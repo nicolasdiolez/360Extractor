@@ -24,16 +24,29 @@ High-performance desktop application for 360° video preprocessing. This tool ge
 
 3.  **Verify environment:**
     Run the verification script to ensure all dependencies are correctly installed:
-    ```bash
-    python check_env.py
-    ```
+
+    *   **macOS / Linux:**
+        ```bash
+        python3 check_env.py
+        ```
+    *   **Windows:**
+        ```bash
+        python check_env.py
+        ```
 
 ## Usage
 
 Run the application:
-```bash
-python3 src/main.py
-```
+
+*   **macOS / Linux:**
+    ```bash
+    python3 src/main.py
+    ```
+
+*   **Windows:**
+    ```bash
+    python src/main.py
+    ```
 
 ### Batch Processing Workflow
 
