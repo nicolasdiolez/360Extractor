@@ -100,3 +100,27 @@ We have provided test scripts to quickly verify these features work as expected.
     python tests/verify_selective_cameras.py
     ```
     *This script creates a temporary video, runs the CLI requesting cameras 0 and 2, and asserts that only those files were created.*
+
+3.  **Verify Layout Logic:**
+    Run the geometry verification script to check if the layout logic (Adaptive vs Ring) produces the correct camera names.
+    ```bash
+    python tests/verify_layout_toggle.py
+    ```
+
+## Section 5: Testing Layout Toggle
+
+You can now force a specific camera layout using the `--layout` argument. This is particularly useful if you want a 6-camera ring layout instead of the default cube layout.
+
+**1. Force Ring Layout (6 Cameras):**
+This command forces a horizontal ring layout even for 6 cameras (which usually defaults to Cube).
+```bash
+python src/main.py --input videos/sample_360.mp4 --output frames/ring_test --camera-count 6 --layout ring
+```
+*Result: 6 horizon views (View_0 to View_5).*
+
+**2. Adaptive Layout (Default):**
+This uses the standard behavior (Cube for 6 cameras).
+```bash
+python src/main.py --input videos/sample_360.mp4 --output frames/cube_test --camera-count 6 --layout adaptive
+```
+*Result: Cube views (Front, Right, Back, Left, Up, Down).*

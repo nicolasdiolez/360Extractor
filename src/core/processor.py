@@ -118,6 +118,7 @@ class ProcessingWorker(QObject):
         fov = job.settings.get('fov', 90)
         camera_count = job.settings.get('camera_count', 6)
         pitch_offset = job.settings.get('pitch_offset', 0)
+        layout_mode = job.settings.get('layout_mode', 'adaptive')
         
         # AI Mode per job
         ai_mode_ui = job.settings.get('ai_mode', 'None')
@@ -142,7 +143,7 @@ class ProcessingWorker(QObject):
         sharpen_strength = job.settings.get('sharpening_strength', 0.5)
         
         # Generate views based on camera count
-        views = GeometryProcessor.generate_views(camera_count, pitch_offset=pitch_offset)
+        views = GeometryProcessor.generate_views(camera_count, pitch_offset=pitch_offset, layout_mode=layout_mode)
         
         maps = {}
         src_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))

@@ -37,4 +37,6 @@ class Job:
         elif pitch_val == 20: pitch_name = "Low"
         
         cams = self.settings.get('camera_count', 6)
-        return f"{pitch_name} ({pitch_val}°), {cams} cams"
+        layout = self.settings.get('layout_mode', 'adaptive')
+        layout_info = " (Ring)" if layout == 'ring' else ""
+        return f"{pitch_name} ({pitch_val}°), {cams} cams{layout_info}"

@@ -369,6 +369,14 @@ class MainWindow(QMainWindow):
         self.cam_count_spin.installEventFilter(self.scroll_blocker)
         self.add_setting_row(camera_layout, "Camera Count:", self.cam_count_spin, "Number of virtual cameras (Ring < 6, Cube = 6, Sphere > 6).")
 
+        # Camera Layout
+        self.layout_combo = QComboBox()
+        self.layout_combo.addItem("Adaptive (Auto)", "adaptive")
+        self.layout_combo.addItem("Ring (Horizon Only)", "ring")
+        self.layout_combo.currentIndexChanged.connect(self.on_setting_changed)
+        self.layout_combo.installEventFilter(self.scroll_blocker)
+        self.add_setting_row(camera_layout, "Layout Mode:", self.layout_combo, "Adaptive: Uses Cube/Sphere for ≥6 cameras. Ring: Forces horizon-only layout.")
+
         # Camera Inclination (Pitch)
         self.pitch_combo = QComboBox()
         self.pitch_combo.addItem("Top Down / Nadir (-90°)", -90)
@@ -525,6 +533,7 @@ class MainWindow(QMainWindow):
             'resolution': self.res_spin.value(),
             'fov': self.fov_spin.value(),
             'camera_count': self.cam_count_spin.value(),
+            'layout_mode': self.layout_combo.currentData(),
             'pitch_offset': self.pitch_combo.currentData(),
             'ai_mode': self.ai_combo.currentText(),
             'blur_filter_enabled': self.blur_check.isChecked(),
@@ -558,6 +567,13 @@ class MainWindow(QMainWindow):
         self.fov_spin.setValue(settings.get('fov', 90))
         self.cam_count_spin.setValue(settings.get('camera_count', 6))
         
+        layout_val = settings.get('layout_mode', 'adaptive')
+        idx = self.layout_combo.findData(layout_val)
+        if idx >= 0:
+            self.layout_combo.setCurrentIndex(idx)
+        else:
+            self.layout_combo.setCurrentIndex(0)
+
         pitch_val = settings.get('pitch_offset', 0)
         index = self.pitch_combo.findData(pitch_val)
         if index >= 0:
@@ -586,6 +602,7 @@ class MainWindow(QMainWindow):
         self.res_spin.blockSignals(block)
         self.fov_spin.blockSignals(block)
         self.cam_count_spin.blockSignals(block)
+        self.layout_combo.blockSignals(block)
         self.pitch_combo.blockSignals(block)
         self.ai_combo.blockSignals(block)
         self.blur_check.blockSignals(block)

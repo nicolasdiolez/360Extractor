@@ -31,6 +31,7 @@ def parse_arguments():
     parser.add_argument("--camera-count", type=int, help="Number of virtual cameras (default: 6)")
     parser.add_argument("--quality", type=int, help="JPEG quality (1-100, default: 95)")
     parser.add_argument("--active-cameras", type=str, help="Comma-separated list of active camera indices (e.g. '0,1,4')")
+    parser.add_argument("--layout", type=str, choices=['adaptive', 'ring'], help="Camera layout mode (adaptive/ring, default: adaptive)")
     return parser.parse_args()
 
 def load_config(config_path):
@@ -140,6 +141,7 @@ def run_cli(args):
     fmt = args.format if args.format is not None else config.get('format', 'jpg')
     cam_count = args.camera_count if args.camera_count is not None else config.get('camera_count', 6)
     quality = args.quality if args.quality is not None else config.get('quality', 95)
+    layout_mode = args.layout if args.layout is not None else config.get('layout_mode', 'adaptive')
     
     # AI Mode logic
     ai_enabled = args.ai # This is True/False from CLI
@@ -152,6 +154,7 @@ def run_cli(args):
         'output_format': fmt,
         'camera_count': cam_count,
         'quality': quality,
+        'layout_mode': layout_mode,
         'ai_mode': 'Generate Mask' if ai_enabled else 'None',
         'custom_output_dir': output_path,
         'active_cameras': active_cameras,
