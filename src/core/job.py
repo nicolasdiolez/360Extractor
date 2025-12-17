@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 import os
 
 @dataclass
@@ -7,6 +7,10 @@ class Job:
     file_path: str
     status: str = "Pending"  # Pending, Processing, Done, Error
     settings: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def active_cameras(self) -> Optional[List[int]]:
+        return self.settings.get('active_cameras', None)
 
     @property
     def filename(self) -> str:

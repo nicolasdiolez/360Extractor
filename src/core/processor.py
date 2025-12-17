@@ -9,6 +9,7 @@ from core.geometry import GeometryProcessor
 from core.ai_model import AIService
 from utils.file_manager import FileManager
 from utils.image_utils import ImageUtils
+from utils.logger import logger
 
 class ProcessingWorker(QObject):
     """
@@ -88,7 +89,8 @@ class ProcessingWorker(QObject):
         
         save_params = []
         if fmt == 'jpg':
-            save_params = [cv2.IMWRITE_JPEG_QUALITY, 95]
+            quality = job.settings.get('quality', 95)
+            save_params = [cv2.IMWRITE_JPEG_QUALITY, quality]
         elif fmt == 'png':
             save_params = [cv2.IMWRITE_PNG_COMPRESSION, 3]
         elif fmt == 'tiff':
@@ -148,7 +150,12 @@ class ProcessingWorker(QObject):
         
         self.progress_updated.emit(0, f"Generating maps for {filename}...")
         
-        for name, y, p, r in views:
+        active_cams = job.active_cameras
+
+        for i, (name, y, p, r) in enumerate(views):
+            if active_cams is not None and i not in active_cams:
+                continue
+
             maps[name] = GeometryProcessor.create_rectilinear_map(
                 src_h, src_w, out_res, out_res, fov, y, p, r
             )
@@ -183,6 +190,9 @@ class ProcessingWorker(QObject):
                 )
 
                 for name, _, _, _ in views:
+                    if name not in maps:
+                        continue
+
                     map_x, map_y = maps[name]
                     # 1. Reproject
                     rect_img = cv2.remap(frame, map_x, map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_WRAP)
@@ -207,7 +217,7 @@ class ProcessingWorker(QObject):
                             if is_blurry:
                                 consecutive_blur_skips += 1
                                 if consecutive_blur_skips > 5:
-                                    print(f"Force accepting frame due to consecutive skips: {filename} - Frame {frame_idx}")
+                                    logger.warning(f"Force accepting frame due to consecutive skips: {filename} - Frame {frame_idx}")
                                     is_blurry = False
                                     consecutive_blur_skips = 0
                             
@@ -221,7 +231,7 @@ class ProcessingWorker(QObject):
                                 is_blurry = True
 
                         if is_blurry:
-                            print(f"Skipped blurry view: {filename} - Frame {frame_idx} - {name} (Score: {score:.1f})")
+                            logger.info(f"Skipped blurry view: {filename} - Frame {frame_idx} - {name} (Score: {score:.1f})")
                             skipped_blur_count += 1
                             continue
 
@@ -259,4 +269,4 @@ class ProcessingWorker(QObject):
         cap.release()
 
         if skipped_blur_count > 0:
-            print(f"Total blurry views skipped for {filename}: {skipped_blur_count}")
+            logger.info(f"Total blurry views skipped for {filename}: {skipped_blur_count}")

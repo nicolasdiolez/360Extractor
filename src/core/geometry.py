@@ -21,13 +21,58 @@ class GeometryProcessor:
         """
         views = []
         
-        # ALWAYS use Ring layout (equidistant along horizon)
-        # This replaces previous Cube (n=6) and Fibonacci (n>6) logic
-        # to ensure consistent panoramic stitching potential.
-        for i in range(n):
-            yaw = (i * 360.0) / n
-            # Apply pitch offset to all ring cameras
-            views.append((f"View_{i}", yaw, pitch_offset, 0))
+        if n < 6:
+            # Ring layout (equidistant along horizon)
+            for i in range(n):
+                yaw = (i * 360.0) / n
+                views.append((f"View_{i}", yaw, pitch_offset, 0))
+                
+        elif n == 6:
+            # Cube layout
+            # Front, Right, Back, Left, Up, Down
+            # Apply pitch_offset only to horizontal views
+            
+            # Horizontal ring
+            views.append(("Front", 0.0, pitch_offset, 0))
+            views.append(("Right", 90.0, pitch_offset, 0))
+            views.append(("Back", 180.0, pitch_offset, 0))
+            views.append(("Left", 270.0, pitch_offset, 0))
+            
+            # Vertical poles (fixed at +/- 90)
+            views.append(("Up", 0.0, 90.0, 0))
+            views.append(("Down", 0.0, -90.0, 0))
+            
+        else:
+            # Fibonacci Sphere layout
+            # Use the Golden Section Spiral algorithm to distribute points evenly
+            dst = 2.0 / n
+            inc = np.pi * (3.0 - np.sqrt(5.0))
+            
+            for i in range(n):
+                # y goes from 1 to -1
+                y = 1 - (i * dst) - (dst / 2)
+                r = np.sqrt(1 - y*y)
+                phi = i * inc
+                
+                x = np.cos(phi) * r
+                z = np.sin(phi) * r
+                
+                # Convert (x, y, z) to (yaw, pitch)
+                # Pitch is elevation from XZ plane (asin y)
+                pitch_deg = np.degrees(np.arcsin(y))
+                
+                # Yaw is angle in XZ plane
+                # using atan2(x, z) to match camera coordinate system orientation
+                # (Z is forward 0, X is right 90)
+                yaw_deg = np.degrees(np.arctan2(x, z))
+                
+                # Normalize yaw to 0-360
+                yaw_deg = yaw_deg % 360.0
+                
+                # Apply pitch_offset to the calculated pitch
+                final_pitch = pitch_deg + pitch_offset
+                
+                views.append((f"View_{i}", yaw_deg, final_pitch, 0))
                 
         return views
 
