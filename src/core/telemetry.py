@@ -6,6 +6,7 @@ from typing import Optional, Tuple, Any, List, Dict
 import piexif
 from src.utils.gpmf_parser import GPMFParser
 from src.utils.srt_parser import parse_srt_data
+from src.utils.camm_parser import parse_camm_data
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +28,18 @@ class TelemetryHandler:
                 '-v', 'quiet',
                 '-print_format', 'json',
                 '-show_streams',
+                '-show_format',
                 video_path
             ]
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             data = json.loads(result.stdout)
             
+            duration = 0.0
+            try:
+                duration = float(data.get('format', {}).get('duration', 0.0))
+            except (ValueError, TypeError):
+                duration = 0.0
+
             subtitle_stream_index = None
 
             for stream in data.get('streams', []):
@@ -44,9 +52,11 @@ class TelemetryHandler:
                         self.has_gps = True
                         logger.info(f"Found telemetry stream: {codec_tag_string}")
                         
+                        stream_index = stream.get('index')
                         if 'gpmd' in codec_tag_string:
-                            stream_index = stream.get('index')
                             self._extract_gpmf_data(video_path, stream_index)
+                        elif 'camm' in codec_tag_string:
+                            self._extract_camm_data(video_path, stream_index, duration)
                         
                         return True
                 
@@ -70,6 +80,34 @@ class TelemetryHandler:
         except Exception as e:
             logger.error(f"Error extracting metadata: {e}")
             return False
+
+    def _extract_camm_data(self, video_path: str, stream_index: int, duration: float):
+        """
+        Extracts and parses CAMM data from the video.
+        """
+        try:
+            cmd = [
+                'ffmpeg',
+                '-y',
+                '-i', video_path,
+                '-map', f'0:{stream_index}',
+                '-f', 'data',
+                '-'
+            ]
+            result = subprocess.run(cmd, capture_output=True, check=True)
+            raw_data = result.stdout
+            
+            self.gps_samples = parse_camm_data(raw_data, duration)
+            if self.gps_samples:
+                self.has_gps = True
+                logger.info(f"Extracted {len(self.gps_samples)} CAMM GPS samples.")
+            else:
+                logger.warning("CAMM stream found but no GPS samples extracted.")
+                
+        except subprocess.CalledProcessError as e:
+            logger.error(f"FFmpeg extraction failed for CAMM: {e}")
+        except Exception as e:
+            logger.error(f"Error parsing CAMM data: {e}")
 
     def _extract_gpmf_data(self, video_path: str, stream_index: int):
         """
