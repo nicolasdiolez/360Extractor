@@ -330,28 +330,6 @@ class MainWindow(QMainWindow):
         interval_controls.addWidget(self.interval_spin)
         interval_controls.addWidget(self.interval_unit)
         interval_layout.addLayout(interval_controls)
-
-        # Adaptive Interval
-        self.adaptive_check = QCheckBox("Adaptive Interval (Motion-Based)")
-        self.adaptive_check.setToolTip("Analyzes optical flow to skip redundant frames when the camera is stationary. Useful for photogrammetry datasets.")
-        self.adaptive_check.toggled.connect(self.on_adaptive_toggled)
-        interval_layout.addWidget(self.adaptive_check)
-        
-        # Motion Threshold
-        motion_layout = QHBoxLayout()
-        self.motion_label = QLabel("Motion Threshold:")
-        motion_layout.addWidget(self.motion_label)
-        
-        self.motion_threshold_spin = QDoubleSpinBox()
-        self.motion_threshold_spin.setRange(0.0, 10.0)
-        self.motion_threshold_spin.setValue(0.5)
-        self.motion_threshold_spin.setSingleStep(0.1)
-        self.motion_threshold_spin.setEnabled(False)
-        self.motion_threshold_spin.valueChanged.connect(self.on_setting_changed)
-        self.motion_threshold_spin.installEventFilter(self.scroll_blocker)
-        motion_layout.addWidget(self.motion_threshold_spin)
-        
-        interval_layout.addLayout(motion_layout)
         
         export_layout.addLayout(interval_layout)
 
@@ -368,12 +346,6 @@ class MainWindow(QMainWindow):
         res_layout.addWidget(self.res_spin)
         export_layout.addLayout(res_layout)
         
-        # Telemetry
-        self.export_telemetry_check = QCheckBox("Export GPS/IMU Metadata")
-        self.export_telemetry_check.setToolTip("Attempts to extract GPMF (GoPro) or CAMM metadata and embed GPS into extracted frames.")
-        self.export_telemetry_check.toggled.connect(self.on_setting_changed)
-        export_layout.addWidget(self.export_telemetry_check)
-
         export_layout.addStretch()
         self.settings_tabs.addTab(tab_export, "Export")
 
@@ -510,6 +482,54 @@ class MainWindow(QMainWindow):
 
         processing_layout.addStretch()
         self.settings_tabs.addTab(tab_processing, "Processing")
+
+        # --- Tab 4: Experimental ---
+        tab_experimental = QWidget()
+        experimental_layout = QVBoxLayout(tab_experimental)
+        experimental_layout.setSpacing(15)
+
+        # Adaptive Interval Group
+        adaptive_group = QGroupBox("Adaptive Extraction")
+        adaptive_layout = QVBoxLayout()
+        adaptive_layout.setSpacing(10)
+
+        self.adaptive_check = QCheckBox("Adaptive Interval (Motion-Based)")
+        self.adaptive_check.setToolTip("Analyzes optical flow to skip redundant frames when the camera is stationary. Useful for photogrammetry datasets.")
+        self.adaptive_check.toggled.connect(self.on_adaptive_toggled)
+        adaptive_layout.addWidget(self.adaptive_check)
+
+        # Motion Threshold
+        motion_layout = QHBoxLayout()
+        self.motion_label = QLabel("Motion Threshold:")
+        motion_layout.addWidget(self.motion_label)
+
+        self.motion_threshold_spin = QDoubleSpinBox()
+        self.motion_threshold_spin.setRange(0.0, 10.0)
+        self.motion_threshold_spin.setValue(0.5)
+        self.motion_threshold_spin.setSingleStep(0.1)
+        self.motion_threshold_spin.setEnabled(False)
+        self.motion_threshold_spin.valueChanged.connect(self.on_setting_changed)
+        self.motion_threshold_spin.installEventFilter(self.scroll_blocker)
+        motion_layout.addWidget(self.motion_threshold_spin)
+        adaptive_layout.addLayout(motion_layout)
+        
+        adaptive_group.setLayout(adaptive_layout)
+        experimental_layout.addWidget(adaptive_group)
+
+        # Telemetry Group
+        telemetry_group = QGroupBox("Metadata")
+        telemetry_layout = QVBoxLayout()
+        
+        self.export_telemetry_check = QCheckBox("Export GPS/IMU Metadata")
+        self.export_telemetry_check.setToolTip("Attempts to extract GPMF (GoPro) or CAMM metadata and embed GPS into extracted frames.")
+        self.export_telemetry_check.toggled.connect(self.on_setting_changed)
+        telemetry_layout.addWidget(self.export_telemetry_check)
+        
+        telemetry_group.setLayout(telemetry_layout)
+        experimental_layout.addWidget(telemetry_group)
+
+        experimental_layout.addStretch()
+        self.settings_tabs.addTab(tab_experimental, "Experimental")
         
         return layout
 
