@@ -27,7 +27,9 @@ def parse_arguments():
     parser.add_argument("--output", "-o", type=str, help="Path to output directory (CLI mode)")
     parser.add_argument("--interval", type=float, help="Extraction interval in seconds (default: 1.0)")
     parser.add_argument("--format", type=str, choices=['jpg', 'png'], help="Output image format (default: jpg)")
-    parser.add_argument("--ai", action="store_true", help="Enable AI processing (Generate Mask)")
+    parser.add_argument("--ai", action="store_true", help="Enable AI masking (Legacy alias for --ai-mask)")
+    parser.add_argument("--ai-mask", action="store_true", help="Enable AI masking (Generate Mask)")
+    parser.add_argument("--ai-skip", action="store_true", help="Enable AI frame skipping (Skip Frame)")
     parser.add_argument("--camera-count", type=int, help="Number of virtual cameras (default: 6)")
     parser.add_argument("--quality", type=int, help="JPEG quality (1-100, default: 95)")
     parser.add_argument("--active-cameras", type=str, help="Comma-separated list of active camera indices (e.g. '0,1,4')")
@@ -149,9 +151,17 @@ def run_cli(args):
     layout_mode = args.layout if args.layout is not None else config.get('layout_mode', 'ring')
     
     # AI Mode logic
-    ai_enabled = args.ai # This is True/False from CLI
-    if not ai_enabled:
-        ai_enabled = config.get('ai', False)
+    ai_mode = 'None'
+    if args.ai_skip:
+        ai_mode = 'Skip Frame'
+    elif args.ai_mask or args.ai:
+        ai_mode = 'Generate Mask'
+    else:
+        # Check config
+        ai_mode = config.get('ai_mode', 'None')
+        # Handle legacy config 'ai': boolean if ai_mode is still None
+        if ai_mode == 'None' and config.get('ai', False):
+            ai_mode = 'Generate Mask'
 
     # Adaptive Mode logic
     adaptive = args.adaptive
@@ -171,7 +181,7 @@ def run_cli(args):
         'camera_count': cam_count,
         'quality': quality,
         'layout_mode': layout_mode,
-        'ai_mode': 'Generate Mask' if ai_enabled else 'None',
+        'ai_mode': ai_mode,
         'custom_output_dir': output_path,
         'active_cameras': active_cameras,
         # Defaults for others (could be exposed to config later)

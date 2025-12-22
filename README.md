@@ -76,6 +76,8 @@ Run the application without arguments to launch the GUI:
 
 Run the application in headless mode by providing the `--input` argument or a configuration file. This is ideal for automation or server environments.
 
+> **Note on Flags:** Boolean flags (like `--ai-mask`, `--ai-skip`, `--adaptive`, `--export-telemetry`) are toggles. Including them enables the feature; they do not take a value (e.g., use `--ai-mask`, not `--ai-mask true`).
+
 - **Visual Progress:** Displays a real-time progress bar (via `tqdm`) showing the completion percentage and estimated time remaining for both individual files and the entire batch.
 
 #### Basic Syntax
@@ -96,7 +98,9 @@ python src/main.py --input <video_path> --output <output_dir> [options]
 | `--resolution` | Output image resolution (width/height). | `2048` |
 | `--layout` | Camera layout mode: `ring`, `cube`, or `fibonacci`. | `ring` |
 | `--quality` | JPEG quality (1-100). | `95` |
-| `--ai` | Enable AI processing (Generate Mask) for operator removal. | `False` |
+| `--ai-mask` | Enable AI masking (Generate Mask) for operator removal. | `False` |
+| `--ai-skip` | Enable AI frame skipping (discard frames with persons). | `False` |
+| `--ai` | Alias for `--ai-mask` (for backward compatibility). | `False` |
 | `--adaptive` | Enable intelligent keyframing (skip static scenes). | `False` |
 | `--motion-threshold` | Sensitivity for motion detection (0.0-100.0). Higher = needs more motion to extract. | `5.0` |
 | `--export-telemetry` | Extract GPS/IMU metadata and embed it into output images (EXIF). | `False` |
