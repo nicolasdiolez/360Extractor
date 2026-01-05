@@ -60,8 +60,11 @@ graph TD
 ### Component Breakdown
 
 #### A. View (UI & CLI Layer)
-- **MainWindow:** The primary GUI container.
-- **ExperimentalTab:** Isolation for high-risk/advanced features (GPS, Adaptive).
+- **MainWindow:** The primary GUI container with sidebar navigation and stacked pages.
+- **Sidebar:** Navigation component for switching between Videos, Settings, Export, and Advanced pages.
+- **VideoCard:** Modern card widget displaying video jobs with thumbnails and progress.
+- **CollapsibleSection:** Animated expandable sections for organized settings.
+- **ToggleSwitch:** Modern animated toggle replacing standard checkboxes.
 - **Headless Interface:** Command-line entry point using `argparse`.
 
 #### B. Controller (Logic Layer)
@@ -128,17 +131,26 @@ Telemetry samples are extracted as a time-series. For any extracted frame at tim
 360Extractor/
 ├── src/
 │   ├── main.py                 # Entry point (GUI/CLI router)
-│   ├── ui/                     # GUI Layer
+│   ├── ui/                     # GUI Layer (v2.0)
+│   │   ├── main_window.py      # Main window with sidebar navigation
+│   │   ├── sidebar.py          # Navigation sidebar component
+│   │   ├── video_card.py       # Video job card with thumbnail
+│   │   ├── toggle_switch.py    # Modern animated toggle
+│   │   ├── collapsible_section.py # Expandable settings sections
+│   │   ├── preview_widget.py   # Frame preview with blur score
+│   │   ├── widgets.py          # Drop zone and utilities
+│   │   └── styles.qss          # Modern dark theme stylesheet
 │   ├── core/                   # Processing Core
 │   │   ├── processor.py        # Extraction Loop
 │   │   ├── geometry.py         # Projection Math
-│   │   ├── telemetry.py        # GPS/IMU Manager
+│   │   ├── telemetry.py        # GPS/IMU Manager (+ GPX sidecar)
 │   │   ├── motion_detector.py  # Optical Flow Logic
 │   │   └── ai_model.py         # YOLO Wrapper
 │   └── utils/
 │       ├── gpmf_parser.py      # Binary GPMF Logic
 │       ├── camm_parser.py      # Binary CAMM Logic
-│       └── srt_parser.py       # DJI Metadata Logic
+│       ├── srt_parser.py       # DJI Metadata Logic
+│       └── gpx_parser.py       # GPX Sidecar Parser
 ├── docs/                       # Protocole & Handbooks
 ├── requirements.txt
 └── ARCHITECTURE.md

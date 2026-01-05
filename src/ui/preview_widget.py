@@ -112,17 +112,28 @@ class PreviewWidget(QWidget):
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         
-        self.label = QLabel("Preview")
+        self.label = QLabel("No Video Selected")
         self.label.setAlignment(Qt.AlignCenter)
-        self.label.setStyleSheet("background-color: #222; color: #888; border: 1px solid #444;")
+        self.label.setStyleSheet("""
+            background-color: #1E1E22;
+            color: #52525B;
+            border: 1px solid #27272A;
+            border-radius: 8px;
+            font-size: 14px;
+        """)
         self.label.setMinimumSize(100, 100)
         self.label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         
         self.layout.addWidget(self.label)
         
-        self.score_label = QLabel("Blur Score: -")
+        self.score_label = QLabel("Blur Score: —")
         self.score_label.setAlignment(Qt.AlignCenter)
-        self.score_label.setStyleSheet("color: #ccc; font-weight: bold; margin-top: 5px;")
+        self.score_label.setStyleSheet("""
+            color: #A1A1AA;
+            font-weight: 600;
+            font-size: 12px;
+            padding: 8px;
+        """)
         self.layout.addWidget(self.score_label)
         
         self.threadpool = QThreadPool()

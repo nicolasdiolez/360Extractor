@@ -1,10 +1,17 @@
-# 360 Extractor
+# 360 Extractor Pro
 
 High-performance desktop application and command-line tool for 360° video preprocessing. This tool generates optimized datasets for Gaussian Splatting and photogrammetry (COLMAP, RealityScan) by converting equirectangular footage into rectilinear pinhole views and removing operators using AI.
+
+> **v2.0** - New modern UI with sidebar navigation, video cards, and improved user experience.
 
 ## Features
 
 - **360° to Rectilinear:** Reproject equirectangular video to pinhole views with configurable FOV and overlap.
+- **Modern UI (v2.0):**
+    - **Sidebar Navigation:** Quick access to Videos, Settings, Export, and Advanced sections.
+    - **Video Cards:** Visual queue with thumbnails, status indicators, and progress tracking.
+    - **Collapsible Sections:** Organized settings with smooth animations.
+    - **Real-time Preview:** Live preview with blur score indicator.
 - **Dual Interface:**
     - **GUI:** User-friendly interface with drag-and-drop support, real-time preview, and batch processing queue.
     - **CLI:** Headless mode for server environments with a real-time visual progress bar.
@@ -20,6 +27,8 @@ High-performance desktop application and command-line tool for 360° video prepr
 - **GPS/IMU Metadata Integration:** Extract GPS and accelerometer data from GoPro (GPMF), Insta360 (CAMM), or DJI (SRT Subtitles) videos and embed it into the output EXIF tags.
     - Includes custom lightweight parsers for GPMF (GoPro) and CAMM (Insta360) to extract GPS data directly, without external dependencies.
     - Supports DJI drone telemetry embedded as subtitles (SRT) as a fallback.
+    - **GPX Sidecar Support:** Automatically detects `video.gpx` files for cameras like Kandao Qoocam 3 Ultra.
+- **Flexible File Naming:** Choose between RealityScan-compatible naming, simple suffix, or fully custom patterns with placeholders.
 - **Flexible Extraction:** Control extraction frequency by Seconds or Frames.
 - **Intelligent Keyframing (Adaptive Interval):** Uses Optical Flow to skip static scenes and only extract frames when significant motion occurs (configurable threshold).
 - **AI Operator Removal:** Automatically detect and mask/remove people (operators) from the footage using YOLOv8.
@@ -47,6 +56,11 @@ High-performance desktop application and command-line tool for 360° video prepr
         ```bash
         python check_env.py
         ```
+
+4.  **Run tests (optional):**
+    ```bash
+    python3 -m pytest tests/ -v
+    ```
 
 ## Usage
 
@@ -173,11 +187,21 @@ You can define job settings in a JSON file for reuse or complex configurations.
     *   *Enable:* Toggle adaptive extraction.
     *   *Motion Threshold:* Adjust sensitivity (0.0-100.0). Higher values require more motion to trigger extraction. Default is 5.0.
 
-### Mask Naming Convention
+### File Naming Options
 
-When **Generate Mask** is used, files are named to be automatically detected by **RealityScan**:
-*   Image: `filename.jpg`
-*   Mask: `filename.jpg.mask.png`
+The application supports three naming conventions:
+
+| Mode | Image | Mask |
+|------|-------|------|
+| **RealityScan** | `video_frame000001_front.jpg` | `video_frame000001_front.jpg.mask.png` |
+| **Simple Suffix** | `video_frame000001_front.jpg` | `video_frame000001_front_mask.png` |
+| **Custom** | User-defined pattern | User-defined pattern |
+
+**Custom Pattern Placeholders:**
+- `{filename}` - Original video name
+- `{frame}` - 6-digit frame number
+- `{camera}` - Camera name (front, back, etc.)
+- `{ext}` - File extension
 
 ## Author
 

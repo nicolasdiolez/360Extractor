@@ -10,7 +10,8 @@ class SettingsManager:
         "fov": 90,
         "camera_count": 6,
         "pitch_offset": 0,
-        "ai_mode": "Skip Frame",
+        "layout_mode": "ring",
+        "ai_mode": "None",
         "output_format": "jpg",
         "custom_output_dir": "",
         "interval_value": 1.0,
@@ -19,7 +20,13 @@ class SettingsManager:
         "smart_blur_enabled": False,
         "blur_threshold": 100.0,
         "sharpening_enabled": False,
-        "sharpening_strength": 0.5
+        "sharpening_strength": 0.5,
+        "adaptive_mode": False,
+        "adaptive_threshold": 0.5,
+        "export_telemetry": False,
+        "naming_mode": "realityscan",
+        "image_pattern": "{filename}_frame{frame}_{camera}",
+        "mask_pattern": "{filename}_frame{frame}_{camera}_mask"
     }
 
     def __new__(cls):
