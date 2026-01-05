@@ -2,11 +2,38 @@ import cv2
 import numpy as np
 import torch
 from ultralytics import YOLO
+from utils.logger import logger
 
 class AIService:
     """
     Wrapper for YOLOv8 to handle person detection and segmentation.
     """
+    
+    @classmethod
+    def is_gpu_available(cls) -> bool:
+        """Check if GPU acceleration is available (MPS or CUDA)."""
+        return torch.backends.mps.is_available() or torch.cuda.is_available()
+    
+    @classmethod
+    def get_device_info(cls) -> dict:
+        """Get detailed device information."""
+        info = {
+            'device': 'cpu',
+            'device_name': 'CPU',
+            'is_accelerated': False
+        }
+        
+        if torch.backends.mps.is_available():
+            info['device'] = 'mps'
+            info['device_name'] = 'Apple Silicon GPU (MPS)'
+            info['is_accelerated'] = True
+        elif torch.cuda.is_available():
+            info['device'] = 'cuda'
+            info['device_name'] = torch.cuda.get_device_name(0)
+            info['is_accelerated'] = True
+            
+        return info
+    
     def __init__(self, model_name='yolov8n-seg.pt'):
         """
         Initialize the AI model.
@@ -15,13 +42,16 @@ class AIService:
             model_name (str): Path or name of the YOLO model.
                               Defaults to 'yolov8n-seg.pt' (Nano Segmentation).
         """
-        self.device = 'cpu'
-        if torch.backends.mps.is_available():
-            self.device = 'mps'
-        elif torch.cuda.is_available():
-            self.device = 'cuda'
+        device_info = self.get_device_info()
+        self.device = device_info['device']
+        
+        if not device_info['is_accelerated']:
+            logger.warning("⚠️ No GPU detected! AI processing will be slow (running on CPU).")
+            logger.info("For better performance, use a Mac with Apple Silicon or a CUDA-compatible GPU.")
+        else:
+            logger.info(f"✓ GPU detected: {device_info['device_name']}")
             
-        print(f"Loading AI Model: {model_name} on {self.device}...")
+        logger.info(f"Loading AI Model: {model_name} on {self.device}...")
         self.model = YOLO(model_name)
         # Class 0 is 'person' in COCO dataset
         self.target_class = 0

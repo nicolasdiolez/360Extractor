@@ -75,6 +75,7 @@ class VideoCard(QWidget):
     A modern card widget representing a video job in the queue.
     """
     clicked = Signal()
+    ctrl_clicked = Signal()  # For multi-selection with Ctrl+click
     remove_clicked = Signal()
     
     STATUS_COLORS = {
@@ -285,7 +286,11 @@ class VideoCard(QWidget):
         
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self.clicked.emit()
+            # Check for Ctrl modifier for multi-select
+            if event.modifiers() & Qt.ControlModifier:
+                self.ctrl_clicked.emit()
+            else:
+                self.clicked.emit()
         super().mousePressEvent(event)
         
     def __del__(self):

@@ -23,6 +23,7 @@ from ui.sidebar import Sidebar
 from ui.video_card import VideoCard
 from ui.toggle_switch import ToggleSwitch, ToggleSwitchWithDescription
 from ui.collapsible_section import CollapsibleSection
+from ui.log_panel import LogPanel
 from core.processor import ProcessingWorker
 from core.analyzer import BlurAnalysisWorker
 from core.job import Job
@@ -52,7 +53,7 @@ class MainWindow(QMainWindow):
         self.custom_output_dir = ""
         self.is_processing = False
         self._video_cards = []
-        self._selected_card = None
+        self._selected_cards = []  # Changed to list for multi-selection
 
         # Scroll Blocker
         self.scroll_blocker = ScrollBlocker(self)
@@ -101,12 +102,19 @@ class MainWindow(QMainWindow):
         self.action_bar = self.create_action_bar()
         content_layout.addWidget(self.action_bar)
         
+        # Log Panel (collapsible at bottom)
+        self.log_panel = LogPanel()
+        content_layout.addWidget(self.log_panel)
+        
         main_layout.addWidget(content_widget, 1)
         
         # Initialize Settings
         self.settings_manager = SettingsManager()
         self.set_ui_from_settings(self.settings_manager.get_all())
         self.update_default_settings_from_ui()
+        
+        # Setup Keyboard Shortcuts
+        self._setup_shortcuts()
 
     def load_stylesheet(self, filename):
         base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -117,6 +125,39 @@ class MainWindow(QMainWindow):
             stream = QTextStream(file)
             self.setStyleSheet(stream.readAll())
             file.close()
+
+    def _setup_shortcuts(self):
+        """Setup keyboard shortcuts for common actions."""
+        from PySide6.QtGui import QShortcut, QKeySequence
+        
+        # Del - Remove selected job
+        delete_shortcut = QShortcut(QKeySequence.Delete, self)
+        delete_shortcut.activated.connect(self.remove_selected_jobs)
+        
+        # Backspace - Also remove selected (Mac style)
+        backspace_shortcut = QShortcut(QKeySequence(Qt.Key_Backspace), self)
+        backspace_shortcut.activated.connect(self.remove_selected_jobs)
+        
+        # Ctrl+O - Open file dialog
+        open_shortcut = QShortcut(QKeySequence.Open, self)
+        open_shortcut.activated.connect(self.open_file_dialog)
+        
+        # Space - Update preview for selected
+        space_shortcut = QShortcut(QKeySequence(Qt.Key_Space), self)
+        space_shortcut.activated.connect(self.update_preview_display)
+        
+        # Ctrl+Return / Cmd+Return - Start processing
+        process_shortcut = QShortcut(QKeySequence(Qt.CTRL | Qt.Key_Return), self)
+        process_shortcut.activated.connect(self._shortcut_start_processing)
+        
+        # Escape - Cancel processing
+        escape_shortcut = QShortcut(QKeySequence(Qt.Key_Escape), self)
+        escape_shortcut.activated.connect(self.cancel_processing)
+        
+    def _shortcut_start_processing(self):
+        """Start processing if not already running."""
+        if not self.is_processing and self.jobs:
+            self.start_processing()
 
     # =========================================================================
     # PAGE CREATION
@@ -748,9 +789,11 @@ class MainWindow(QMainWindow):
             
         current_settings = self.get_settings_from_ui()
         
-        if self._selected_card:
-            self._selected_card.job.settings = current_settings
-            self._selected_card.refresh()
+        if self._selected_cards:
+            # Apply settings to all selected cards
+            for card in self._selected_cards:
+                card.job.settings = current_settings
+                card.refresh()
         else:
             self.default_settings = current_settings
             for key, value in current_settings.items():
@@ -832,6 +875,7 @@ class MainWindow(QMainWindow):
         # Create video card
         card = VideoCard(job)
         card.clicked.connect(lambda c=card: self.on_card_clicked(c))
+        card.ctrl_clicked.connect(lambda c=card: self.on_card_ctrl_clicked(c))
         card.remove_clicked.connect(lambda c=card: self.remove_job_by_card(c))
         
         # Insert before stretch
@@ -839,16 +883,34 @@ class MainWindow(QMainWindow):
         self._video_cards.append(card)
 
     def on_card_clicked(self, card):
-        # Deselect previous
-        if self._selected_card:
-            self._selected_card.setSelected(False)
+        """Single click: select only this card, deselect others."""
+        # Deselect all previous
+        for c in self._selected_cards:
+            c.setSelected(False)
+        self._selected_cards.clear()
         
         # Select new
         card.setSelected(True)
-        self._selected_card = card
+        self._selected_cards.append(card)
         
-        # Update settings UI
+        # Update settings UI from this card
         self.set_ui_from_settings(card.job.settings)
+        self.update_preview_display()
+        
+    def on_card_ctrl_clicked(self, card):
+        """Ctrl+click: toggle selection without deselecting others."""
+        if card in self._selected_cards:
+            # Deselect this card
+            card.setSelected(False)
+            self._selected_cards.remove(card)
+        else:
+            # Add to selection
+            card.setSelected(True)
+            self._selected_cards.append(card)
+        
+        # Update preview to last selected
+        if self._selected_cards:
+            self.set_ui_from_settings(self._selected_cards[-1].job.settings)
         self.update_preview_display()
 
     def remove_job_by_card(self, card):
@@ -858,31 +920,34 @@ class MainWindow(QMainWindow):
             self.jobs.pop(idx)
             card.deleteLater()
             
-            if card == self._selected_card:
-                self._selected_card = None
-                self.set_ui_from_settings(self.default_settings)
+            if card in self._selected_cards:
+                self._selected_cards.remove(card)
+                if not self._selected_cards:
+                    self.set_ui_from_settings(self.default_settings)
                 self.update_preview_display()
             
             if not self.jobs:
                 self.process_btn.setEnabled(False)
 
     def remove_selected_jobs(self):
-        if self._selected_card:
-            self.remove_job_by_card(self._selected_card)
+        """Remove all selected jobs."""
+        for card in self._selected_cards[:]:  # Copy list to avoid modification during iteration
+            self.remove_job_by_card(card)
 
     def clear_queue(self):
         for card in self._video_cards[:]:
             card.deleteLater()
         self._video_cards.clear()
         self.jobs.clear()
-        self._selected_card = None
+        self._selected_cards.clear()
         self.process_btn.setEnabled(False)
         self.set_ui_from_settings(self.default_settings)
         self.update_preview_display()
 
     def update_preview_display(self):
-        if self._selected_card:
-            job = self._selected_card.job
+        if self._selected_cards:
+            # Show preview for the last selected card
+            job = self._selected_cards[-1].job
             self.preview_widget.update_preview(job.file_path, self.get_settings_from_ui())
         else:
             self.preview_widget.update_preview(None, None)
@@ -974,11 +1039,12 @@ class MainWindow(QMainWindow):
     # =========================================================================
 
     def analyze_blur(self):
-        if not self._selected_card:
+        if not self._selected_cards:
             QMessageBox.warning(self, "Selection Required", "Please select a video to analyze.")
             return
         
-        job = self._selected_card.job
+        # Analyze the last selected card
+        job = self._selected_cards[-1].job
         self.status_label.setText(f"Analyzing {job.filename}...")
         self.btn_analyze.setEnabled(False)
         self.btn_analyze.setText("Analyzing...")
