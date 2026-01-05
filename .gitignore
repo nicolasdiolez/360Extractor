@@ -55,3 +55,14 @@ cover/
 
 # Project Specific
 *.log
+
+# Internal Development Files (not for public repo)
+plans/
+docs/CLI_TESTING_PROTOCOL.md
+IMPROVEMENTS.md
+TEST_CLI.md
+tests/verify_*.py
+
+# YOLO Model (auto-downloaded by ultralytics)
+yolov8n-seg.pt
+src/yolov8n-seg.pt
