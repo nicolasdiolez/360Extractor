@@ -41,7 +41,7 @@ QMainWindow {
 }
 
 QWidget {
-    font-family: "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 13px;
     color: #A1A1AA;
     outline: none;
