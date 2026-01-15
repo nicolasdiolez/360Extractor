@@ -38,6 +38,12 @@ def parse_arguments():
     parser.add_argument("--adaptive", action="store_true", help="Enable adaptive interval (motion-based)")
     parser.add_argument("--motion-threshold", type=float, help="Motion threshold for adaptive interval (default: 0.5)")
     parser.add_argument("--export-telemetry", action="store_true", help="Export GPS/IMU metadata (if available)")
+    
+    # Naming Control
+    parser.add_argument("--naming-mode", type=str, choices=['realityscan', 'simple', 'custom'], help="Naming convention for output files")
+    parser.add_argument("--image-pattern", type=str, help="Custom pattern for image filenames")
+    parser.add_argument("--mask-pattern", type=str, help="Custom pattern for mask filenames")
+    
     return parser.parse_args()
 
 def load_config(config_path):
@@ -174,6 +180,15 @@ def run_cli(args):
     if not export_telemetry:
         export_telemetry = config.get('export_telemetry', False)
 
+    # Naming Configuration
+    naming_mode = args.naming_mode or config.get('naming_mode', 'realityscan')
+    image_pattern = args.image_pattern or config.get('image_pattern')
+    mask_pattern = args.mask_pattern or config.get('mask_pattern')
+    
+    # Auto-switch to custom if patterns provided
+    if (args.image_pattern or args.mask_pattern) and not args.naming_mode:
+        naming_mode = 'custom'
+
     settings = {
         'interval_value': interval,
         'interval_unit': 'Seconds',
@@ -193,7 +208,10 @@ def run_cli(args):
         'sharpening_enabled': config.get('sharpening_enabled', False),
         'adaptive_mode': adaptive,
         'adaptive_threshold': motion_threshold,
-        'export_telemetry': export_telemetry
+        'export_telemetry': export_telemetry,
+        'naming_mode': naming_mode,
+        'image_pattern': image_pattern,
+        'mask_pattern': mask_pattern
     }
 
     jobs = [Job(file_path=f, settings=settings) for f in files_to_process]

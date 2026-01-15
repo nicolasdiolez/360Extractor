@@ -1,7 +1,3 @@
-"""
-Sidebar Navigation Widget for the main window.
-Modern navigation sidebar with icons and labels.
-"""
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton, 
     QSizePolicy, QHBoxLayout
@@ -9,17 +5,21 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QIcon, QFont
 
+from ui.icons import get_icon
 
 class SidebarButton(QPushButton):
     """A styled sidebar navigation button."""
     
-    def __init__(self, icon_text, label, parent=None):
+    def __init__(self, icon_name, label, parent=None):
         super().__init__(parent)
-        self._icon_text = icon_text
+        self._icon_name = icon_name
         self._label = label
         self._active = False
         
-        self.setText(f"{icon_text}  {label}")
+        self.setText(f"  {label}")
+        self.setIcon(get_icon(icon_name, color="#A1A1AA", size=20))
+        self.setIconSize(QSize(20, 20))
+        
         self.setCheckable(True)
         self.setFixedHeight(48)
         self.setCursor(Qt.PointingHandCursor)
@@ -27,6 +27,8 @@ class SidebarButton(QPushButton):
         
     def _update_style(self):
         if self._active:
+            # Active State
+            self.setIcon(get_icon(self._icon_name, color="#3B82F6", size=20))
             self.setStyleSheet("""
                 QPushButton {
                     background-color: rgba(59, 130, 246, 0.15);
@@ -41,6 +43,8 @@ class SidebarButton(QPushButton):
                 }
             """)
         else:
+            # Inactive State
+            self.setIcon(get_icon(self._icon_name, color="#A1A1AA", size=20))
             self.setStyleSheet("""
                 QPushButton {
                     background-color: transparent;
@@ -71,10 +75,10 @@ class Sidebar(QWidget):
     page_changed = Signal(str)
     
     PAGES = [
-        ("📹", "Videos", "videos"),
-        ("⚙️", "Settings", "settings"),
-        ("📤", "Export", "export"),
-        ("🧪", "Advanced", "advanced"),
+        ("video", "Videos", "videos"),
+        ("settings", "Settings", "settings"),
+        ("export", "Export", "export"),
+        ("advanced", "Advanced", "advanced"),
     ]
     
     def __init__(self, parent=None):
@@ -98,8 +102,8 @@ class Sidebar(QWidget):
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(20, 20, 20, 30)
         
-        logo = QLabel("🌐")
-        logo.setStyleSheet("font-size: 24px;")
+        logo = QLabel()
+        logo.setPixmap(get_icon("logo", color="#3B82F6", size=28).pixmap(28, 28))
         header_layout.addWidget(logo)
         
         title = QLabel("360 Extractor")
@@ -111,8 +115,8 @@ class Sidebar(QWidget):
         
         # Navigation buttons
         self._buttons = {}
-        for icon, label, page_id in self.PAGES:
-            btn = SidebarButton(icon, label)
+        for icon_name, label, page_id in self.PAGES:
+            btn = SidebarButton(icon_name, label)
             btn.clicked.connect(lambda checked, p=page_id: self._on_button_clicked(p))
             self._buttons[page_id] = btn
             layout.addWidget(btn)

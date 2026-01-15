@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QThread, QObject, QSize
 from PySide6.QtGui import QPixmap, QImage, QColor, QPainter, QPainterPath
 
+from ui.icons import get_icon, get_pixmap
+
 
 class ThumbnailWorker(QObject):
     """Worker to generate video thumbnails in background."""
@@ -112,7 +114,8 @@ class VideoCard(QWidget):
             border-radius: 8px;
         """)
         self._thumbnail.setAlignment(Qt.AlignCenter)
-        self._thumbnail.setText("📹")
+        # Use icon placeholder instead of emoji
+        self._thumbnail.setPixmap(get_pixmap("video", color="#52525B", size=32))
         layout.addWidget(self._thumbnail)
         
         # Info container
@@ -164,7 +167,8 @@ class VideoCard(QWidget):
         layout.addLayout(info_layout, 1)
         
         # Remove button
-        self._remove_btn = QPushButton("✕")
+        self._remove_btn = QPushButton("")
+        self._remove_btn.setIcon(get_icon("x", color="#52525B", size=16))
         self._remove_btn.setFixedSize(24, 24)
         self._remove_btn.setCursor(Qt.PointingHandCursor)
         self._remove_btn.setStyleSheet("""

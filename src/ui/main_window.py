@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QFrame, QSizePolicy
 )
 from PySide6.QtGui import QAction, QDesktopServices
-from PySide6.QtCore import Qt, QFile, QTextStream, QThread, QUrl, QEvent, QObject, Signal
+from PySide6.QtCore import Qt, QFile, QTextStream, QThread, QUrl, QEvent, QObject, Signal, QSize
 import subprocess
 import platform
 
@@ -24,6 +24,7 @@ from ui.video_card import VideoCard
 from ui.toggle_switch import ToggleSwitch, ToggleSwitchWithDescription
 from ui.collapsible_section import CollapsibleSection
 from ui.log_panel import LogPanel
+from ui.icons import get_icon
 from core.processor import ProcessingWorker
 from core.analyzer import BlurAnalysisWorker
 from core.job import Job
@@ -45,7 +46,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} Pro")
-        self.setMinimumSize(1100, 750)
+        self.setMinimumSize(1200, 800)
         
         # Internal State
         self.jobs = []
@@ -75,43 +76,87 @@ class MainWindow(QMainWindow):
         self.sidebar.page_changed.connect(self.on_page_changed)
         main_layout.addWidget(self.sidebar)
         
-        # Content Area
-        content_widget = QWidget()
-        content_widget.setObjectName("contentArea")
-        content_layout = QVBoxLayout(content_widget)
-        content_layout.setContentsMargins(24, 24, 24, 0)
-        content_layout.setSpacing(16)
+        # =====================================================================
+        # NEW LAYOUT: [Queue] | [Preview + Settings]
+        # =====================================================================
         
-        # Stacked widget for pages
+        # Content Splitter (Queue vs Right Panel)
+        self.content_splitter = QSplitter(Qt.Horizontal)
+        self.content_splitter.setHandleWidth(1)
+        self.content_splitter.setStyleSheet("QSplitter::handle { background: #27272A; }")
+        
+        # 1. Left: Persistent Queue
+        self.queue_section = self.create_queue_section()
+        self.content_splitter.addWidget(self.queue_section)
+        
+        # 2. Right: Preview + Dynamic Pages
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
+        
+        # Vertical Splitter for Preview vs Page Content
+        self.right_splitter = QSplitter(Qt.Vertical)
+        self.right_splitter.setHandleWidth(1)
+        self.right_splitter.setStyleSheet("QSplitter::handle { background: #27272A; }")
+        
+        # Top: Persistent Preview
+        self.preview_section = self.create_preview_section()
+        self.right_splitter.addWidget(self.preview_section)
+        
+        # Bottom: Stacked Pages (Settings, Export, Advanced)
+        self.pages_container = QWidget()
+        pages_layout = QVBoxLayout(self.pages_container)
+        pages_layout.setContentsMargins(24, 16, 24, 0) # Add padding for pages
+        
         self.pages = QStackedWidget()
         
-        # Create pages
-        self.videos_page = self.create_videos_page()
+        # Create pages (Videos page is no longer needed in stack)
         self.settings_page = self.create_settings_page()
         self.export_page = self.create_export_page()
         self.advanced_page = self.create_advanced_page()
         
-        self.pages.addWidget(self.videos_page)
         self.pages.addWidget(self.settings_page)
         self.pages.addWidget(self.export_page)
         self.pages.addWidget(self.advanced_page)
         
-        content_layout.addWidget(self.pages)
+        pages_layout.addWidget(self.pages)
+        self.right_splitter.addWidget(self.pages_container)
         
-        # Action Bar (always visible at bottom)
+        # Add splitter to right panel
+        right_layout.addWidget(self.right_splitter, 1)
+        
+        # Action Bar (Always visible at bottom right)
+        right_content_margins = QWidget()
+        right_margins_layout = QVBoxLayout(right_content_margins)
+        right_margins_layout.setContentsMargins(24, 0, 24, 0) # Align with pages padding
+        
         self.action_bar = self.create_action_bar()
-        content_layout.addWidget(self.action_bar)
+        right_margins_layout.addWidget(self.action_bar)
         
-        # Log Panel (collapsible at bottom)
+        # Log Panel
         self.log_panel = LogPanel()
-        content_layout.addWidget(self.log_panel)
+        right_margins_layout.addWidget(self.log_panel)
         
-        main_layout.addWidget(content_widget, 1)
+        right_layout.addWidget(right_content_margins)
+
+        self.content_splitter.addWidget(right_panel)
+        
+        # Set initial splitter sizes (Queue roughly 1/3, Preview vs Settings dynamic)
+        self.content_splitter.setStretchFactor(0, 1) # Queue
+        self.content_splitter.setStretchFactor(1, 3) # Right Panel
+        self.right_splitter.setStretchFactor(0, 1)   # Preview
+        self.right_splitter.setStretchFactor(1, 0)   # Pages (Hidden initially if starting on Videos)
+        
+        main_layout.addWidget(self.content_splitter)
         
         # Initialize Settings
         self.settings_manager = SettingsManager()
         self.set_ui_from_settings(self.settings_manager.get_all())
         self.update_default_settings_from_ui()
+        
+        # Initial Page State
+        self.on_page_changed("videos")
         
         # Setup Keyboard Shortcuts
         self._setup_shortcuts()
@@ -163,33 +208,28 @@ class MainWindow(QMainWindow):
     # PAGE CREATION
     # =========================================================================
 
-    def create_videos_page(self):
-        """Create the main videos/queue page."""
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
+    def create_queue_section(self):
+        """Create the persistent video queue section (Left Left)."""
+        widget = QWidget()
+        widget.setMinimumWidth(300)
+        # Background slightly darker to distinguish from sidebar and content
+        widget.setObjectName("queueSection") 
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(16, 24, 16, 16)
+        layout.setSpacing(12)
         
         # Header
         header = QLabel("Video Queue")
-        header.setObjectName("headerLabel")
+        header.setObjectName("headerLabelSmall")
+        header.setStyleSheet("color: #E4E4E7; font-weight: 600; font-size: 14px;")
         layout.addWidget(header)
-        
-        # Main content splitter
-        splitter = QSplitter(Qt.Horizontal)
-        
-        # Left side: Queue
-        left_widget = QWidget()
-        left_layout = QVBoxLayout(left_widget)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(12)
         
         # Drop Zone
         self.drop_zone = DropZone()
         self.drop_zone.files_dropped.connect(self.handle_files_dropped)
         self.drop_zone.clicked.connect(self.open_file_dialog)
-        self.drop_zone.setMinimumHeight(120)
-        left_layout.addWidget(self.drop_zone)
+        self.drop_zone.setMinimumHeight(100)
+        layout.addWidget(self.drop_zone)
         
         # Queue container with scroll
         queue_scroll = QScrollArea()
@@ -200,53 +240,46 @@ class MainWindow(QMainWindow):
         self.queue_container = QWidget()
         self.queue_container.setObjectName("queueContainer")
         self.queue_layout = QVBoxLayout(self.queue_container)
-        self.queue_layout.setContentsMargins(0, 0, 8, 0)
+        self.queue_layout.setContentsMargins(0, 0, 4, 0) # Small right margin for scrollbar
         self.queue_layout.setSpacing(8)
         self.queue_layout.addStretch()
         
         queue_scroll.setWidget(self.queue_container)
-        left_layout.addWidget(queue_scroll, 1)
+        layout.addWidget(queue_scroll, 1)
         
         # Queue controls
         controls = QHBoxLayout()
         
-        self.btn_remove = QPushButton("Remove Selected")
+        self.btn_remove = QPushButton("Remove")
         self.btn_remove.setProperty("secondary", True)
         self.btn_remove.clicked.connect(self.remove_selected_jobs)
         
-        self.btn_clear = QPushButton("Clear Queue")
+        self.btn_clear = QPushButton("Clear")
         self.btn_clear.setProperty("secondary", True)
         self.btn_clear.clicked.connect(self.clear_queue)
         
         controls.addWidget(self.btn_remove)
         controls.addWidget(self.btn_clear)
-        controls.addStretch()
-        left_layout.addLayout(controls)
+        layout.addLayout(controls)
         
-        splitter.addWidget(left_widget)
+        return widget
+
+    def create_preview_section(self):
+        """Create the persistent preview section (Top Right)."""
+        widget = QWidget()
+        widget.setObjectName("previewSection")
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(24, 24, 24, 0)
+        layout.setSpacing(12)
         
-        # Right side: Preview
-        right_widget = QWidget()
-        right_widget.setObjectName("previewArea")
-        right_layout = QVBoxLayout(right_widget)
-        right_layout.setContentsMargins(16, 16, 16, 16)
-        
-        preview_header = QLabel("Preview")
-        preview_header.setStyleSheet("color: #FFFFFF; font-weight: 600; font-size: 14px;")
-        right_layout.addWidget(preview_header)
+        header = QLabel("Preview")
+        header.setStyleSheet("color: #E4E4E7; font-weight: 600; font-size: 14px;")
+        layout.addWidget(header)
         
         self.preview_widget = PreviewWidget()
-        right_layout.addWidget(self.preview_widget, 1)
+        layout.addWidget(self.preview_widget, 1)
         
-        splitter.addWidget(right_widget)
-        
-        # Set sizes
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 2)
-        
-        layout.addWidget(splitter, 1)
-        
-        return page
+        return widget
 
     def create_settings_page(self):
         """Create the camera/extraction settings page."""
@@ -638,12 +671,16 @@ class MainWindow(QMainWindow):
         # Buttons row
         buttons = QHBoxLayout()
         
-        self.process_btn = QPushButton("▶  Start Processing")
+        self.process_btn = QPushButton("  Start Processing")
+        self.process_btn.setIcon(get_icon("play", color="#FFFFFF", size=20))
+        self.process_btn.setIconSize(QSize(20, 20))
         self.process_btn.setFixedHeight(48)
         self.process_btn.clicked.connect(self.start_processing)
         self.process_btn.setEnabled(False)
         
-        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn = QPushButton("  Cancel")
+        self.cancel_btn.setIcon(get_icon("x", color="#FFFFFF", size=20))
+        self.cancel_btn.setIconSize(QSize(20, 20))
         self.cancel_btn.setObjectName("cancelButton")
         self.cancel_btn.setFixedHeight(48)
         self.cancel_btn.setFixedWidth(120)
@@ -678,13 +715,25 @@ class MainWindow(QMainWindow):
     # =========================================================================
 
     def on_page_changed(self, page_id):
-        page_map = {
-            "videos": 0,
-            "settings": 1,
-            "export": 2,
-            "advanced": 3,
-        }
-        self.pages.setCurrentIndex(page_map.get(page_id, 0))
+        # In the new layout, "videos" translates to "Hide Settings Panel"
+        # so the Preview can take up more space.
+        
+        if page_id == "videos":
+            self.pages_container.hide()
+            # Reset splitter to give full height to preview if desired, 
+            # effectively it works because pages_container is hidden.
+        else:
+            self.pages_container.show()
+            page_map = {
+                "settings": 0,
+                "export": 1,
+                "advanced": 2,
+            }
+            # Adjust index because we removed the videos page from the stack
+            # Stack Logic: 0=Settings, 1=Export, 2=Advanced
+            
+            idx = page_map.get(page_id, 0)
+            self.pages.setCurrentIndex(idx)
 
     # =========================================================================
     # SETTINGS MANAGEMENT

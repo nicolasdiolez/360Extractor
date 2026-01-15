@@ -118,6 +118,9 @@ python src/main.py --input <video_path> --output <output_dir> [options]
 | `--adaptive` | Enable intelligent keyframing (skip static scenes). | `False` |
 | `--motion-threshold` | Sensitivity for motion detection (0.0-100.0). Higher = needs more motion to extract. | `5.0` |
 | `--export-telemetry` | Extract GPS/IMU metadata and embed it into output images (EXIF). | `False` |
+| `--naming-mode` | Naming convention: `realityscan`, `simple`, or `custom`. | `realityscan` |
+| `--image-pattern` | Custom image filename pattern (e.g., `{filename}_{frame}`). | - |
+| `--mask-pattern` | Custom mask filename pattern (e.g., `{image_name}_mask`). | - |
 
 #### Examples
 

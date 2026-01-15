@@ -577,6 +577,17 @@ QWidget#contentArea {
     background-color: #0D0D0F;
 }
 
+/* Queue Section (Persistent Left) */
+QWidget#queueSection {
+    background-color: #121214; 
+    border-right: 1px solid #1E1E22;
+}
+
+/* Preview Section (Persistent Top-Right) */
+QWidget#previewSection {
+    background-color: #0D0D0F;
+}
+
 /* Settings panel */
 QWidget#settingsPanel {
     background-color: #161618;
