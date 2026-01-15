@@ -124,7 +124,7 @@ class Sidebar(QWidget):
         layout.addStretch()
         
         # Version footer
-        version = QLabel("v2.0.0")
+        version = QLabel("v2.1.0")
         version.setStyleSheet("color: #52525B; font-size: 11px; padding: 20px;")
         version.setAlignment(Qt.AlignCenter)
         layout.addWidget(version)

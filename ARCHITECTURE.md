@@ -60,19 +60,20 @@ graph TD
 ### Component Breakdown
 
 #### A. View (UI & CLI Layer)
-- **MainWindow:** The primary GUI container with sidebar navigation and stacked pages.
-- **Sidebar:** Navigation component for switching between Videos, Settings, Export, and Advanced pages.
+- **MainWindow:** Redesigned persistent layout: [Queue (Left) | Content + Preview (Right)].
+- **Sidebar:** Navigation component (Icons only/Compact) for switching "Content" pages.
 - **VideoCard:** Modern card widget displaying video jobs with thumbnails and progress.
-- **CollapsibleSection:** Animated expandable sections for organized settings.
-- **ToggleSwitch:** Modern animated toggle replacing standard checkboxes.
-- **Headless Interface:** Command-line entry point using `argparse`.
+- **PreviewWidget:** Persistent preview panel, always visible during navigation.
+- **LogPanel:** Collapsible log viewer at the bottom of the content area.
+- **Icons:** Centralized SVG icon library (`icons.py`) replacing emojis.
+- **Headless Interface:** Command-line entry point using `argparse` with custom naming support.
 
 #### B. Controller (Logic Layer)
 - **AppController:** Manages application state and settings prioritization (CLI > Config > Default).
 - **SignalManager:** Routes events (signals) to both GUI widgets and CLI progress bars (`tqdm`).
 
 #### C. Model (Processing Layer)
-- **VideoProcessor:** Orchestrates the re-projection loop.
+- **VideoProcessor:** Orchestrates the re-projection loop with custom naming strategies.
 - **MotionDetector:** Implements Farneback Optical Flow to calculate scene change magnitude.
 - **TelemetryHandler:** Detects and parses GPMF (GoPro), CAMM (Insta360), and SRT (DJI) metadata.
 
@@ -87,7 +88,6 @@ sequenceDiagram
     participant F as File (360 Video)
     participant T as Telemetry
     participant E as Extractor
-    participant M as Motion Detector
     participant P as Projector
     participant A as AI Service
     participant D as Disk
@@ -95,10 +95,9 @@ sequenceDiagram
     F->>T: Extract GPMF/CAMM/SRT
     T-->>T: Sync & Interpolate GPS
     F->>E: Decode Frame (t)
-    alt Mode: Adaptive
-        E->>M: Current vs Last Frame
-        M-->>E: Motion Score
-        note over E: If score < threshold, skip frame
+    alt Mode: Adaptive (Motion)
+        E->>E: Check Optical Flow
+        note over E: If score < threshold, skip
     end
     E->>P: Raw Equirectangular Frame
     loop For Each Active Camera
@@ -109,19 +108,19 @@ sequenceDiagram
         else AI: Generate Mask
             A->>A: Segment Person -> Mask
         end
-        P->>D: Save Image + EXIF (GPS)
+        P->>D: Save Image (Custom Naming) + EXIF
     end
 ```
 
 ### 4.2. Algorithms
 
 #### Adaptive Interval (Optical Flow)
-To minimize redundancy, the application calculates the **Dense Optical Flow** between the current frame and the last extracted frame using the Farneback algorithm on downsampled grayscale versions. 
-- **Score:** Mean magnitude of all flow vectors.
-- **Decision:** Extraction occurs only when `score > motion_threshold`.
+To minimize redundancy, the application calculates the **Dense Optical Flow** between the current frame and the last extracted frame using the Farneback algorithm. 
 
-#### Metadata Synchronization
-Telemetry samples are extracted as a time-series. For any extracted frame at time $t$, the system performs linear interpolation between the two closest GPS samples $(t_i, t_{i+1})$ to ensure millisecond-accurate EXIF coordinates.
+#### Custom Naming Strategies
+The system supports dynamic file naming patterns using context variables:
+- `{filename}`, `{frame}`, `{camera}`
+- Modes: Standard (RealityScan), Simple, and fully Custom patterns.
 
 ---
 
@@ -131,15 +130,26 @@ Telemetry samples are extracted as a time-series. For any extracted frame at tim
 360Extractor/
 ├── src/
 │   ├── main.py                 # Entry point (GUI/CLI router)
-│   ├── ui/                     # GUI Layer (v2.0)
-│   │   ├── main_window.py      # Main window with sidebar navigation
-│   │   ├── sidebar.py          # Navigation sidebar component
-│   │   ├── video_card.py       # Video job card with thumbnail
-│   │   ├── toggle_switch.py    # Modern animated toggle
-│   │   ├── collapsible_section.py # Expandable settings sections
-│   │   ├── preview_widget.py   # Frame preview with blur score
-│   │   ├── widgets.py          # Drop zone and utilities
-│   │   └── styles.qss          # Modern dark theme stylesheet
+│   ├── ui/                     # GUI Layer (v2.1)
+│   │   ├── main_window.py      # Main window (Persistent Queue/Preview)
+│   │   ├── sidebar.py          # Navigation sidebar
+│   │   ├── video_card.py       # Job card component
+│   │   ├── preview_widget.py   # Persistent preview panel
+│   │   ├── log_panel.py        # Log viewer component
+│   │   ├── icons.py            # SVG Icon assets
+│   │   ├── styles.qss          # Modern dark theme stylesheet
+│   │   └── widgets.py          # Shared widgets
+│   ├── core/                   # Processing Core
+│   │   ├── processor.py        # Extraction Loop & Naming Logic
+│   │   ├── geometry.py         # Projection Math
+│   │   ├── telemetry.py        # GPS/IMU Manager
+│   │   ├── motion_detector.py  # Optical Flow Logic
+│   │   └── ai_model.py         # YOLO Wrapper
+│   └── utils/
+│       ├── gpmf_parser.py      # Binary GPMF Logic
+│       ├── camm_parser.py      # Binary CAMM Logic
+│       ├── srt_parser.py       # DJI Metadata Logic
+│       └── gpx_parser.py       # GPX Sidecar Parser
 │   ├── core/                   # Processing Core
 │   │   ├── processor.py        # Extraction Loop
 │   │   ├── geometry.py         # Projection Math

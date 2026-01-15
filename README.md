@@ -2,12 +2,12 @@
 
 High-performance desktop application and command-line tool for 360° video preprocessing. This tool generates optimized datasets for Gaussian Splatting and photogrammetry (COLMAP, RealityScan) by converting equirectangular footage into rectilinear pinhole views and removing operators using AI.
 
-> **v2.0** - New modern UI with sidebar navigation, video cards, and improved user experience.
+> **v2.1** - New persisted UI layout, professional SVG icons, and CLI custom naming support.
 
 ## Features
 
 - **360° to Rectilinear:** Reproject equirectangular video to pinhole views with configurable FOV and overlap.
-- **Modern UI (v2.0):**
+- **Modern UI (v2.1):**
     - **Sidebar Navigation:** Quick access to Videos, Settings, Export, and Advanced sections.
     - **Video Cards:** Visual queue with thumbnails, status indicators, and progress tracking.
     - **Collapsible Sections:** Organized settings with smooth animations.
