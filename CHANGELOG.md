@@ -5,9 +5,10 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - experimental-v2.1
+## [2.1.1] - 2026-01-20
 
 ### Added
+- **Documentation Restructuring** - Modular documentation in `docs/` directory for better readability
 - **Log panel** - Collapsible panel with color-coded log levels (INFO, WARNING, ERROR)
 - **Keyboard shortcuts** - Del (remove), Ctrl+O (open), Space (preview), Ctrl+Return (start), Escape (cancel)
 - **Multi-selection** - Ctrl+click to select multiple videos in queue

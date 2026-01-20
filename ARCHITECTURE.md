@@ -130,7 +130,7 @@ The system supports dynamic file naming patterns using context variables:
 360Extractor/
 ├── src/
 │   ├── main.py                 # Entry point (GUI/CLI router)
-│   ├── ui/                     # GUI Layer (v2.1)
+│   ├── ui/                     # GUI Layer (v2.1.1)
 │   │   ├── main_window.py      # Main window (Persistent Queue/Preview)
 │   │   ├── sidebar.py          # Navigation sidebar
 │   │   ├── video_card.py       # Job card component
