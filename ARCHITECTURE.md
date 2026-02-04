@@ -11,7 +11,7 @@ This document outlines the technical design for a high-performance desktop and C
 
 ---
 
-## 2. Technology Stack Selection
+## 2. Technology Stack Selection (v2.2.0)
 
 ### Core Framework: Python 3.10+ & PySide6 (Qt)
 **Justification:**
@@ -25,7 +25,7 @@ This document outlines the technical design for a high-performance desktop and C
 | **UI Framework** | **PySide6** | Modern Qt bindings for Python. |
 | **Video Processing** | **OpenCV (cv2) + FFmpeg** | Industry standard for decoding/encoding. |
 | **Math/Array Ops** | **NumPy** | Essential for vectorized matrix operations. |
-| **AI/ML** | **YOLOv8 (Ultralytics)** | State-of-the-art detection and segmentation. |
+| **AI/ML** | **YOLO26 (Ultralytics)** | Next-gen NMS-Free architecture for deterministic latency. |
 | **Telemetry** | **piexif + Custom Parsers** | Native GPMF/CAMM parsing and EXIF injection. |
 | **Motion Detection** | **OpenCV Farneback** | Dense Optical Flow for adaptive extraction. |
 | **Progress Tracking**| **tqdm** | Real-time CLI progress monitoring. |
