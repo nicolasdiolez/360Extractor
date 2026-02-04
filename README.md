@@ -2,7 +2,7 @@
 
 High-performance desktop application and command-line tool for 360° video preprocessing. This tool generates optimized datasets for Gaussian Splatting and photogrammetry (COLMAP, RealityScan) by converting equirectangular footage into rectilinear pinhole views and removing operators using AI.
 
-> **v2.1.1** - Documentation restructuring, new persisted UI layout, professional SVG icons, and CLI custom naming support.
+> **v2.2.0** - YOLO26 integration (NMS-Free), +43% performance boost, and updated dependencies.
 
 ## Key Features
 
@@ -53,8 +53,8 @@ For detailed information on configuration and usage, please refer to:
 ## License
 
 This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
-Required by usage of YOLOv8 (Ultralytics). See [LICENSE](LICENSE) for details.
+Required by usage of YOLO26 (Ultralytics). See [LICENSE](LICENSE) for details.
 
 ## Credits
 
-Special thanks to **Ultralytics** (YOLOv8), **The Qt Company** (PySide6), and **OpenCV**.
+Special thanks to **Ultralytics** (YOLO26), **The Qt Company** (PySide6), and **OpenCV**.

@@ -1,6 +1,6 @@
 PySide6>=6.5.0
 opencv-python>=4.8.0
 numpy>=1.24.0
-ultralytics>=8.0.0
+ultralytics>=8.4.0
 tqdm>=4.66.0
 piexif>=1.1.3

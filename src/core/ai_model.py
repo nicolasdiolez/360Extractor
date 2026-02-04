@@ -34,7 +34,7 @@ class AIService:
             
         return info
     
-    def __init__(self, model_name='yolov8n-seg.pt'):
+    def __init__(self, model_name='yolo26n-seg.pt'):
         """
         Initialize the AI model.
         

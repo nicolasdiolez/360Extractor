@@ -34,8 +34,8 @@ class ProcessingWorker(QObject):
         
         if needs_ai:
              # Initialize YOLO model
-             # Note: Using 'yolov8n-seg.pt' (nano) for performance.
-             self.ai_service = AIService('yolov8n-seg.pt')
+             # Note: Using 'yolo26n-seg.pt' (nano) for maximum performance (NMS-free).
+             self.ai_service = AIService('yolo26n-seg.pt')
 
         self.motion_detector = MotionDetector()
 
