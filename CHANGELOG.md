@@ -5,6 +5,12 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2] - 2026-02-11
+
+### Fixed
+- **Windows Encoding Fix**: Resolved `UnicodeDecodeError` on non-UTF-8 systems (e.g., Chinese Windows) by enforcing UTF-8 decoding for FFmpeg/probe output.
+- **GPU Debugging**: Added detailed PyTorch and CUDA version logging to assist in diagnosing "No GPU detected" issues.
+
 ## [2.2.1] - 2026-02-11
 
 ### Fixed

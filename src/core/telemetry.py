@@ -48,7 +48,7 @@ class TelemetryHandler:
                 '-show_format',
                 video_path
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True, encoding='utf-8', errors='replace')
             data = json.loads(result.stdout)
             
             duration = 0.0

@@ -65,4 +65,4 @@ tests/verify_*.py
 
 # YOLO Model (auto-downloaded by ultralytics)
 yolov8n-seg.pt
-src/yolov8n-seg.ptyolo26n-seg.pt
+yolo26n-seg.pt

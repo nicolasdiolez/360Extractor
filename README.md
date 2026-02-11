@@ -2,7 +2,7 @@
 
 High-performance desktop application and command-line tool for 360° video preprocessing. This tool generates optimized datasets for Gaussian Splatting and photogrammetry (COLMAP, RealityScan) by converting equirectangular footage into rectilinear pinhole views and removing operators using AI.
 
-> **v2.2.1** - Critical fix for YOLO 26 loading (Ultralytics update). Mask refinement added.
+> **v2.2.2** - Fixed Windows encoding crash (UnicodeDecodeError) and improved GPU diagnostics.
 
 ## Key Features
 

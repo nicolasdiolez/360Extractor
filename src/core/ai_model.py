@@ -32,6 +32,16 @@ class AIService:
             info['device_name'] = torch.cuda.get_device_name(0)
             info['is_accelerated'] = True
             
+        # detailed logging
+        logger.info(f"PyTorch Version: {torch.__version__}")
+        if torch.cuda.is_available():
+             logger.info(f"CUDA Available: True (Version: {torch.version.cuda})")
+             logger.info(f"CUDA Device Count: {torch.cuda.device_count()}")
+             logger.info(f"Current CUDA Device: {torch.cuda.current_device()}")
+             logger.info(f"Device Name: {torch.cuda.get_device_name(0)}")
+        else:
+             logger.info("CUDA Available: False")
+             
         return info
     
     def __init__(self, model_name='yolo26n-seg.pt'):
