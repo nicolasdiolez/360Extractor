@@ -5,6 +5,13 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-02-11
+
+### Fixed
+- **Critical AI Loading Fix**: Resolved `Segment26` class error by upgrading Ultralytics core to `8.4.14+`.
+- **Mask Refinement**: Added morphological dilation to prevent "halos" around masked subjects.
+- **Legacy Cleanup**: Removed fallback logic for deprecated YOLOv8 models.
+
 ## [2.2.0] - 2026-01-27
 
 ### Changed
