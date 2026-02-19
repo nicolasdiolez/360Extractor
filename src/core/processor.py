@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import os
 import time
+import concurrent.futures
 from collections import deque
 from PySide6.QtCore import QObject, Signal
 
@@ -38,9 +39,11 @@ class ProcessingWorker(QObject):
              self.ai_service = AIService('yolo26n-seg.pt')
 
         self.motion_detector = MotionDetector()
+        self.io_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
     def stop(self):
         self.is_running = False
+        self.io_pool.shutdown(wait=False)
 
     def run(self):
         total_jobs = len(self.jobs)
@@ -233,6 +236,10 @@ class ProcessingWorker(QObject):
                     
                     last_extracted_frame = frame.copy()
 
+                batch_images = []
+                batch_contexts = []
+                batch_names = []
+
                 for name, _, _, _ in views:
                     if name not in maps:
                         continue
@@ -284,77 +291,76 @@ class ProcessingWorker(QObject):
                         gaussian = cv2.GaussianBlur(rect_img, (0, 0), 2.0)
                         rect_img = cv2.addWeighted(rect_img, 1.0 + sharpen_strength, gaussian, -sharpen_strength, 0)
 
-                    # 4. AI Processing
-                    final_img = rect_img
-                    mask_or_skip = None
-                    
+                    batch_images.append(rect_img)
+                    batch_names.append(name)
+                    batch_contexts.append({
+                        'filename': name_no_ext,
+                        'frame': f"{frame_idx:06d}",
+                        'camera': name,
+                        'ext': ext
+                    })
+
+                # 4. AI Processing
+                ai_results = []
+                if batch_images:
                     if self.ai_service and ai_mode_internal != 'none':
-                        final_img, result_extra = self.ai_service.process_image(rect_img, mode=ai_mode_internal)
+                        ai_results = self.ai_service.process_batch(batch_images, mode=ai_mode_internal)
+                    else:
+                        ai_results = [(img, None) for img in batch_images]
+
+                # 5. Save (Multi-threaded I/O)
+                futures = []
+                naming_mode = job.settings.get('naming_mode', 'realityscan')
+                img_pattern = job.settings.get('image_pattern', '{filename}_frame{frame}_{camera}')
+                mask_pattern = job.settings.get('mask_pattern', '{filename}_frame{frame}_{camera}_mask')
+
+                def io_save_task(save_path, final_img, params, gps, handler, mask_path, mask_img):
+                    FileManager.save_image(save_path, final_img, params)
+                    if gps and handler:
+                        handler.embed_exif(save_path, *gps)
+                    if mask_img is not None and isinstance(mask_img, np.ndarray):
+                        FileManager.save_mask(mask_path, mask_img)
+
+                for i, (final_img, mask_or_skip) in enumerate(ai_results):
+                    if final_img is None and mask_or_skip is True:
+                        continue # Skipped
                         
-                        if ai_mode_internal == 'skip_frame' and result_extra is True:
-                            # Person detected, skip this view
-                            continue
-                        elif ai_mode_internal == 'generate_mask':
-                            mask_or_skip = result_extra
+                    name = batch_names[i]
+                    ctx = batch_contexts[i]
                     
-                    
-                    # 5. Save
-                    if final_img is not None:
-                        # Naming Logic
-                        naming_mode = job.settings.get('naming_mode', 'realityscan')
-                        
-                        # Context variables for naming
-                        ctx = {
-                            'filename': name_no_ext,
-                            'frame': f"{frame_idx:06d}",
-                            'camera': name,
-                            'ext': ext
-                        }
-                        
-                        save_name = ""
-                        mask_name = ""
+                    save_name = ""
+                    mask_name = ""
 
-                        if naming_mode == 'realityscan':
-                             # Standard RealityScan: [orig_name]_frame[X]_[cam].jpg
-                             save_name = f"{name_no_ext}_frame{frame_idx:06d}_{name}{ext}"
-                             # Mask: [image_name].mask.png
-                             mask_name = f"{save_name}.mask.png"
-                             
-                        elif naming_mode == 'simple':
-                            # Simple Suffix: [orig_name]_frame[X]_[cam].jpg
-                            save_name = f"{name_no_ext}_frame{frame_idx:06d}_{name}{ext}"
-                            # Mask: [orig_name]_frame[X]_[cam]_mask.png
-                            mask_name = f"{name_no_ext}_frame{frame_idx:06d}_{name}_mask.png"
-                            
-                        elif naming_mode == 'custom':
-                            img_pattern = job.settings.get('image_pattern', '{filename}_frame{frame}_{camera}')
-                            mask_pattern = job.settings.get('mask_pattern', '{filename}_frame{frame}_{camera}_mask')
-                            
-                            # Generate Image Name
-                            # Note: pattern likely doesn't include extension, so we add it if missing or just append
-                            # Ideally, pattern is the "stem". We enforce {ext} if user put it, or append standard ext
-                            if '{ext}' in img_pattern:
-                                save_name = self.generate_filename(img_pattern, ctx)
-                            else:
-                                save_name = self.generate_filename(img_pattern, ctx) + ext
-                                
-                            # Update context with the generated image name (excluding ext mostly, but let's see usage)
-                            # Ideally {image_name} is the full filename of the image
-                            ctx['image_name'] = save_name
-                            
-                            if '{ext}' in mask_pattern:
-                                mask_name = self.generate_filename(mask_pattern, ctx)
-                            else:
-                                mask_name = self.generate_filename(mask_pattern, ctx) + ".png" # Masks always png
+                    if naming_mode == 'realityscan':
+                         save_name = f"{name_no_ext}_frame{frame_idx:06d}_{name}{ext}"
+                         mask_name = f"{save_name}.mask.png"
+                    elif naming_mode == 'simple':
+                        save_name = f"{name_no_ext}_frame{frame_idx:06d}_{name}{ext}"
+                        mask_name = f"{name_no_ext}_frame{frame_idx:06d}_{name}_mask.png"
+                    elif naming_mode == 'custom':
+                        if '{ext}' in img_pattern:
+                            save_name = self.generate_filename(img_pattern, ctx)
+                        else:
+                            save_name = self.generate_filename(img_pattern, ctx) + ext
+                        ctx['image_name'] = save_name
+                        if '{ext}' in mask_pattern:
+                            mask_name = self.generate_filename(mask_pattern, ctx)
+                        else:
+                            mask_name = self.generate_filename(mask_pattern, ctx) + ".png"
 
-                        full_save_path = os.path.join(output_dir, save_name)
-                        FileManager.save_image(full_save_path, final_img, save_params)
-                        
-                        if current_gps:
-                            telemetry_handler.embed_exif(full_save_path, *current_gps)
+                    full_save_path = os.path.join(output_dir, save_name)
+                    full_mask_path = os.path.join(output_dir, mask_name)
 
-                        if mask_or_skip is not None and isinstance(mask_or_skip, np.ndarray):
-                            FileManager.save_mask(os.path.join(output_dir, mask_name), mask_or_skip)
+                    # Submit to thread pool
+                    futures.append(self.io_pool.submit(
+                        io_save_task, full_save_path, final_img, save_params, 
+                        current_gps, telemetry_handler, full_mask_path, mask_or_skip
+                    ))
+                
+                # Wait for all saves for this frame to complete before moving to the next
+                # This prevents unbounded memory buildup if GPU is faster than SSD
+                if futures:
+                    concurrent.futures.wait(futures)
             
             frame_idx += 1
             

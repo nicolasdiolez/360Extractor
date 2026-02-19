@@ -11,7 +11,7 @@ This document outlines the technical design for a high-performance desktop and C
 
 ---
 
-## 2. Technology Stack Selection (v2.2.0)
+## 2. Technology Stack Selection (v2.3.0)
 
 ### Core Framework: Python 3.10+ & PySide6 (Qt)
 **Justification:**
@@ -73,9 +73,10 @@ graph TD
 - **SignalManager:** Routes events (signals) to both GUI widgets and CLI progress bars (`tqdm`).
 
 #### C. Model (Processing Layer)
-- **VideoProcessor:** Orchestrates the re-projection loop with custom naming strategies.
+- **VideoProcessor:** Orchestrates the re-projection loop. Utilizes `concurrent.futures.ThreadPoolExecutor` for asynchronous, non-blocking I/O saving.
 - **MotionDetector:** Implements Farneback Optical Flow to calculate scene change magnitude.
 - **TelemetryHandler:** Detects and parses GPMF (GoPro), CAMM (Insta360), and SRT (DJI) metadata.
+- **AIService:** Wraps YOLO26, featuring `process_batch` for high-throughput GPU inference across multiple camera views simultaneously.
 
 ---
 
@@ -90,7 +91,7 @@ sequenceDiagram
     participant E as Extractor
     participant P as Projector
     participant A as AI Service
-    participant D as Disk
+    participant IO as ThreadPool (Disk)
 
     F->>T: Extract GPMF/CAMM/SRT
     T-->>T: Sync & Interpolate GPS
@@ -100,16 +101,17 @@ sequenceDiagram
         note over E: If score < threshold, skip
     end
     E->>P: Raw Equirectangular Frame
-    loop For Each Active Camera
-        P->>P: Reproject to Rectilinear
-        P->>A: Send Image
-        alt AI: Skip Frame
-            A->>A: Detect Person -> Skip
-        else AI: Generate Mask
-            A->>A: Segment Person -> Mask
-        end
-        P->>D: Save Image (Custom Naming) + EXIF
+    
+    P->>P: Reproject selected cameras (Batch Builders)
+    P->>A: Send Batch of Images
+    alt AI: Skip Frame
+        A->>A: Batch Detect -> Skip frame if any person
+    else AI: Generate Mask
+        A->>A: Batch Segment -> Return masks
     end
+    
+    P->>IO: Submit parallel save tasks
+    IO->>IO: Save Images & Masks + Embed EXIF
 ```
 
 ### 4.2. Algorithms

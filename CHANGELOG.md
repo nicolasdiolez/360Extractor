@@ -5,6 +5,13 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-02-19
+
+### Changed
+- **Performance (AI Batching)**: Dramatically improved inference speeds by batch processing all camera views simultaneously.
+- **Performance (I/O)**: Implemented `ThreadPoolExecutor` for asynchronous image and mask saving.
+- **Security**: Mitigated potential XML vulnerabilities (XXE/Billion Laughs) in the GPX parser by migrating to `defusedxml`.
+
 ## [2.2.2] - 2026-02-11
 
 ### Fixed

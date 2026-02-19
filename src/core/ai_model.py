@@ -133,3 +133,51 @@ class AIService:
                 return image, 255 * np.ones((h, w), dtype=np.uint8)
 
         return image, None
+
+    def process_batch(self, images, mode='none', conf=0.25):
+        """
+        Process a batch of images to detect/remove operators.
+        
+        Args:
+            images (list of np.ndarray): The input images (BGR).
+            mode (str): Processing mode - 'none', 'skip_frame', 'generate_mask'.
+            conf (float): Confidence threshold.
+            
+        Returns:
+            list of tuples: [(processed_image, mask_or_status), ...]
+        """
+        if mode == 'none' or self.model is None or not images:
+            return [(img, None) for img in images]
+            
+        # Run inference on the whole batch
+        results = self.model(images, classes=self.target_classes, device=self.device, verbose=False, conf=conf)
+        
+        batch_results = []
+        for i, res in enumerate(results):
+            img = images[i]
+            has_detection = False
+            if res and res.boxes:
+                has_detection = True
+
+            if mode == 'skip_frame':
+                if has_detection:
+                    batch_results.append((None, True))
+                else:
+                    batch_results.append((img, False))
+            elif mode == 'generate_mask':
+                if has_detection and res.masks:
+                    full_mask = np.zeros(img.shape[:2], dtype=np.uint8)
+                    for m in res.masks.xy:
+                        pts = np.array(m, np.int32).reshape((-1, 1, 2))
+                        cv2.fillPoly(full_mask, [pts], 255)
+                    kernel = np.ones((15, 15), np.uint8)
+                    full_mask = cv2.dilate(full_mask, kernel, iterations=1)
+                    final_mask = cv2.bitwise_not(full_mask)
+                    batch_results.append((img, final_mask))
+                else:
+                    h, w = img.shape[:2]
+                    batch_results.append((img, 255 * np.ones((h, w), dtype=np.uint8)))
+            else:
+                batch_results.append((img, None))
+                
+        return batch_results
