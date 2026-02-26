@@ -11,7 +11,7 @@ This document outlines the technical design for a high-performance desktop and C
 
 ---
 
-## 2. Technology Stack Selection (v2.3.0)
+## 2. Technology Stack Selection (v2.3.1)
 
 ### Core Framework: Python 3.10+ & PySide6 (Qt)
 **Justification:**
@@ -132,7 +132,7 @@ The system supports dynamic file naming patterns using context variables:
 360Extractor/
 ├── src/
 │   ├── main.py                 # Entry point (GUI/CLI router)
-│   ├── ui/                     # GUI Layer (v2.1.1)
+│   ├── ui/                     # GUI Layer
 │   │   ├── main_window.py      # Main window (Persistent Queue/Preview)
 │   │   ├── sidebar.py          # Navigation sidebar
 │   │   ├── video_card.py       # Job card component

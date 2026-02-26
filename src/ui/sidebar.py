@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QIcon, QFont
 
+from core.version import VERSION
 from ui.icons import get_icon
 
 class SidebarButton(QPushButton):
@@ -124,7 +125,7 @@ class Sidebar(QWidget):
         layout.addStretch()
         
         # Version footer
-        version = QLabel("v2.1.1")
+        version = QLabel(f"v{VERSION}")
         version.setStyleSheet("color: #52525B; font-size: 11px; padding: 20px;")
         version.setAlignment(Qt.AlignCenter)
         layout.addWidget(version)
