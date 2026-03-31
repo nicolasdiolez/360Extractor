@@ -9,7 +9,7 @@ High-performance desktop application and command-line tool for 360° video prepr
 - **360° to Rectilinear:** Reproject equirectangular video to pinhole views with configurable FOV and overlap.
 - **Dual Interface:** Graphical UI for ease of use and CLI for automation.
 - **Advanced Control:** Multiple layouts (Ring, Cube Map, Fibonacci), inclination settings, and selective camera extraction.
-- **AI-Powered:** Automatic operator removal and intelligent motion-based keyframing.
+- **AI-Powered:** Automatic operator/object removal (supports 80 COCO classes like humans, vehicles, plants) with adjustable confidence, mask inversion, and intelligent motion-based keyframing.
 - **Metadata Integration:** Extract GPS/IMU data (GoPro, Insta360, DJI) and embed into EXIF.
 - **Quality Control:** Automatic blur detection and filtering.
 

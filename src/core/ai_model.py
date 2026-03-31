@@ -72,19 +72,21 @@ class AIService:
         # Future: Make this configurable in settings
         self.target_classes = [0] 
 
-    def process_image(self, image, mode='none', conf=0.25):
+    def process_image(self, image, mode='none', conf=0.25, classes=None, invert_mask=True):
         """
-        Process an image to detect/remove operators.
+        Process an image to detect/remove target objects.
         
         Args:
             image (np.ndarray): The input image (BGR).
             mode (str): Processing mode - 'none', 'skip_frame', 'generate_mask'.
             conf (float): Confidence threshold.
+            classes (list): List of COCO class IDs to target.
+            invert_mask (bool): If True, invert masks (black targets, white bg).
             
         Returns:
             tuple: (processed_image, mask_or_status)
-                - If mode='skip_frame': returns (None, True) if person found, (image, False) otherwise.
-                - If mode='generate_mask': returns (image, mask) where mask is binary (0=person, 255=bg).
+                - If mode='skip_frame': returns (None, True) if targets found, (image, False) otherwise.
+                - If mode='generate_mask': returns (image, mask) where mask is binary.
                 - If mode='none': returns (image, None).
         """
         if mode == 'none' or self.model is None:
@@ -92,7 +94,8 @@ class AIService:
             
         # Run inference
         # stream=False ensures we get all results
-        results = self.model(image, classes=self.target_classes, device=self.device, verbose=False, conf=conf)
+        target_classes = classes if classes is not None else self.target_classes
+        results = self.model(image, classes=target_classes, device=self.device, verbose=False, conf=conf)
         
         has_detection = False
         if results and results[0].boxes:
@@ -124,24 +127,30 @@ class AIService:
 
                 # Invert mask for photogrammetry convention:
                 # Black (0) = Ignore/Masked (The Person), White (255) = Keep (Background).
-                final_mask = cv2.bitwise_not(full_mask)
+                if invert_mask:
+                    final_mask = cv2.bitwise_not(full_mask)
+                else:
+                    final_mask = full_mask
                 
                 return image, final_mask
             else:
                 # No person, return full white mask (keep everything)
                 h, w = image.shape[:2]
-                return image, 255 * np.ones((h, w), dtype=np.uint8)
+                bg_val = 255 if invert_mask else 0
+                return image, bg_val * np.ones((h, w), dtype=np.uint8)
 
         return image, None
 
-    def process_batch(self, images, mode='none', conf=0.25):
+    def process_batch(self, images, mode='none', conf=0.25, classes=None, invert_mask=True):
         """
-        Process a batch of images to detect/remove operators.
+        Process a batch of images to detect/remove target objects.
         
         Args:
             images (list of np.ndarray): The input images (BGR).
             mode (str): Processing mode - 'none', 'skip_frame', 'generate_mask'.
             conf (float): Confidence threshold.
+            classes (list): List of COCO class IDs to target.
+            invert_mask (bool): If True, invert masks (black targets, white bg).
             
         Returns:
             list of tuples: [(processed_image, mask_or_status), ...]
@@ -150,7 +159,8 @@ class AIService:
             return [(img, None) for img in images]
             
         # Run inference on the whole batch
-        results = self.model(images, classes=self.target_classes, device=self.device, verbose=False, conf=conf)
+        target_classes = classes if classes is not None else self.target_classes
+        results = self.model(images, classes=target_classes, device=self.device, verbose=False, conf=conf)
         
         batch_results = []
         for i, res in enumerate(results):
@@ -172,11 +182,15 @@ class AIService:
                         cv2.fillPoly(full_mask, [pts], 255)
                     kernel = np.ones((15, 15), np.uint8)
                     full_mask = cv2.dilate(full_mask, kernel, iterations=1)
-                    final_mask = cv2.bitwise_not(full_mask)
+                    if invert_mask:
+                        final_mask = cv2.bitwise_not(full_mask)
+                    else:
+                        final_mask = full_mask
                     batch_results.append((img, final_mask))
                 else:
                     h, w = img.shape[:2]
-                    batch_results.append((img, 255 * np.ones((h, w), dtype=np.uint8)))
+                    bg_val = 255 if invert_mask else 0
+                    batch_results.append((img, bg_val * np.ones((h, w), dtype=np.uint8)))
             else:
                 batch_results.append((img, None))
                 

@@ -30,6 +30,7 @@ from core.analyzer import BlurAnalysisWorker
 from core.job import Job
 from core.settings_manager import SettingsManager
 from core.version import APP_NAME, VERSION
+from core.ai_classes import COCO_CLASSES
 
 
 class ScrollBlocker(QObject):
@@ -561,6 +562,57 @@ class MainWindow(QMainWindow):
         ai_row.addWidget(self.ai_combo)
         ai_section.addLayout(ai_row)
         
+        # Invert Masks
+        self.ai_invert_toggle = ToggleSwitchWithDescription("Invert Masks", "Black=Target, White=Keep")
+        self.ai_invert_toggle.setChecked(True)
+        self.ai_invert_toggle.toggled.connect(self.on_setting_changed)
+        ai_section.addWidget(self.ai_invert_toggle)
+        
+        # Confidence slider
+        conf_row = QHBoxLayout()
+        conf_row.addWidget(QLabel("Confidence Level"))
+        conf_row.addStretch()
+        self.ai_conf_spin = QDoubleSpinBox()
+        self.ai_conf_spin.setRange(0.01, 1.0)
+        self.ai_conf_spin.setSingleStep(0.05)
+        self.ai_conf_spin.setValue(0.25)
+        self.ai_conf_spin.setFixedWidth(100)
+        self.ai_conf_spin.valueChanged.connect(self.on_setting_changed)
+        self.ai_conf_spin.installEventFilter(self.scroll_blocker)
+        conf_row.addWidget(self.ai_conf_spin)
+        ai_section.addLayout(conf_row)
+        
+        # Targets
+        ai_section.addWidget(QLabel("Detection Targets:"))
+        
+        presets_layout = QHBoxLayout()
+        self.chk_humans = QCheckBox("Humans")
+        self.chk_humans.setChecked(True)
+        self.chk_humans.toggled.connect(self.on_setting_changed)
+        self.chk_vehicles = QCheckBox("Vehicles")
+        self.chk_vehicles.toggled.connect(self.on_setting_changed)
+        self.chk_plants = QCheckBox("Plants")
+        self.chk_plants.toggled.connect(self.on_setting_changed)
+        
+        presets_layout.addWidget(self.chk_humans)
+        presets_layout.addWidget(self.chk_vehicles)
+        presets_layout.addWidget(self.chk_plants)
+        ai_section.addLayout(presets_layout)
+        
+        custom_row = QHBoxLayout()
+        custom_row.addWidget(QLabel("Custom:"))
+        self.txt_custom_classes = QLineEdit()
+        self.txt_custom_classes.setPlaceholderText("e.g. dog, umbrella, cup")
+        self.txt_custom_classes.textChanged.connect(self.on_setting_changed)
+        custom_row.addWidget(self.txt_custom_classes)
+        
+        self.btn_view_classes = QPushButton("?")
+        self.btn_view_classes.setFixedWidth(30)
+        self.btn_view_classes.clicked.connect(self.show_available_classes)
+        custom_row.addWidget(self.btn_view_classes)
+        
+        ai_section.addLayout(custom_row)
+        
         content_layout.addWidget(ai_section)
         
         # Blur Section
@@ -752,6 +804,12 @@ class MainWindow(QMainWindow):
             'pitch_offset': self.pitch_combo.currentData(),
             'export_telemetry': self.telemetry_toggle.isChecked(),
             'ai_mode': self.ai_combo.currentText(),
+            'ai_invert_mask': self.ai_invert_toggle.isChecked(),
+            'ai_confidence': self.ai_conf_spin.value(),
+            'ai_detect_humans': self.chk_humans.isChecked(),
+            'ai_detect_vehicles': self.chk_vehicles.isChecked(),
+            'ai_detect_plants': self.chk_plants.isChecked(),
+            'ai_custom_classes': self.txt_custom_classes.text(),
             'adaptive_mode': self.adaptive_toggle.isChecked(),
             'adaptive_threshold': self.motion_threshold_spin.value(),
             'blur_filter_enabled': self.blur_toggle.isChecked(),
@@ -769,7 +827,8 @@ class MainWindow(QMainWindow):
         widgets = [
             self.format_combo, self.interval_spin, self.interval_unit,
             self.res_spin, self.fov_spin, self.cam_count_spin,
-            self.layout_combo, self.pitch_combo, self.ai_combo,
+            self.layout_combo, self.pitch_combo, self.ai_combo, self.ai_invert_toggle,
+            self.ai_conf_spin, self.chk_humans, self.chk_vehicles, self.chk_plants, self.txt_custom_classes,
             self.blur_threshold_spin, self.sharpen_slider,
             self.motion_threshold_spin, self.naming_mode_combo,
             self.image_pattern_input, self.mask_pattern_input
@@ -803,6 +862,12 @@ class MainWindow(QMainWindow):
             self.pitch_combo.setCurrentIndex(idx)
             
         self.ai_combo.setCurrentText(settings.get('ai_mode', 'None'))
+        self.ai_invert_toggle.setChecked(settings.get('ai_invert_mask', True))
+        self.ai_conf_spin.setValue(settings.get('ai_confidence', 0.25))
+        self.chk_humans.setChecked(settings.get('ai_detect_humans', True))
+        self.chk_vehicles.setChecked(settings.get('ai_detect_vehicles', False))
+        self.chk_plants.setChecked(settings.get('ai_detect_plants', False))
+        self.txt_custom_classes.setText(settings.get('ai_custom_classes', ""))
         
         self.blur_toggle.setChecked(settings.get('blur_filter_enabled', False))
         self.smart_blur_toggle.setChecked(settings.get('smart_blur_enabled', False))
@@ -1134,6 +1199,18 @@ class MainWindow(QMainWindow):
         self.btn_analyze.setText("Analyze Selected Video")
         self.status_label.setText("Analysis failed")
         QMessageBox.critical(self, "Error", f"Analysis failed: {error_msg}")
+
+    def show_available_classes(self):
+        """Display a list of all available COCO classes."""
+        # Group classes for better readability
+        # It's an 80 items dict, let's format it in multiple columns or simple list
+        grouped_classes = "\n".join([f"{k}: {v}" for k, v in COCO_CLASSES.items()])
+        QMessageBox.information(
+            self, "Available Target Objects",
+            f"You can type any of the following items in the custom bar (comma separated):\n\n"
+            f"{grouped_classes}\n\n"
+            "Note: Sky and general background concepts are not native YOLO COCO classes."
+        )
 
     # =========================================================================
     # LIFECYCLE

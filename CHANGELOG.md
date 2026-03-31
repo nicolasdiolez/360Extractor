@@ -2,8 +2,14 @@
 
 All notable changes to 360 Extractor Pro will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+- **Dynamic AI Targets**: Added the ability to target specific object classes (Humans, Vehicles, Plants) or enter custom class queries from the 80 available COCO categories using YOLO.
+- **AI Confidence Tuning**: Added a UI slider to dynamically regulate the YOLO inference confidence limit.
+- **Mask Inversion**: Added a toggle switch in the UI and backend logic to invert the binary mask generation.
 
 ## [2.3.1] - 2026-02-26
 

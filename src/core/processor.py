@@ -144,6 +144,26 @@ class ProcessingWorker(QObject):
             ai_mode_internal = 'skip_frame'
         elif ai_mode_ui == 'Generate Mask':
             ai_mode_internal = 'generate_mask'
+            
+        ai_confidence = job.settings.get('ai_confidence', 0.25)
+        ai_invert_mask = job.settings.get('ai_invert_mask', True)
+        
+        from core.ai_classes import PRESETS, parse_custom_classes
+        target_classes = []
+        if job.settings.get('ai_detect_humans', True):
+            target_classes.extend(PRESETS["Humans"])
+        if job.settings.get('ai_detect_vehicles', False):
+            target_classes.extend(PRESETS["Vehicles"])
+        if job.settings.get('ai_detect_plants', False):
+            target_classes.extend(PRESETS["Plants"])
+            
+        custom_classes_str = job.settings.get('ai_custom_classes', '')
+        if custom_classes_str:
+            target_classes.extend(parse_custom_classes(custom_classes_str))
+            
+        target_classes = list(set(target_classes))
+        if not target_classes:
+            target_classes = [0] # fallback to human
 
         # Blur Filter Settings
         blur_enabled = job.settings.get('blur_filter_enabled', False)
@@ -304,7 +324,7 @@ class ProcessingWorker(QObject):
                 ai_results = []
                 if batch_images:
                     if self.ai_service and ai_mode_internal != 'none':
-                        ai_results = self.ai_service.process_batch(batch_images, mode=ai_mode_internal)
+                        ai_results = self.ai_service.process_batch(batch_images, mode=ai_mode_internal, conf=ai_confidence, classes=target_classes, invert_mask=ai_invert_mask)
                     else:
                         ai_results = [(img, None) for img in batch_images]
 
