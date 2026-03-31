@@ -4,7 +4,7 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.4.0] - 2026-03-31
 
 ### Added
 - **Dynamic AI Targets**: Added the ability to target specific object classes (Humans, Vehicles, Plants) or enter custom class queries from the 80 available COCO categories using YOLO.

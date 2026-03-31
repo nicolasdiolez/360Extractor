@@ -2,7 +2,7 @@
 
 High-performance desktop application and command-line tool for 360° video preprocessing. This tool generates optimized datasets for Gaussian Splatting and photogrammetry (COLMAP, RealityScan) by converting equirectangular footage into rectilinear pinhole views and removing operators using AI.
 
-> **v2.3.1** - Major performance boost with AI Batch Inference & I/O Multithreading. Added XML security patches. Fixed version display mismatch in GUI.
+> **v2.4.0** - Advanced AI dynamic class targeting, adjustable precision, and full mask inversion.
 
 ## Key Features
 
