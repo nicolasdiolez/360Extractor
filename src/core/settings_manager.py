@@ -30,6 +30,8 @@ class SettingsManager:
         "adaptive_mode": False,
         "adaptive_threshold": 0.5,
         "export_telemetry": False,
+        "interpolation_mode": "linear",
+        "feather_mask": False,
         "naming_mode": "realityscan",
         "image_pattern": "{filename}_frame{frame}_{camera}",
         "mask_pattern": "{filename}_frame{frame}_{camera}_mask"

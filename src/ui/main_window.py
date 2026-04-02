@@ -568,6 +568,11 @@ class MainWindow(QMainWindow):
         self.ai_invert_toggle.toggled.connect(self.on_setting_changed)
         ai_section.addWidget(self.ai_invert_toggle)
         
+        # Soft Mask (Feathering)
+        self.ai_feather_toggle = ToggleSwitchWithDescription("Soft Mask", "Gaussian blur on mask edges")
+        self.ai_feather_toggle.toggled.connect(self.on_setting_changed)
+        ai_section.addWidget(self.ai_feather_toggle)
+        
         # Confidence slider
         conf_row = QHBoxLayout()
         conf_row.addWidget(QLabel("Confidence Level"))
@@ -671,6 +676,11 @@ class MainWindow(QMainWindow):
         self.sharpen_slider.installEventFilter(self.scroll_blocker)
         sharpen_row.addWidget(self.sharpen_slider)
         post_section.addLayout(sharpen_row)
+        
+        # High Quality (Lanczos)
+        self.lanczos_toggle = ToggleSwitchWithDescription("High Quality (Lanczos)", "Superior reprojection sharpness")
+        self.lanczos_toggle.toggled.connect(self.on_setting_changed)
+        post_section.addWidget(self.lanczos_toggle)
         
         content_layout.addWidget(post_section)
         
@@ -803,6 +813,8 @@ class MainWindow(QMainWindow):
             'layout_mode': self.layout_combo.currentData(),
             'pitch_offset': self.pitch_combo.currentData(),
             'export_telemetry': self.telemetry_toggle.isChecked(),
+            'interpolation_mode': 'lanczos' if self.lanczos_toggle.isChecked() else 'linear',
+            'feather_mask': self.ai_feather_toggle.isChecked(),
             'ai_mode': self.ai_combo.currentText(),
             'ai_invert_mask': self.ai_invert_toggle.isChecked(),
             'ai_confidence': self.ai_conf_spin.value(),
@@ -831,7 +843,8 @@ class MainWindow(QMainWindow):
             self.ai_conf_spin, self.chk_humans, self.chk_vehicles, self.chk_plants, self.txt_custom_classes,
             self.blur_threshold_spin, self.sharpen_slider,
             self.motion_threshold_spin, self.naming_mode_combo,
-            self.image_pattern_input, self.mask_pattern_input
+            self.image_pattern_input, self.mask_pattern_input,
+            self.lanczos_toggle, self.ai_feather_toggle
         ]
         for w in widgets:
             w.blockSignals(True)
@@ -881,6 +894,10 @@ class MainWindow(QMainWindow):
         self.motion_threshold_spin.setEnabled(self.adaptive_toggle.isChecked())
         
         self.telemetry_toggle.setChecked(settings.get('export_telemetry', False))
+        
+        # High Quality / Feathering
+        self.lanczos_toggle.setChecked(settings.get('interpolation_mode', 'linear') == 'lanczos')
+        self.ai_feather_toggle.setChecked(settings.get('feather_mask', False))
         
         naming_mode = settings.get('naming_mode', 'realityscan')
         idx = self.naming_mode_combo.findData(naming_mode)

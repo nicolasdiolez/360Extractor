@@ -72,7 +72,7 @@ class AIService:
         # Future: Make this configurable in settings
         self.target_classes = [0] 
 
-    def process_image(self, image, mode='none', conf=0.25, classes=None, invert_mask=True):
+    def process_image(self, image, mode='none', conf=0.25, classes=None, invert_mask=True, feather_mask=False):
         """
         Process an image to detect/remove target objects.
         
@@ -126,6 +126,10 @@ class AIService:
                 kernel = np.ones((k_size, k_size), np.uint8) 
                 full_mask = cv2.dilate(full_mask, kernel, iterations=1)
 
+                if feather_mask:
+                    blur_k = k_size * 2 + 1
+                    full_mask = cv2.GaussianBlur(full_mask, (blur_k, blur_k), 0)
+
                 # Invert mask for photogrammetry convention:
                 # Black (0) = Ignore/Masked (The Person), White (255) = Keep (Background).
                 if invert_mask:
@@ -142,7 +146,7 @@ class AIService:
 
         return image, None
 
-    def process_batch(self, images, mode='none', conf=0.25, classes=None, invert_mask=True):
+    def process_batch(self, images, mode='none', conf=0.25, classes=None, invert_mask=True, feather_mask=False):
         """
         Process a batch of images to detect/remove target objects.
         
@@ -184,6 +188,10 @@ class AIService:
                     k_size = max(3, int(img.shape[1] * 0.005))
                     kernel = np.ones((k_size, k_size), np.uint8)
                     full_mask = cv2.dilate(full_mask, kernel, iterations=1)
+                    if feather_mask:
+                        blur_k = k_size * 2 + 1
+                        full_mask = cv2.GaussianBlur(full_mask, (blur_k, blur_k), 0)
+
                     if invert_mask:
                         final_mask = cv2.bitwise_not(full_mask)
                     else:

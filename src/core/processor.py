@@ -147,7 +147,12 @@ class ProcessingWorker(QObject):
             
         ai_confidence = job.settings.get('ai_confidence', 0.25)
         ai_invert_mask = job.settings.get('ai_invert_mask', True)
+        ai_feather_mask = job.settings.get('feather_mask', False)
         
+        # Interpolation Settings
+        interp_mode = job.settings.get('interpolation_mode', 'linear')
+        interp_flag = cv2.INTER_LANCZOS4 if interp_mode == 'lanczos' else cv2.INTER_LINEAR
+
         from core.ai_classes import PRESETS, parse_custom_classes
         target_classes = []
         if job.settings.get('ai_detect_humans', True):
@@ -266,7 +271,7 @@ class ProcessingWorker(QObject):
 
                     map_x, map_y = maps[name]
                     # 1. Reproject
-                    rect_img = cv2.remap(frame, map_x, map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_WRAP)
+                    rect_img = cv2.remap(frame, map_x, map_y, interp_flag, borderMode=cv2.BORDER_WRAP)
                     
                     # 2. Blur Detection
                     if blur_enabled:
@@ -324,7 +329,11 @@ class ProcessingWorker(QObject):
                 ai_results = []
                 if batch_images:
                     if self.ai_service and ai_mode_internal != 'none':
-                        ai_results = self.ai_service.process_batch(batch_images, mode=ai_mode_internal, conf=ai_confidence, classes=target_classes, invert_mask=ai_invert_mask)
+                        ai_results = self.ai_service.process_batch(
+                            batch_images, mode=ai_mode_internal, conf=ai_confidence, 
+                            classes=target_classes, invert_mask=ai_invert_mask, 
+                            feather_mask=ai_feather_mask
+                        )
                     else:
                         ai_results = [(img, None) for img in batch_images]
 

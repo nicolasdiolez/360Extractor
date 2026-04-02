@@ -44,6 +44,14 @@ class Job:
     def export_telemetry(self) -> bool:
         return self.settings.get('export_telemetry', False)
 
+    @property
+    def interpolation_mode(self) -> str:
+        return self.settings.get('interpolation_mode', 'linear')
+
+    @property
+    def feather_mask(self) -> bool:
+        return self.settings.get('feather_mask', False)
+
     def summary(self) -> str:
         """Returns a short summary of the job settings."""
         # e.g., "High (-20°), 6 cams"
