@@ -4,6 +4,12 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - 2026-04-02
+
+### Changed
+- **Mask Refinement**: Mask dilation kernel size is now dynamic and proportional to output resolution (`max(3, image_width * 0.005)`), fixing halo and over-masking issues across different export resolutions.
+- **CLI Interface**: Exposed YOLO object targeting via CLI arguments (`--targets humans,vehicles,plants`, `--custom-classes`) replacing the need for config files in headless environments.
+
 ## [2.4.0] - 2026-03-31
 
 ### Added

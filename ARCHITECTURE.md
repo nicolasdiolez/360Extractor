@@ -11,7 +11,7 @@ This document outlines the technical design for a high-performance desktop and C
 
 ---
 
-## 2. Technology Stack Selection (v2.4.0)
+## 2. Technology Stack Selection (v2.4.1)
 
 ### Core Framework: Python 3.10+ & PySide6 (Qt)
 **Justification:**
