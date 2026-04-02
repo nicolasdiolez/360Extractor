@@ -121,8 +121,9 @@ class AIService:
                     cv2.fillPoly(full_mask, [pts], 255)
                 
                 # Refinement: Dilation to cover edges/halos
-                # Kernel size depends on resolution, but 5x5 is a safe start for 2k-4k
-                kernel = np.ones((15, 15), np.uint8) 
+                # Kernel size depends dynamically on image resolution
+                k_size = max(3, int(image.shape[1] * 0.005))
+                kernel = np.ones((k_size, k_size), np.uint8) 
                 full_mask = cv2.dilate(full_mask, kernel, iterations=1)
 
                 # Invert mask for photogrammetry convention:
@@ -180,7 +181,8 @@ class AIService:
                     for m in res.masks.xy:
                         pts = np.array(m, np.int32).reshape((-1, 1, 2))
                         cv2.fillPoly(full_mask, [pts], 255)
-                    kernel = np.ones((15, 15), np.uint8)
+                    k_size = max(3, int(img.shape[1] * 0.005))
+                    kernel = np.ones((k_size, k_size), np.uint8)
                     full_mask = cv2.dilate(full_mask, kernel, iterations=1)
                     if invert_mask:
                         final_mask = cv2.bitwise_not(full_mask)

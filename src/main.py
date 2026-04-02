@@ -39,6 +39,10 @@ def parse_arguments():
     parser.add_argument("--motion-threshold", type=float, help="Motion threshold for adaptive interval (default: 0.5)")
     parser.add_argument("--export-telemetry", action="store_true", help="Export GPS/IMU metadata (if available)")
     
+    # AI Targets
+    parser.add_argument("--targets", type=str, help="Comma-separated list of basic targets (humans,vehicles,plants)")
+    parser.add_argument("--custom-classes", type=str, help="Custom classes to detect (comma separated)")
+    
     # Naming Control
     parser.add_argument("--naming-mode", type=str, choices=['realityscan', 'simple', 'custom'], help="Naming convention for output files")
     parser.add_argument("--image-pattern", type=str, help="Custom pattern for image filenames")
@@ -180,6 +184,19 @@ def run_cli(args):
     if not export_telemetry:
         export_telemetry = config.get('export_telemetry', False)
 
+    # AI Targets logic
+    ai_detect_humans = config.get('ai_detect_humans', True)
+    ai_detect_vehicles = config.get('ai_detect_vehicles', False)
+    ai_detect_plants = config.get('ai_detect_plants', False)
+    
+    if args.targets is not None:
+        targets_list = [t.strip().lower() for t in args.targets.split(',')]
+        ai_detect_humans = 'humans' in targets_list
+        ai_detect_vehicles = 'vehicles' in targets_list
+        ai_detect_plants = 'plants' in targets_list
+
+    ai_custom_classes = args.custom_classes if args.custom_classes is not None else config.get('ai_custom_classes', "")
+
     # Naming Configuration
     naming_mode = args.naming_mode or config.get('naming_mode', 'realityscan')
     image_pattern = args.image_pattern or config.get('image_pattern')
@@ -199,6 +216,10 @@ def run_cli(args):
         'ai_mode': ai_mode,
         'custom_output_dir': output_path,
         'active_cameras': active_cameras,
+        'ai_detect_humans': ai_detect_humans,
+        'ai_detect_vehicles': ai_detect_vehicles,
+        'ai_detect_plants': ai_detect_plants,
+        'ai_custom_classes': ai_custom_classes,
         # Defaults for others (could be exposed to config later)
         'resolution': resolution,
         'fov': config.get('fov', 90),
