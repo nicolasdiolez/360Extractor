@@ -99,8 +99,6 @@ class VideoCard(QWidget):
         self.setMinimumWidth(250)
         self.setCursor(Qt.PointingHandCursor)
         
-        self._update_style()
-        
         # Main layout
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
@@ -108,14 +106,14 @@ class VideoCard(QWidget):
         
         # Thumbnail
         self._thumbnail = QLabel()
-        self._thumbnail.setFixedSize(70, 70)
+        self._thumbnail.setFixedSize(64, 64)
         self._thumbnail.setStyleSheet("""
-            background-color: #252529;
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
             border-radius: 8px;
         """)
         self._thumbnail.setAlignment(Qt.AlignCenter)
-        # Use icon placeholder instead of emoji
-        self._thumbnail.setPixmap(get_pixmap("video", color="#52525B", size=32))
+        self._thumbnail.setPixmap(get_pixmap("video", color="#3F3F46", size=24))
         layout.addWidget(self._thumbnail)
         
         # Info container
@@ -143,7 +141,7 @@ class VideoCard(QWidget):
         
         # Settings summary
         self._summary_label = QLabel(job.summary())
-        self._summary_label.setStyleSheet("color: #52525B; font-size: 10px;")
+        self._summary_label.setStyleSheet("color: #52525B; font-size: 10px; font-weight: 500;")
         info_layout.addWidget(self._summary_label)
         
         # Progress bar (hidden by default)
@@ -185,6 +183,9 @@ class VideoCard(QWidget):
         self._remove_btn.clicked.connect(self.remove_clicked.emit)
         layout.addWidget(self._remove_btn, alignment=Qt.AlignTop)
         
+        # Apply style now that all elements are initialized
+        self._update_style()
+        
         # Load thumbnail async
         self._load_thumbnail()
         
@@ -192,26 +193,15 @@ class VideoCard(QWidget):
         self.update_status(job.status)
         
     def _update_style(self):
+        # Use property-based styling from styles.qss
+        self.setProperty("selected", self._selected)
+        self.style().polish(self)
+        
+        # Update labels based on selection
         if self._selected:
-            self.setStyleSheet("""
-                QWidget#videoCard {
-                    background-color: #1E1E22;
-                    border: 2px solid #3B82F6;
-                    border-radius: 12px;
-                }
-            """)
+            self._name_label.setStyleSheet("color: #FFFFFF; font-size: 13px; font-weight: 600;")
         else:
-            self.setStyleSheet("""
-                QWidget#videoCard {
-                    background-color: #161618;
-                    border: 1px solid #27272A;
-                    border-radius: 12px;
-                }
-                QWidget#videoCard:hover {
-                    background-color: #1A1A1D;
-                    border-color: #3B82F6;
-                }
-            """)
+            self._name_label.setStyleSheet("color: #E4E4E7; font-size: 13px; font-weight: 500;")
     
     def _cleanup_thread(self):
         """Safely cleanup the thumbnail loading thread."""

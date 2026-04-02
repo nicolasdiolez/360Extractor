@@ -4,6 +4,19 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-04-02
+
+### Added
+- **Premium Design System**: Complete visual redesign (`v3.0`) using HSL-harmonized colors, glassmorphism effects, and professional branding.
+- **Adaptive Preview**: Redesigned `PreviewWidget` with dynamic aspect ratio and high-resolution rendering (1024px) for crisp image quality.
+- **Responsive Layout**: Implemented auto-scaling previews and improved pane management for a better workflow on large screens.
+- **Empty States**: Added graphical empty state illustrations for better user feedback when no video is selected.
+- **Logo & Branding**: New refined logo section in the sidebar with a cleaner standard look.
+
+### Fixed
+- **Bootstrap Bug**: Resolved a critical `AttributeError` in `VideoCard` during concurrent job addition.
+- **Font Optimization**: Fixed the "Inter" font populating delay by providing a robust system-native font stack.
+
 ## [2.4.1] - 2026-04-02
 
 ### Changed
