@@ -46,7 +46,7 @@ class ScrollBlocker(QObject):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"{APP_NAME} Pro")
+        self.setWindowTitle(APP_NAME)
         self.setMinimumSize(1200, 800)
         
         # Internal State
@@ -84,7 +84,7 @@ class MainWindow(QMainWindow):
         # Content Splitter (Queue vs Right Panel)
         self.content_splitter = QSplitter(Qt.Horizontal)
         self.content_splitter.setHandleWidth(1)
-        self.content_splitter.setStyleSheet("QSplitter::handle { background: #27272A; }")
+        self.content_splitter.setStyleSheet("QSplitter::handle { background: #121214; }")
         
         # 1. Left: Persistent Queue
         self.queue_section = self.create_queue_section()
@@ -99,7 +99,7 @@ class MainWindow(QMainWindow):
         # Vertical Splitter for Preview vs Page Content
         self.right_splitter = QSplitter(Qt.Vertical)
         self.right_splitter.setHandleWidth(1)
-        self.right_splitter.setStyleSheet("QSplitter::handle { background: #27272A; }")
+        self.right_splitter.setStyleSheet("QSplitter::handle { background: #121214; }")
         
         # Top: Persistent Preview
         self.preview_section = self.create_preview_section()
@@ -782,8 +782,9 @@ class MainWindow(QMainWindow):
         
         if page_id == "videos":
             self.pages_container.hide()
-            # Reset splitter to give full height to preview if desired, 
-            # effectively it works because pages_container is hidden.
+            # Reset splitter to give more space to preview
+            self.right_splitter.setStretchFactor(0, 1)
+            self.right_splitter.setStretchFactor(1, 0)
         else:
             self.pages_container.show()
             page_map = {
@@ -792,10 +793,12 @@ class MainWindow(QMainWindow):
                 "advanced": 2,
             }
             # Adjust index because we removed the videos page from the stack
-            # Stack Logic: 0=Settings, 1=Export, 2=Advanced
-            
             idx = page_map.get(page_id, 0)
             self.pages.setCurrentIndex(idx)
+            
+            # Ensure the settings panel is visible (give it some stretch)
+            self.right_splitter.setStretchFactor(0, 3) 
+            self.right_splitter.setStretchFactor(1, 2)
 
     # =========================================================================
     # SETTINGS MANAGEMENT
