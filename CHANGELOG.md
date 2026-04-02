@@ -4,6 +4,17 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.1] - 2026-04-02
+
+### Added
+- **High-Quality (Lanczos) Interpolation**: New optional reprojection mode available in Settings, using `cv2.INTER_LANCZOS4` for sharper textures in photogrammetry.
+- **Native AI Softness**: Upgraded segmentation mask pipeline to use YOLO26 raw probability tensors instead of polygon-filling.
+- **Soft Mask Toggle**: Users can now choose between "Hard Edged" (crisp/high-precision) and "Native Softness" (professional alpha blending) in AI settings.
+
+### Fixed
+- **Threading Stability**: Resolved a `RuntimeError` when submitting save tasks after worker shutdown (e.g., on job cancellation).
+- **Mask Feathering Refinement**: Improved the localized softness calculation to avoid "hazy" subject rendering.
+
 ## [2.5.0] - 2026-04-02
 
 ### Added

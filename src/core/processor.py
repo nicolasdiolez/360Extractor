@@ -380,11 +380,19 @@ class ProcessingWorker(QObject):
                     full_save_path = os.path.join(output_dir, save_name)
                     full_mask_path = os.path.join(output_dir, mask_name)
 
-                    # Submit to thread pool
-                    futures.append(self.io_pool.submit(
-                        io_save_task, full_save_path, final_img, save_params, 
-                        current_gps, telemetry_handler, full_mask_path, mask_or_skip
-                    ))
+                    # Submit to thread pool (with safety check for shutdown)
+                    if not self.is_running:
+                        break
+                        
+                    try:
+                        futures.append(self.io_pool.submit(
+                            io_save_task, full_save_path, final_img, save_params, 
+                            current_gps, telemetry_handler, full_mask_path, mask_or_skip
+                        ))
+                    except RuntimeError:
+                        # Pool closed, stop loop
+                        logger.warning("I/O Pool closed, stopping save loop.")
+                        break
                 
                 # Wait for all saves for this frame to complete before moving to the next
                 # This prevents unbounded memory buildup if GPU is faster than SSD

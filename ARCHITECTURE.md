@@ -8,6 +8,8 @@ This document outlines the technical design for a high-performance desktop and C
 - **Modes:** Dual interface via PySide6 GUI and Headless CLI for cloud/server deployments.
 - **Intelligence:** Motion-aware adaptive frame extraction (Optical Flow).
 - **Data Enrichment:** Native extraction of GPS/IMU metadata (GoPro, Insta360, DJI).
+- **Advanced Processing:** Choice of High-Quality (Lanczos) or Standard interpolation.
+- **AI-Powered Masking:** Native probability-based soft edge generation for professional photogrammetry.
 
 ---
 

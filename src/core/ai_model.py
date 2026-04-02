@@ -110,25 +110,31 @@ class AIService:
         if mode == 'generate_mask':
             mask = None
             if has_detection and results[0].masks:
-                # Get binary mask from results
-                full_mask = np.zeros(image.shape[:2], dtype=np.uint8)
+                # 1. Start from native probability maps (tensors)
+                # results[0].masks.data is a tensor of shape (N, H, W)
+                mask_tensors = results[0].masks.data
                 
-                for m in results[0].masks.xy:
-                    # m is polygon coordinates
-                    pts = np.array(m, np.int32)
-                    pts = pts.reshape((-1, 1, 2))
-                    # Fill the polygon on the mask
-                    cv2.fillPoly(full_mask, [pts], 255)
+                # Combined mask (max across all detections)
+                # Move to CPU for CPU/GPU agnostic processing
+                combined_mask = torch.any(mask_tensors > 0.5, dim=0).byte() * 255
                 
-                # Refinement: Dilation to cover edges/halos
-                # Kernel size depends dynamically on image resolution
+                if feather_mask:
+                    # For soft edges, use the probability values instead of hard thresholding
+                    # Max of mask probabilities (clamped 0-1)
+                    soft_mask_t = torch.max(mask_tensors, dim=0)[0]
+                    # Up-scale directly to image size using interpolation
+                    full_mask = soft_mask_t.cpu().numpy()
+                    full_mask = cv2.resize(full_mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
+                    full_mask = (full_mask * 255).astype(np.uint8)
+                else:
+                    # For hard edges, use the thresholded combined mask
+                    full_mask = combined_mask.cpu().numpy()
+                    full_mask = cv2.resize(full_mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
+                
+                # Refinement: Dilation to cover edges/halos (still useful)
                 k_size = max(3, int(image.shape[1] * 0.005))
                 kernel = np.ones((k_size, k_size), np.uint8) 
                 full_mask = cv2.dilate(full_mask, kernel, iterations=1)
-
-                if feather_mask:
-                    blur_k = k_size * 2 + 1
-                    full_mask = cv2.GaussianBlur(full_mask, (blur_k, blur_k), 0)
 
                 # Invert mask for photogrammetry convention:
                 # Black (0) = Ignore/Masked (The Person), White (255) = Keep (Background).
@@ -181,17 +187,30 @@ class AIService:
                     batch_results.append((img, False))
             elif mode == 'generate_mask':
                 if has_detection and res.masks:
-                    full_mask = np.zeros(img.shape[:2], dtype=np.uint8)
-                    for m in res.masks.xy:
-                        pts = np.array(m, np.int32).reshape((-1, 1, 2))
-                        cv2.fillPoly(full_mask, [pts], 255)
+                    # 1. Start from native probability maps (tensors)
+                    # res.masks.data is shape (N, H, W)
+                    mask_tensors = res.masks.data
+                    
+                    # Combined mask (max across all detections)
+                    combined_mask = torch.any(mask_tensors > 0.5, dim=0).byte() * 255
+                    
+                    if feather_mask:
+                        # For soft edges, use the probability values instead of hard thresholding
+                        soft_mask_t = torch.max(mask_tensors, dim=0)[0]
+                        # Up-scale directly to image size using interpolation
+                        full_mask = soft_mask_t.cpu().numpy()
+                        full_mask = cv2.resize(full_mask, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR)
+                        full_mask = (full_mask * 255).astype(np.uint8)
+                    else:
+                        # For hard edges, use the thresholded combined mask
+                        full_mask = combined_mask.cpu().numpy()
+                        full_mask = cv2.resize(full_mask, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
+                        
+                    # Refinement: Dilation to cover edges/halos (still useful)
                     k_size = max(3, int(img.shape[1] * 0.005))
                     kernel = np.ones((k_size, k_size), np.uint8)
                     full_mask = cv2.dilate(full_mask, kernel, iterations=1)
-                    if feather_mask:
-                        blur_k = k_size * 2 + 1
-                        full_mask = cv2.GaussianBlur(full_mask, (blur_k, blur_k), 0)
-
+                    
                     if invert_mask:
                         final_mask = cv2.bitwise_not(full_mask)
                     else:
