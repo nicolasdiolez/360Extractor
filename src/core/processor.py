@@ -113,22 +113,35 @@ class ProcessingWorker(QObject):
         elif fmt == 'tiff':
             save_params = [cv2.IMWRITE_TIFF_COMPRESSION, 1] # 1 = NONE
 
-        cap = cv2.VideoCapture(file_path)
-        if not cap.isOpened():
-            raise IOError(f"Could not open video: {file_path}")
+        is_image = file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.tiff', '.tif'))
+        
+        cap = None
+        current_image_frame = None
+        
+        if is_image:
+            current_image_frame = cv2.imread(file_path)
+            if current_image_frame is None:
+                raise IOError(f"Could not open image: {file_path}")
+            fps = 0
+            total_frames_video = 1
+            interval = 1
+        else:
+            cap = cv2.VideoCapture(file_path)
+            if not cap.isOpened():
+                raise IOError(f"Could not open video: {file_path}")
 
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames_video = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        if total_frames_video <= 0: total_frames_video = 1 # Prevent division by zero
-        
-        # Calculate extraction interval
-        interval_value = float(job.settings.get('interval_value', 1.0))
-        interval_unit = job.settings.get('interval_unit', 'Seconds')
-        
-        if interval_unit == 'Frames':
-            interval = int(max(1, interval_value))
-        else: # Seconds
-            interval = int(max(1, fps * interval_value))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            total_frames_video = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            if total_frames_video <= 0: total_frames_video = 1 # Prevent division by zero
+            
+            # Calculate extraction interval
+            interval_value = float(job.settings.get('interval_value', 1.0))
+            interval_unit = job.settings.get('interval_unit', 'Seconds')
+            
+            if interval_unit == 'Frames':
+                interval = int(max(1, interval_value))
+            else: # Seconds
+                interval = int(max(1, fps * interval_value))
         
         # Geometry Settings
         out_res = job.resolution
@@ -201,8 +214,11 @@ class ProcessingWorker(QObject):
         views = GeometryProcessor.generate_views(camera_count, pitch_offset=pitch_offset, layout_mode=layout_mode)
         
         maps = {}
-        src_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        if is_image:
+            src_h, src_w = current_image_frame.shape[:2]
+        else:
+            src_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         
         self.progress_updated.emit(0, f"Generating maps for {filename}...")
         
@@ -220,7 +236,14 @@ class ProcessingWorker(QObject):
         job_start_time = time.time()
         
         while self.is_running:
-            ret, frame = cap.read()
+            if is_image:
+                if frame_idx > 0:
+                    break
+                frame = current_image_frame
+                ret = True
+            else:
+                ret, frame = cap.read()
+                
             if not ret:
                 break
             
@@ -401,7 +424,8 @@ class ProcessingWorker(QObject):
             
             frame_idx += 1
             
-        cap.release()
+        if cap:
+            cap.release()
 
         if skipped_blur_count > 0:
             logger.info(f"Total blurry views skipped for {filename}: {skipped_blur_count}")

@@ -33,17 +33,24 @@ class ThumbnailWorker(QObject):
             return
             
         try:
-            cap = cv2.VideoCapture(self.video_path)
-            if not cap.isOpened():
-                self.finished.emit(QPixmap())
-                return
+            is_image = self.video_path.lower().endswith(('.jpg', '.jpeg', '.png', '.tiff', '.tif'))
+            if is_image:
+                frame = cv2.imread(self.video_path)
+                if frame is None or self._is_cancelled:
+                    self.finished.emit(QPixmap())
+                    return
+            else:
+                cap = cv2.VideoCapture(self.video_path)
+                if not cap.isOpened():
+                    self.finished.emit(QPixmap())
+                    return
+                    
+                ret, frame = cap.read()
+                cap.release()
                 
-            ret, frame = cap.read()
-            cap.release()
-            
-            if not ret or self._is_cancelled:
-                self.finished.emit(QPixmap())
-                return
+                if not ret or self._is_cancelled:
+                    self.finished.emit(QPixmap())
+                    return
                 
             # Convert and resize
             h, w = frame.shape[:2]

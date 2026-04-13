@@ -985,7 +985,7 @@ class MainWindow(QMainWindow):
     # =========================================================================
 
     def handle_files_dropped(self, files):
-        valid_extensions = ['.mp4', '.mov', '.mkv', '.avi']
+        valid_extensions = ['.mp4', '.mov', '.mkv', '.avi', '.jpg', '.jpeg', '.png', '.tiff', '.tif']
         valid_files = [f for f in files if os.path.splitext(f)[1].lower() in valid_extensions]
         
         if valid_files:
@@ -993,11 +993,11 @@ class MainWindow(QMainWindow):
                 self.add_job(f)
             self.process_btn.setEnabled(True)
         else:
-            QMessageBox.warning(self, "Invalid Files", "Please drop video files (.mp4, .mov, .mkv, .avi)")
+            QMessageBox.warning(self, "Invalid Files", "Please drop 360° videos or images (.mp4, .mov, .mkv, .avi, .jpg, .png, etc.)")
 
     def open_file_dialog(self):
         files, _ = QFileDialog.getOpenFileNames(
-            self, "Select 360° Videos", "", "Video Files (*.mp4 *.mov *.mkv *.avi)"
+            self, "Select 360° Media", "", "Media Files (*.mp4 *.mov *.mkv *.avi *.jpg *.jpeg *.png *.tiff *.tif)"
         )
         if files:
             self.handle_files_dropped(files)

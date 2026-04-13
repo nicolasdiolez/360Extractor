@@ -61,6 +61,7 @@ plans/
 docs/CLI_TESTING_PROTOCOL.md
 IMPROVEMENTS.md
 TEST_CLI.md
+handoff.md
 tests/verify_*.py
 
 # YOLO Model (auto-downloaded by ultralytics)

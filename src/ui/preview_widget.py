@@ -29,18 +29,26 @@ class PreviewWorker(QRunnable):
     @Slot()
     def run(self):
         try:
-            cap = cv2.VideoCapture(self.video_path)
-            if not cap.isOpened():
-                self.signals.error.emit(f"Could not open video: {self.video_path}")
-                return
+            is_image = self.video_path.lower().endswith(('.jpg', '.jpeg', '.png', '.tiff', '.tif'))
+            
+            if is_image:
+                frame = cv2.imread(self.video_path)
+                if frame is None:
+                    self.signals.error.emit(f"Could not load image: {self.video_path}")
+                    return
+            else:
+                cap = cv2.VideoCapture(self.video_path)
+                if not cap.isOpened():
+                    self.signals.error.emit(f"Could not open video: {self.video_path}")
+                    return
 
-            # Read first frame (or frame at timestamp 0)
-            ret, frame = cap.read()
-            cap.release()
+                # Read first frame (or frame at timestamp 0)
+                ret, frame = cap.read()
+                cap.release()
 
-            if not ret:
-                self.signals.error.emit("Could not read frame from video")
-                return
+                if not ret:
+                    self.signals.error.emit("Could not read frame from video")
+                    return
 
             # Source dimensions
             h, w = frame.shape[:2]

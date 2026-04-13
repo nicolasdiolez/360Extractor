@@ -4,20 +4,13 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.5.1] - 2026-04-02
-
-### Added
-- **High-Quality (Lanczos) Interpolation**: New optional reprojection mode available in Settings, using `cv2.INTER_LANCZOS4` for sharper textures in photogrammetry.
-- **Native AI Softness**: Upgraded segmentation mask pipeline to use YOLO26 raw probability tensors instead of polygon-filling.
-- **Soft Mask Toggle**: Users can now choose between "Hard Edged" (crisp/high-precision) and "Native Softness" (professional alpha blending) in AI settings.
-
-### Fixed
-- **Threading Stability**: Resolved a `RuntimeError` when submitting save tasks after worker shutdown (e.g., on job cancellation).
-- **Mask Feathering Refinement**: Improved the localized softness calculation to avoid "hazy" subject rendering.
-
 ## [2.5.0] - 2026-04-02
 
 ### Added
+- **Native 360° Image Support**: Added support for static panoramic images (.jpg, .png, .tiff, etc.), allowing users to run single frames through the exact same reprojection and AI masking pipeline as videos.
+- **High-Quality (Lanczos) Interpolation**: New optional reprojection mode available in Settings, using `cv2.INTER_LANCZOS4` for sharper textures in photogrammetry.
+- **Native AI Softness**: Upgraded segmentation mask pipeline to use YOLO26 raw probability tensors instead of polygon-filling.
+- **Soft Mask Toggle**: Users can now choose between "Hard Edged" (crisp/high-precision) and "Native Softness" (professional alpha blending) in AI settings.
 - **Premium Design System**: Complete visual redesign (`v3.0`) using HSL-harmonized colors, glassmorphism effects, and professional branding.
 - **Adaptive Preview**: Redesigned `PreviewWidget` with dynamic aspect ratio and high-resolution rendering (1024px) for crisp image quality.
 - **Responsive Layout**: Implemented auto-scaling previews and improved pane management for a better workflow on large screens.
@@ -25,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Logo & Branding**: New refined logo section in the sidebar with a cleaner standard look.
 
 ### Fixed
+- **Threading Stability**: Resolved a `RuntimeError` when submitting save tasks after worker shutdown (e.g., on job cancellation).
+- **Mask Feathering Refinement**: Improved the localized softness calculation to avoid "hazy" subject rendering.
 - **Bootstrap Bug**: Resolved a critical `AttributeError` in `VideoCard` during concurrent job addition.
 - **Font Optimization**: Fixed the "Inter" font populating delay by providing a robust system-native font stack.
 

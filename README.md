@@ -1,12 +1,12 @@
 # 360 Extractor Pro
 
-High-performance desktop application and command-line tool for 360° video preprocessing. This tool generates optimized datasets for Gaussian Splatting and photogrammetry (COLMAP, RealityScan) by converting equirectangular footage into rectilinear pinhole views and removing operators using AI.
+High-performance desktop application and command-line tool for 360° video and image preprocessing. This tool generates optimized datasets for Gaussian Splatting and photogrammetry (COLMAP, RealityScan) by converting equirectangular media into rectilinear pinhole views and removing operators using AI.
 
-> **v2.5.0** - Premium UI/UX overhaul with adaptive preview resolution and glassmorphism theme.
+> **v2.5.0** - Premium UI/UX overhaul with adaptive preview resolution, glassmorphism theme, and **native 360° image support**.
 
 ## Key Features
 
-- **360° to Rectilinear:** Reproject equirectangular video to pinhole views with configurable FOV and overlap.
+- **360° to Rectilinear:** Reproject equirectangular video and images to pinhole views with configurable FOV and overlap.
 - **Dual Interface:** Graphical UI for ease of use and CLI for automation.
 - **Advanced Control:** Multiple layouts (Ring, Cube Map, Fibonacci), inclination settings, and selective camera extraction.
 - **AI-Powered:** Automatic operator/object removal (supports 80 COCO classes like humans, vehicles, plants) with adjustable confidence, mask inversion, and intelligent motion-based keyframing.
