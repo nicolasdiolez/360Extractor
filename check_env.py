@@ -51,6 +51,29 @@ def check_imports():
         missing_packages.append(f"ultralytics (Error: {e})")
         print(f"❌ ultralytics error: {e}")
 
+    # Check PyTorch & GPU acceleration (CUDA/MPS)
+    try:
+        import torch
+        print(f"✅ PyTorch found: {torch.__version__}")
+        if torch.cuda.is_available():
+            print(f"   - GPU Acceleration (CUDA): Available (Device: {torch.cuda.get_device_name(0)})")
+        elif torch.backends.mps.is_available():
+            print("   - GPU Acceleration (MPS): Available (Apple Silicon)")
+        else:
+            print("   - GPU Acceleration: NOT Available (Running on CPU)")
+            if "+cpu" in torch.__version__:
+                print("     ⚠️  You have the CPU-only version of PyTorch installed.")
+                print("     If you have an NVIDIA GPU, reinstall PyTorch with CUDA support:")
+                print("     pip install --force-reinstall torch --index-url https://download.pytorch.org/whl/cu121")
+            else:
+                print("     If you have a compatible GPU, please check your CUDA drivers or PyTorch installation.")
+    except ImportError:
+        missing_packages.append("torch")
+        print("❌ PyTorch NOT found")
+    except Exception as e:
+        missing_packages.append(f"torch (Error: {e})")
+        print(f"❌ PyTorch error: {e}")
+
     print("-" * 40)
     
     if missing_packages:

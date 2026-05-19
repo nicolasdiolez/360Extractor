@@ -4,6 +4,15 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.1] - 2026-05-19
+
+### Added
+- **PyTorch & GPU Diagnostics**: Added comprehensive environment verification for PyTorch version, MPS (Apple Silicon), and CUDA (NVIDIA) support inside `check_env.py`.
+- **NVIDIA GPU Installation Guide**: Scinded standard installation instructions and introduced a specialized step-by-step path to enable GPU acceleration under Windows/Linux inside `README.md`.
+
+### Fixed
+- **PyTorch Import Shadowing**: Resolved circular import issues caused by local test script naming (`torch.py`) shadowing the official `torch` package.
+
 ## [2.5.0] - 2026-04-02
 
 ### Added

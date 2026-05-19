@@ -2,7 +2,7 @@
 
 High-performance desktop application and command-line tool for 360° video and image preprocessing. This tool generates optimized datasets for Gaussian Splatting and photogrammetry (COLMAP, RealityScan) by converting equirectangular media into rectilinear pinhole views and removing operators using AI.
 
-> **v2.5.0** - Premium UI/UX overhaul with adaptive preview resolution, glassmorphism theme, and **native 360° image support**.
+> **v2.5.1** - Premium UI/UX overhaul with adaptive preview resolution, glassmorphism theme, and **native 360° image support**.
 
 ## Key Features
 
@@ -18,9 +18,16 @@ High-performance desktop application and command-line tool for 360° video and i
 
 1.  **Clone the repository**
 2.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+    - **For CPU-only or Mac (Apple Silicon):**
+      ```bash
+      pip install -r requirements.txt
+      ```
+    - **For NVIDIA GPU acceleration (Windows/Linux):**
+      You need to install the CUDA-compatible version of PyTorch first, followed by the rest of the dependencies:
+      ```bash
+      pip install torch --index-url https://download.pytorch.org/whl/cu121
+      pip install -r requirements.txt
+      ```
 3.  **Verify environment:**
     ```bash
     python3 check_env.py
