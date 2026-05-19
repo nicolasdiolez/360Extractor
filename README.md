@@ -25,7 +25,7 @@ High-performance desktop application and command-line tool for 360° video and i
     - **For NVIDIA GPU acceleration (Windows/Linux):**
       You need to install the CUDA-compatible version of PyTorch first, followed by the rest of the dependencies:
       ```bash
-      pip install torch --index-url https://download.pytorch.org/whl/cu121
+      pip install torch --index-url https://download.pytorch.org/whl/cu124
       pip install -r requirements.txt
       ```
 3.  **Verify environment:**
