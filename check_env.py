@@ -63,8 +63,11 @@ def check_imports():
             print("   - GPU Acceleration: NOT Available (Running on CPU)")
             if "+cpu" in torch.__version__:
                 print("     ⚠️  You have the CPU-only version of PyTorch installed.")
-                print("     If you have an NVIDIA GPU, reinstall PyTorch with CUDA support:")
-                print("     pip install --force-reinstall torch --index-url https://download.pytorch.org/whl/cu124")
+                print("     If you have an NVIDIA GPU, please run our automated GPU setup helper:")
+                print("         python setup_cuda.py")
+                print("     ")
+                print("     Or reinstall manually forcing both torch and torchvision from the CUDA index:")
+                print("         pip install --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu124")
             else:
                 print("     If you have a compatible GPU, please check your CUDA drivers or PyTorch installation.")
     except ImportError:

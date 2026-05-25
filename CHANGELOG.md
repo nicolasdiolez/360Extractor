@@ -4,6 +4,15 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.2] - 2026-05-25
+
+### Added
+- **Automated GPU Setup Script**: Introduced `setup_cuda.py`, a cross-platform helper to guide users through installing PyTorch and torchvision with full CUDA support.
+
+### Fixed
+- **PyTorch CUDA Downgrade**: Resolved dependency resolution conflicts where installing `requirements.txt` implicitly pulled `torchvision` from standard PyPI and uninstalled/downgraded the custom CUDA-compatible PyTorch installation.
+- **Environment Diagnostics**: Updated `check_env.py` to recommend installing both `torch` and `torchvision` together from PyTorch's custom CUDA wheels index.
+
 ## [2.5.1] - 2026-05-19
 
 ### Added
