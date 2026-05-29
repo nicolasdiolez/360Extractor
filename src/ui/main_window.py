@@ -307,7 +307,15 @@ class MainWindow(QMainWindow):
         
         # Camera Settings Section
         camera_section = CollapsibleSection("Camera Configuration")
-        
+
+        # 360 vs flat input
+        self.input_360_toggle = ToggleSwitchWithDescription(
+            "360° Input", "Reproject equirectangular media to pinhole views"
+        )
+        self.input_360_toggle.setChecked(True)
+        self.input_360_toggle.toggled.connect(self.on_360_toggled)
+        camera_section.addWidget(self.input_360_toggle)
+
         # FOV
         fov_row = QHBoxLayout()
         fov_row.addWidget(QLabel("Field of View"))
@@ -807,6 +815,7 @@ class MainWindow(QMainWindow):
 
     def get_settings_from_ui(self):
         return {
+            'is_360': self.input_360_toggle.isChecked(),
             'output_format': self.format_combo.currentText(),
             'custom_output_dir': self.custom_output_dir,
             'interval_value': self.interval_spin.value(),
@@ -848,12 +857,13 @@ class MainWindow(QMainWindow):
             self.blur_threshold_spin, self.sharpen_slider,
             self.motion_threshold_spin, self.naming_mode_combo,
             self.image_pattern_input, self.mask_pattern_input,
-            self.lanczos_toggle, self.ai_feather_toggle
+            self.lanczos_toggle, self.ai_feather_toggle, self.input_360_toggle
         ]
         for w in widgets:
             w.blockSignals(True)
-        
+
         # Set values
+        self.input_360_toggle.setChecked(settings.get('is_360', True))
         self.format_combo.setCurrentText(settings.get('output_format', 'jpg'))
         self.custom_output_dir = settings.get('custom_output_dir', "")
         if self.custom_output_dir:
@@ -915,6 +925,9 @@ class MainWindow(QMainWindow):
         for w in widgets:
             w.blockSignals(False)
 
+        # Sync enabled-state of 360-only controls (signals were blocked above)
+        self._apply_360_state(self.input_360_toggle.isChecked())
+
     def update_default_settings_from_ui(self):
         self.default_settings = self.get_settings_from_ui()
 
@@ -948,6 +961,21 @@ class MainWindow(QMainWindow):
         else:
             self.cam_count_spin.setEnabled(True)
         self.on_setting_changed()
+
+    def on_360_toggled(self, checked):
+        self._apply_360_state(checked)
+        self.on_setting_changed()
+
+    def _apply_360_state(self, is_360):
+        """Enable/disable 360-only controls when toggling flat (non-360) mode."""
+        self.fov_spin.setEnabled(is_360)
+        self.layout_combo.setEnabled(is_360)
+        self.pitch_combo.setEnabled(is_360)
+        if is_360:
+            # Respect the cube layout which forces exactly 6 cameras.
+            self.cam_count_spin.setEnabled(self.layout_combo.currentData() != 'cube')
+        else:
+            self.cam_count_spin.setEnabled(False)
 
     def on_blur_toggled(self, checked):
         self.blur_threshold_spin.setEnabled(checked)

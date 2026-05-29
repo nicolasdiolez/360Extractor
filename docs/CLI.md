@@ -22,9 +22,10 @@ python src/main.py --input <video_path> --output <output_dir> [options]
 
 | Flag | Description | Default |
 | :--- | :--- | :--- |
-| `--input`, `-i` | Path to input video file or directory. **(Required)** | - |
+| `--input`, `-i` | Path to input video/image file or directory. **(Required)** | - |
 | `--output`, `-o` | Path to output directory. | `./output` |
 | `--config` | Path to a JSON configuration file. | - |
+| `--flat` | Treat input as standard (non-360) media; disables equirectangular reprojection. | `False` |
 | `--interval` | Extraction interval in seconds. | `1.0` |
 | `--format` | Output image format (`jpg` or `png`). | `jpg` |
 | `--camera-count` | Number of virtual cameras (2-36). | `6` |
@@ -57,7 +58,13 @@ python src/main.py --input videos/trip.mp4 --output frames/trip --active-cameras
 ```
 *Camera Indices for 6-camera layout: 0:Front, 1:Right, 2:Back, 3:Left, 4:Up, 5:Down.*
 
-### 3. Using a Config File
+### 3. Standard (Non-360) Media
+Process a regular (non-panoramic) video or image without reprojection.
+```bash
+python src/main.py --input clips/interview.mp4 --output frames/interview --flat
+```
+
+### 4. Using a Config File
 Run a job defined in a JSON file.
 ```bash
 python src/main.py --config my_job.json

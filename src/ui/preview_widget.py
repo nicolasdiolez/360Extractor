@@ -68,6 +68,8 @@ class PreviewWorker(QRunnable):
             if layout_mode == 'adaptive':
                 layout_mode = 'ring'
 
+            is_360 = self.settings.get('is_360', True)
+
             # Determine PREVIEW aspect ratio and resolution
             # We want the preview to match the aspect ratio of the final output.
             # Standard pinhole is usually 1:1 or 4:3 or 16:9. 
@@ -88,27 +90,31 @@ class PreviewWorker(QRunnable):
                 frame = cv2.resize(frame, (4096, int(h * scale)), interpolation=cv2.INTER_AREA)
                 h, w = frame.shape[:2]
 
-            # Get the first view configuration
-            views = GeometryProcessor.generate_views(cam_count, pitch_offset, layout_mode)
-            if not views:
-                 self.signals.error.emit("No views generated")
-                 return
-            
-            # Use the first view for preview
-            name, yaw, pitch, roll = views[0]
+            if is_360:
+                # Get the first view configuration
+                views = GeometryProcessor.generate_views(cam_count, pitch_offset, layout_mode)
+                if not views:
+                     self.signals.error.emit("No views generated")
+                     return
 
-            # Generate maps
-            map_x, map_y = GeometryProcessor.create_rectilinear_map(
-                src_h=h, src_w=w,
-                dest_h=preview_h, dest_w=preview_w,
-                fov_deg=fov,
-                yaw_deg=yaw,
-                pitch_deg=pitch,
-                roll_deg=roll
-            )
+                # Use the first view for preview
+                name, yaw, pitch, roll = views[0]
 
-            # Remap
-            remapped = cv2.remap(frame, map_x, map_y, cv2.INTER_LINEAR)
+                # Generate maps
+                map_x, map_y = GeometryProcessor.create_rectilinear_map(
+                    src_h=h, src_w=w,
+                    dest_h=preview_h, dest_w=preview_w,
+                    fov_deg=fov,
+                    yaw_deg=yaw,
+                    pitch_deg=pitch,
+                    roll_deg=roll
+                )
+
+                # Remap
+                remapped = cv2.remap(frame, map_x, map_y, cv2.INTER_LINEAR)
+            else:
+                # Flat / non-360 media: preview the frame as-is.
+                remapped = frame
 
             # Apply Sharpening if enabled
             if sharpen_enabled:

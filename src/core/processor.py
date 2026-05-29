@@ -169,6 +169,11 @@ class ProcessingWorker(QObject):
             if layout_mode == 'adaptive':  # legacy alias
                 layout_mode = 'ring'
 
+            # Non-360 (flat) media is processed as-is, without equirectangular
+            # reprojection. All other steps (blur filter, AI masking, sharpening,
+            # telemetry) still apply.
+            is_360 = job.settings.get('is_360', True)
+
             # AI Mode per job
             ai_mode_ui = job.settings.get('ai_mode', 'None')
             ai_mode_internal = 'none'
@@ -227,27 +232,32 @@ class ProcessingWorker(QObject):
                 logger.info(f"Extracting telemetry for {filename}...")
                 telemetry_handler.extract_metadata(file_path)
 
-            # Generate views based on camera count
-            views = GeometryProcessor.generate_views(camera_count, pitch_offset=pitch_offset, layout_mode=layout_mode)
-
+            # Generate views and reprojection maps (only for 360 input).
             maps = {}
-            if is_image:
-                src_h, src_w = current_image_frame.shape[:2]
+            if is_360:
+                views = GeometryProcessor.generate_views(camera_count, pitch_offset=pitch_offset, layout_mode=layout_mode)
+
+                if is_image:
+                    src_h, src_w = current_image_frame.shape[:2]
+                else:
+                    src_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+                self.progress_updated.emit(0, f"Generating maps for {filename}...")
+
+                active_cams = job.active_cameras
+
+                for i, (name, y, p, r) in enumerate(views):
+                    if active_cams is not None and i not in active_cams:
+                        continue
+
+                    maps[name] = GeometryProcessor.create_rectilinear_map(
+                        src_h, src_w, out_res, out_res, fov, y, p, r
+                    )
             else:
-                src_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-            self.progress_updated.emit(0, f"Generating maps for {filename}...")
-
-            active_cams = job.active_cameras
-
-            for i, (name, y, p, r) in enumerate(views):
-                if active_cams is not None and i not in active_cams:
-                    continue
-
-                maps[name] = GeometryProcessor.create_rectilinear_map(
-                    src_h, src_w, out_res, out_res, fov, y, p, r
-                )
+                # Flat / non-360 media: a single passthrough "view".
+                views = [("flat", 0.0, 0.0, 0.0)]
+                self.progress_updated.emit(0, f"Processing {filename} (flat / non-360)...")
 
             frame_idx = 0
             job_start_time = time.time()
@@ -306,12 +316,17 @@ class ProcessingWorker(QObject):
                     batch_names = []
 
                     for name, _, _, _ in views:
-                        if name not in maps:
-                            continue
+                        if is_360:
+                            if name not in maps:
+                                continue
 
-                        map_x, map_y = maps[name]
-                        # 1. Reproject
-                        rect_img = cv2.remap(frame, map_x, map_y, interp_flag, borderMode=cv2.BORDER_WRAP)
+                            map_x, map_y = maps[name]
+                            # 1. Reproject
+                            rect_img = cv2.remap(frame, map_x, map_y, interp_flag, borderMode=cv2.BORDER_WRAP)
+                        else:
+                            # Flat passthrough at native resolution. Copy so the
+                            # async I/O save is not affected by the next cap.read().
+                            rect_img = frame.copy()
 
                         # 2. Blur Detection
                         if blur_enabled:

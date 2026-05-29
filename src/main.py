@@ -35,6 +35,7 @@ def parse_arguments():
     parser.add_argument("--active-cameras", type=str, help="Comma-separated list of active camera indices (e.g. '0,1,4')")
     parser.add_argument("--resolution", type=int, help="Output image resolution (width/height) (default: 2048)")
     parser.add_argument("--layout", type=str, choices=['ring', 'cube', 'fibonacci'], help="Camera layout mode (ring/cube/fibonacci, default: ring)")
+    parser.add_argument("--flat", action="store_true", help="Treat input as standard (non-360) media; disables equirectangular reprojection")
     parser.add_argument("--adaptive", action="store_true", help="Enable adaptive interval (motion-based)")
     parser.add_argument("--motion-threshold", type=float, help="Motion threshold for adaptive interval (default: 0.5)")
     parser.add_argument("--export-telemetry", action="store_true", help="Export GPS/IMU metadata (if available)")
@@ -118,16 +119,20 @@ def run_cli(args):
             
     # Prepare jobs
     files_to_process = []
+    supported_exts = (
+        '.mp4', '.avi', '.mov', '.mkv',          # video
+        '.jpg', '.jpeg', '.png', '.tiff', '.tif' # image
+    )
     if os.path.isdir(input_path):
         for root, dirs, files in os.walk(input_path):
             for f in files:
-                if f.lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
+                if f.lower().endswith(supported_exts):
                     files_to_process.append(os.path.join(root, f))
     else:
         files_to_process.append(input_path)
-        
+
     if not files_to_process:
-        logger.error("No video files found.")
+        logger.error("No supported video/image files found.")
         sys.exit(1)
 
     logger.info(f"Found {len(files_to_process)} file(s) to process.")
@@ -159,6 +164,11 @@ def run_cli(args):
     quality = args.quality if args.quality is not None else config.get('quality', 95)
     resolution = args.resolution if args.resolution is not None else config.get('resolution', 2048)
     layout_mode = args.layout if args.layout is not None else config.get('layout_mode', 'ring')
+
+    # 360 vs flat (non-360) input. --flat forces non-360; otherwise use config.
+    is_360 = config.get('is_360', True)
+    if args.flat:
+        is_360 = False
     
     # AI Mode logic
     ai_mode = 'None'
@@ -207,6 +217,7 @@ def run_cli(args):
         naming_mode = 'custom'
 
     settings = {
+        'is_360': is_360,
         'interval_value': interval,
         'interval_unit': 'Seconds',
         'output_format': fmt,

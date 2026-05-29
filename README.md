@@ -1,12 +1,13 @@
 # 360 Extractor Pro
 
-High-performance desktop application and command-line tool for 360° video and image preprocessing. This tool generates optimized datasets for Gaussian Splatting and photogrammetry (COLMAP, RealityScan) by converting equirectangular media into rectilinear pinhole views and removing operators using AI.
+High-performance desktop application and command-line tool for 360° and standard video/image preprocessing. This tool generates optimized datasets for Gaussian Splatting and photogrammetry (COLMAP, RealityScan) by converting equirectangular media into rectilinear pinhole views and removing operators using AI.
 
-> **v2.5.2** - PyTorch CUDA environment fixes and premium UI/UX overhaul with adaptive preview resolution, glassmorphism theme, and **native 360° image support**.
+> **v3.0.0** - Added **non-360 (flat) media support**, GPS data validation, and major robustness fixes to the processing pipeline and Qt lifecycle (see [CHANGELOG](CHANGELOG.md)).
 
 ## Key Features
 
 - **360° to Rectilinear:** Reproject equirectangular video and images to pinhole views with configurable FOV and overlap.
+- **Standard (Non-360) Media:** Process regular video and images as-is — every filter (blur, AI masking, sharpening, telemetry) still applies, without equirectangular reprojection.
 - **Dual Interface:** Graphical UI for ease of use and CLI for automation.
 - **Advanced Control:** Multiple layouts (Ring, Cube Map, Fibonacci), inclination settings, and selective camera extraction.
 - **AI-Powered:** Automatic operator/object removal (supports 80 COCO classes like humans, vehicles, plants) with adjustable confidence, mask inversion, and intelligent motion-based keyframing.
@@ -52,6 +53,11 @@ python3 src/main.py
 Process videos via command line for automation:
 ```bash
 python3 src/main.py --input <video_path> --output <output_dir> --interval 1.0
+```
+
+Process standard (non-360) media with `--flat` (skips equirectangular reprojection):
+```bash
+python3 src/main.py --input <media_path> --output <output_dir> --flat
 ```
 
 ## Documentation

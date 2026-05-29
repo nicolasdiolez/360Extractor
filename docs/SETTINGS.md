@@ -4,10 +4,13 @@ This guide explains the various settings available in the 360 Extractor Pro GUI 
 
 ## Core Settings
 
+*   **360° Input:** Toggle whether the source is 360° equirectangular media.
+    *   *Enabled (default):* Media is reprojected into rectilinear pinhole views (the camera/layout settings below apply).
+    *   *Disabled (flat / non-360):* Standard video and images are processed as-is, at their native resolution. Blur filtering, AI masking, sharpening, telemetry and naming still apply, but the camera/layout/inclination settings are ignored. (CLI: `--flat`.)
 *   **Extraction Interval:** Choose how often to extract frames.
     *   *Seconds:* Good for time-based sampling (e.g., every 1.0s).
     *   *Frames:* Good for exact frame stepping (e.g., every 30 frames).
-*   **Camera Count:** Number of virtual pinhole cameras (2-36).
+*   **Camera Count:** Number of virtual pinhole cameras (2-36). *(360° input only.)*
 *   **Camera Layout:** Select the geometric arrangement of cameras.
     *   *Ring:* Evenly spaced along the horizon.
     *   *Cube Map:* Fixed 6 cameras (Front, Right, Back, Left, Up, Down). Ignores camera count (forces 6).
@@ -59,6 +62,7 @@ You can define job settings in a JSON file for reuse or complex configurations. 
 {
     "input": "videos/holiday.mp4",
     "output": "processed/holiday",
+    "is_360": true,
     "interval": 2.0,
     "format": "png",
     "camera_count": 6,
@@ -70,3 +74,6 @@ You can define job settings in a JSON file for reuse or complex configurations. 
     "naming_mode": "realityscan"
 }
 ```
+
+> Set `"is_360": false` (or pass `--flat`) to process standard, non-panoramic
+> media without reprojection.

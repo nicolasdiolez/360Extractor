@@ -6,6 +6,7 @@ class SettingsManager:
     _instance = None
     
     DEFAULT_SETTINGS = {
+        "is_360": True,
         "resolution": 2048,
         "fov": 90,
         "camera_count": 6,

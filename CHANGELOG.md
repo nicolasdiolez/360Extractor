@@ -4,6 +4,24 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-05-29
+
+### Added
+- **Non-360 (Flat) Media Support**: New "360° Input" toggle in the GUI (and `--flat` flag in the CLI) lets you process standard video and images without equirectangular reprojection. Blur filtering, AI masking, sharpening, telemetry and naming all still apply. When disabled, the 360-only controls (FOV, virtual cameras, layout, inclination) are turned off.
+- **CLI Image Inputs**: Directory scans now also pick up image files (`.jpg`, `.jpeg`, `.png`, `.tiff`, `.tif`) in addition to video.
+
+### Fixed
+- **Video Handle Leak**: `process_video` now wraps processing in `try/finally`, guaranteeing the `cv2.VideoCapture` handle is released even if an exception occurs mid-processing (previously the file could remain locked).
+- **Window Close During Processing**: `closeEvent` now stops running workers and waits for their `QThread`s, preventing "QThread destroyed while running" crashes and orphaned threads.
+- **Misleading Completion Dialog**: A failed job no longer aborts the whole batch and no longer triggers a false "Success" dialog. The final message is now conditional (success / completed with N errors / cancelled), failing jobs are marked "Error", and a new `job_error` signal reports per-job failures.
+- **GPS Data Validation**: GPS samples from all sources (GPMF/CAMM/SRT/GPX) are now validated (NaN/Inf and out-of-range coordinates dropped) and sorted by timestamp, fixing potentially corrupt EXIF GPS and incorrect time lookups.
+- **Preview vs Export Mismatch**: The live preview now uses the selected layout mode (Ring/Cube/Fibonacci) instead of always defaulting to Ring.
+
+### Changed
+- **Path Safety**: Custom output filename patterns are confined to the destination folder via `os.path.basename`, preventing path traversal.
+- **Unified Default Layout**: `layout_mode` now defaults consistently to `ring` (`adaptive` kept as a legacy alias).
+- **Logging**: Processing errors are logged with full tracebacks via the logger (`exc_info=True`) instead of `print`/`traceback.print_exc`.
+
 ## [2.5.2] - 2026-05-25
 
 ### Added
