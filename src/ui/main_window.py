@@ -31,6 +31,7 @@ from core.job import Job
 from core.settings_manager import SettingsManager
 from core.version import APP_NAME, VERSION
 from core.ai_classes import COCO_CLASSES
+from utils.logger import logger
 
 
 class ScrollBlocker(QObject):
@@ -1095,23 +1096,24 @@ class MainWindow(QMainWindow):
             return
             
         self.toggle_processing_state(True)
+        self._was_cancelled = False
         self.progress_bar.setValue(0)
         self.status_label.setText("Initializing...")
-        
+
         for card in self._video_cards:
             card.update_status("Pending")
-        
+
         self.thread = QThread()
         self.worker = ProcessingWorker(self.jobs)
         self.worker.moveToThread(self.thread)
-        
+
         self.thread.started.connect(self.worker.run)
         self.worker.job_started.connect(self.on_job_started)
         self.worker.job_finished.connect(self.on_job_finished)
+        self.worker.job_error.connect(self.on_job_error)
         self.worker.progress_updated.connect(self.update_progress)
         self.worker.finished.connect(self.processing_finished)
-        self.worker.error_occurred.connect(self.processing_error)
-        
+
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
@@ -1120,6 +1122,7 @@ class MainWindow(QMainWindow):
 
     def cancel_processing(self):
         if hasattr(self, 'worker'):
+            self._was_cancelled = True
             self.status_label.setText("Cancelling...")
             self.worker.stop()
             self.cancel_btn.setEnabled(False)
@@ -1146,6 +1149,12 @@ class MainWindow(QMainWindow):
         if 0 <= index < len(self._video_cards):
             self._video_cards[index].update_status("Done")
 
+    def on_job_error(self, index, message):
+        # Mark the failing card without interrupting the rest of the batch.
+        if 0 <= index < len(self._video_cards):
+            self._video_cards[index].update_status("Error")
+        logger.error(f"Job {index} failed: {message}")
+
     def update_progress(self, value, message):
         self.progress_bar.setValue(value)
         self.status_label.setText(message.split(" - ")[0] if " - " in message else message)
@@ -1156,17 +1165,23 @@ class MainWindow(QMainWindow):
                 card.set_progress(value)
 
     def processing_finished(self):
+        error_count = getattr(self.worker, 'error_count', 0) if hasattr(self, 'worker') else 0
         self.toggle_processing_state(False)
         self.progress_bar.setValue(100)
-        self.status_label.setText("Complete!")
-        QMessageBox.information(self, "Success", "Batch processing completed successfully.")
 
-    def processing_error(self, message):
-        self.toggle_processing_state(False)
-        self.status_label.setText("Error")
-        QMessageBox.critical(self, "Error", message)
-        if hasattr(self, 'worker'):
-            self.worker.stop()
+        if getattr(self, '_was_cancelled', False):
+            self.status_label.setText("Cancelled")
+            QMessageBox.information(self, "Cancelled", "Processing was cancelled.")
+        elif error_count > 0:
+            self.status_label.setText(f"Completed with {error_count} error(s)")
+            QMessageBox.warning(
+                self, "Completed with errors",
+                f"Batch finished, but {error_count} job(s) failed. "
+                "See the log panel for details."
+            )
+        else:
+            self.status_label.setText("Complete!")
+            QMessageBox.information(self, "Success", "Batch processing completed successfully.")
 
     # =========================================================================
     # ANALYSIS
@@ -1237,5 +1252,30 @@ class MainWindow(QMainWindow):
     # =========================================================================
 
     def closeEvent(self, event):
+        # Stop any running worker and wait for its thread so we never destroy a
+        # QThread while it is still running (avoids crashes / orphaned threads).
+        self._shutdown_thread('worker', 'thread')
+        self._shutdown_thread('analysis_worker', 'analysis_thread')
+
         self.settings_manager.save_settings()
         super().closeEvent(event)
+
+    def _shutdown_thread(self, worker_attr, thread_attr):
+        """Request a worker to stop and wait for its QThread to finish."""
+        worker = getattr(self, worker_attr, None)
+        thread = getattr(self, thread_attr, None)
+
+        if worker is not None:
+            try:
+                if hasattr(worker, 'stop'):
+                    worker.stop()
+            except RuntimeError:
+                pass  # Underlying C++ object already deleted
+
+        if thread is not None:
+            try:
+                if thread.isRunning():
+                    thread.quit()
+                    thread.wait(5000)
+            except RuntimeError:
+                pass  # Underlying C++ object already deleted

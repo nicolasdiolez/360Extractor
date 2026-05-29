@@ -10,6 +10,7 @@ from core.geometry import GeometryProcessor
 from core.ai_model import AIService
 from core.motion_detector import MotionDetector
 from core.telemetry import TelemetryHandler
+from core.ai_classes import PRESETS, parse_custom_classes
 from utils.file_manager import FileManager
 from utils.image_utils import ImageUtils
 from utils.logger import logger
@@ -21,6 +22,7 @@ class ProcessingWorker(QObject):
     progress_updated = Signal(int, str) # value (0-100), message
     job_started = Signal(int)
     job_finished = Signal(int)
+    job_error = Signal(int, str) # job index, error message
     finished = Signal()
     error_occurred = Signal(str)
 
@@ -28,11 +30,12 @@ class ProcessingWorker(QObject):
         super().__init__()
         self.jobs = jobs
         self.is_running = True
-        
+        self.error_count = 0
+
         # Initialize AI Service if needed
         self.ai_service = None
         needs_ai = any(job.settings.get('ai_mode', 'None') != 'None' for job in self.jobs)
-        
+
         if needs_ai:
              # Initialize YOLO model
              # Note: Using 'yolo26n-seg.pt' (nano) for maximum performance (NMS-free).
@@ -47,20 +50,30 @@ class ProcessingWorker(QObject):
 
     def run(self):
         total_jobs = len(self.jobs)
-        
+        self.error_count = 0
+
         for i, job in enumerate(self.jobs):
             if not self.is_running:
                 break
-            
+
             self.job_started.emit(i)
             try:
                 self.process_video(job, i, total_jobs)
                 self.job_finished.emit(i)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
-                self.error_occurred.emit(f"Error processing {os.path.basename(job.file_path)}: {str(e)}")
-        
+                # Log the full traceback, mark the job as failed and continue
+                # with the remaining jobs instead of aborting the whole batch.
+                logger.error(
+                    f"Error processing {os.path.basename(job.file_path)}: {e}",
+                    exc_info=True
+                )
+                self.error_count += 1
+                self.job_error.emit(i, str(e))
+                # Kept for CLI mode which relies on error_occurred for logging.
+                self.error_occurred.emit(
+                    f"Error processing {os.path.basename(job.file_path)}: {str(e)}"
+                )
+
         self.finished.emit()
 
     def generate_filename(self, pattern, context):
@@ -88,7 +101,7 @@ class ProcessingWorker(QObject):
 
         # Create a specific subfolder for this video to keep things organized
         output_dir = os.path.join(base_output_dir, f"{name_no_ext}_processed")
-        
+
         try:
             FileManager.ensure_directory(output_dir)
         except OSError as e:
@@ -99,11 +112,11 @@ class ProcessingWorker(QObject):
         fmt = job.output_format.lower()
         if fmt not in ['jpg', 'png', 'tiff']:
             fmt = 'jpg'
-        
+
         ext = f".{fmt}"
         if fmt == 'tiff':
             ext = '.tif'
-        
+
         save_params = []
         if fmt == 'jpg':
             quality = job.settings.get('quality', 95)
@@ -114,318 +127,325 @@ class ProcessingWorker(QObject):
             save_params = [cv2.IMWRITE_TIFF_COMPRESSION, 1] # 1 = NONE
 
         is_image = file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.tiff', '.tif'))
-        
+
         cap = None
         current_image_frame = None
-        
-        if is_image:
-            current_image_frame = cv2.imread(file_path)
-            if current_image_frame is None:
-                raise IOError(f"Could not open image: {file_path}")
-            fps = 0
-            total_frames_video = 1
-            interval = 1
-        else:
-            cap = cv2.VideoCapture(file_path)
-            if not cap.isOpened():
-                raise IOError(f"Could not open video: {file_path}")
-
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            total_frames_video = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            if total_frames_video <= 0: total_frames_video = 1 # Prevent division by zero
-            
-            # Calculate extraction interval
-            interval_value = float(job.settings.get('interval_value', 1.0))
-            interval_unit = job.settings.get('interval_unit', 'Seconds')
-            
-            if interval_unit == 'Frames':
-                interval = int(max(1, interval_value))
-            else: # Seconds
-                interval = int(max(1, fps * interval_value))
-        
-        # Geometry Settings
-        out_res = job.resolution
-        fov = job.settings.get('fov', 90)
-        camera_count = job.settings.get('camera_count', 6)
-        pitch_offset = job.settings.get('pitch_offset', 0)
-        layout_mode = job.settings.get('layout_mode', 'adaptive')
-        
-        # AI Mode per job
-        ai_mode_ui = job.settings.get('ai_mode', 'None')
-        ai_mode_internal = 'none'
-        if ai_mode_ui == 'Skip Frame':
-            ai_mode_internal = 'skip_frame'
-        elif ai_mode_ui == 'Generate Mask':
-            ai_mode_internal = 'generate_mask'
-            
-        ai_confidence = job.settings.get('ai_confidence', 0.25)
-        ai_invert_mask = job.settings.get('ai_invert_mask', True)
-        ai_feather_mask = job.settings.get('feather_mask', False)
-        
-        # Interpolation Settings
-        interp_mode = job.settings.get('interpolation_mode', 'linear')
-        interp_flag = cv2.INTER_LANCZOS4 if interp_mode == 'lanczos' else cv2.INTER_LINEAR
-
-        from core.ai_classes import PRESETS, parse_custom_classes
-        target_classes = []
-        if job.settings.get('ai_detect_humans', True):
-            target_classes.extend(PRESETS["Humans"])
-        if job.settings.get('ai_detect_vehicles', False):
-            target_classes.extend(PRESETS["Vehicles"])
-        if job.settings.get('ai_detect_plants', False):
-            target_classes.extend(PRESETS["Plants"])
-            
-        custom_classes_str = job.settings.get('ai_custom_classes', '')
-        if custom_classes_str:
-            target_classes.extend(parse_custom_classes(custom_classes_str))
-            
-        target_classes = list(set(target_classes))
-        if not target_classes:
-            target_classes = [0] # fallback to human
-
-        # Blur Filter Settings
-        blur_enabled = job.settings.get('blur_filter_enabled', False)
-        smart_blur_enabled = job.settings.get('smart_blur_enabled', False)
-        blur_threshold = job.settings.get('blur_threshold', 100.0)
         skipped_blur_count = 0
-        
-        # Adaptive Blur State
-        blur_history = deque(maxlen=10)
-        consecutive_blur_skips = 0
 
-        # Sharpening Settings
-        sharpen_enabled = job.settings.get('sharpening_enabled', False)
-        sharpen_strength = job.settings.get('sharpening_strength', 0.5)
-
-        # Adaptive Settings
-        adaptive_mode = job.adaptive_mode
-        adaptive_threshold = job.adaptive_threshold
-        last_extracted_frame = None
-        
-        # Telemetry Setup
-        telemetry_handler = None
-        current_gps = None
-        if job.export_telemetry:
-            telemetry_handler = TelemetryHandler()
-            logger.info(f"Extracting telemetry for {filename}...")
-            telemetry_handler.extract_metadata(file_path)
-
-        # Generate views based on camera count
-        views = GeometryProcessor.generate_views(camera_count, pitch_offset=pitch_offset, layout_mode=layout_mode)
-        
-        maps = {}
-        if is_image:
-            src_h, src_w = current_image_frame.shape[:2]
-        else:
-            src_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        
-        self.progress_updated.emit(0, f"Generating maps for {filename}...")
-        
-        active_cams = job.active_cameras
-
-        for i, (name, y, p, r) in enumerate(views):
-            if active_cams is not None and i not in active_cams:
-                continue
-
-            maps[name] = GeometryProcessor.create_rectilinear_map(
-                src_h, src_w, out_res, out_res, fov, y, p, r
-            )
-
-        frame_idx = 0
-        job_start_time = time.time()
-        
-        while self.is_running:
+        # Wrap the whole processing in try/finally so the video capture handle
+        # is always released, even if an exception is raised mid-processing.
+        try:
             if is_image:
-                if frame_idx > 0:
-                    break
-                frame = current_image_frame
-                ret = True
+                current_image_frame = cv2.imread(file_path)
+                if current_image_frame is None:
+                    raise IOError(f"Could not open image: {file_path}")
+                fps = 0
+                total_frames_video = 1
+                interval = 1
             else:
-                ret, frame = cap.read()
-                
-            if not ret:
-                break
-            
-            if frame_idx % interval == 0:
-                # Update GPS for current time
-                if telemetry_handler:
-                    current_time = frame_idx / fps if fps > 0 else 0
-                    current_gps = telemetry_handler.get_gps_at_time(current_time)
+                cap = cv2.VideoCapture(file_path)
+                if not cap.isOpened():
+                    raise IOError(f"Could not open video: {file_path}")
 
-                # Progress calculation (per job 0-100%)
-                current_job_progress = int((frame_idx / total_frames_video) * 100)
-                
-                # ETA Calculation
-                elapsed = time.time() - job_start_time
-                if frame_idx > 0 and elapsed > 0:
-                    rate = frame_idx / elapsed # frames per second
-                    remaining_frames = total_frames_video - frame_idx
-                    eta_seconds = remaining_frames / rate
-                    eta_min = int(eta_seconds // 60)
-                    eta_sec = int(eta_seconds % 60)
-                    eta_str = f"ETA: {eta_min}m {eta_sec}s"
-                else:
-                    eta_str = "ETA: --m --s"
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                total_frames_video = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                if total_frames_video <= 0: total_frames_video = 1 # Prevent division by zero
 
-                self.progress_updated.emit(
-                    current_job_progress,
-                    f"Processing {filename} - Frame {frame_idx}/{total_frames_video} - {eta_str}"
+                # Calculate extraction interval
+                interval_value = float(job.settings.get('interval_value', 1.0))
+                interval_unit = job.settings.get('interval_unit', 'Seconds')
+
+                if interval_unit == 'Frames':
+                    interval = int(max(1, interval_value))
+                else: # Seconds
+                    interval = int(max(1, fps * interval_value))
+
+            # Geometry Settings
+            out_res = job.resolution
+            fov = job.settings.get('fov', 90)
+            camera_count = job.settings.get('camera_count', 6)
+            pitch_offset = job.settings.get('pitch_offset', 0)
+            layout_mode = job.settings.get('layout_mode', 'adaptive')
+
+            # AI Mode per job
+            ai_mode_ui = job.settings.get('ai_mode', 'None')
+            ai_mode_internal = 'none'
+            if ai_mode_ui == 'Skip Frame':
+                ai_mode_internal = 'skip_frame'
+            elif ai_mode_ui == 'Generate Mask':
+                ai_mode_internal = 'generate_mask'
+
+            ai_confidence = job.settings.get('ai_confidence', 0.25)
+            ai_invert_mask = job.settings.get('ai_invert_mask', True)
+            ai_feather_mask = job.settings.get('feather_mask', False)
+
+            # Interpolation Settings
+            interp_mode = job.settings.get('interpolation_mode', 'linear')
+            interp_flag = cv2.INTER_LANCZOS4 if interp_mode == 'lanczos' else cv2.INTER_LINEAR
+
+            target_classes = []
+            if job.settings.get('ai_detect_humans', True):
+                target_classes.extend(PRESETS["Humans"])
+            if job.settings.get('ai_detect_vehicles', False):
+                target_classes.extend(PRESETS["Vehicles"])
+            if job.settings.get('ai_detect_plants', False):
+                target_classes.extend(PRESETS["Plants"])
+
+            custom_classes_str = job.settings.get('ai_custom_classes', '')
+            if custom_classes_str:
+                target_classes.extend(parse_custom_classes(custom_classes_str))
+
+            target_classes = list(set(target_classes))
+            if not target_classes:
+                target_classes = [0] # fallback to human
+
+            # Blur Filter Settings
+            blur_enabled = job.settings.get('blur_filter_enabled', False)
+            smart_blur_enabled = job.settings.get('smart_blur_enabled', False)
+            blur_threshold = job.settings.get('blur_threshold', 100.0)
+
+            # Adaptive Blur State
+            blur_history = deque(maxlen=10)
+            consecutive_blur_skips = 0
+
+            # Sharpening Settings
+            sharpen_enabled = job.settings.get('sharpening_enabled', False)
+            sharpen_strength = job.settings.get('sharpening_strength', 0.5)
+
+            # Adaptive Settings
+            adaptive_mode = job.adaptive_mode
+            adaptive_threshold = job.adaptive_threshold
+            last_extracted_frame = None
+
+            # Telemetry Setup
+            telemetry_handler = None
+            current_gps = None
+            if job.export_telemetry:
+                telemetry_handler = TelemetryHandler()
+                logger.info(f"Extracting telemetry for {filename}...")
+                telemetry_handler.extract_metadata(file_path)
+
+            # Generate views based on camera count
+            views = GeometryProcessor.generate_views(camera_count, pitch_offset=pitch_offset, layout_mode=layout_mode)
+
+            maps = {}
+            if is_image:
+                src_h, src_w = current_image_frame.shape[:2]
+            else:
+                src_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+            self.progress_updated.emit(0, f"Generating maps for {filename}...")
+
+            active_cams = job.active_cameras
+
+            for i, (name, y, p, r) in enumerate(views):
+                if active_cams is not None and i not in active_cams:
+                    continue
+
+                maps[name] = GeometryProcessor.create_rectilinear_map(
+                    src_h, src_w, out_res, out_res, fov, y, p, r
                 )
 
-                # Adaptive Check
-                if adaptive_mode:
-                    if last_extracted_frame is not None:
-                        motion_score = self.motion_detector.calculate_motion_score(last_extracted_frame, frame)
-                        if motion_score <= adaptive_threshold:
-                            # Skip extraction
-                            frame_idx += 1
-                            continue
-                    
-                    last_extracted_frame = frame.copy()
+            frame_idx = 0
+            job_start_time = time.time()
 
-                batch_images = []
-                batch_contexts = []
-                batch_names = []
+            while self.is_running:
+                if is_image:
+                    if frame_idx > 0:
+                        break
+                    frame = current_image_frame
+                    ret = True
+                else:
+                    ret, frame = cap.read()
 
-                for name, _, _, _ in views:
-                    if name not in maps:
-                        continue
+                if not ret:
+                    break
 
-                    map_x, map_y = maps[name]
-                    # 1. Reproject
-                    rect_img = cv2.remap(frame, map_x, map_y, interp_flag, borderMode=cv2.BORDER_WRAP)
-                    
-                    # 2. Blur Detection
-                    if blur_enabled:
-                        score = ImageUtils.calculate_blur_score(rect_img)
-                        is_blurry = False
-                        
-                        if smart_blur_enabled:
-                            # 1. Check Minimum Floor (Safety net against black/garbage frames)
-                            if score < blur_threshold:
-                                is_blurry = True
-                            
-                            # 2. Adaptive Check
-                            elif len(blur_history) > 0:
-                                avg_score = sum(blur_history) / len(blur_history)
-                                if score < avg_score * 0.6:
-                                    is_blurry = True
-                                    
-                            # 3. Safety Override (Force accept if too many consecutive skips)
-                            if is_blurry:
-                                consecutive_blur_skips += 1
-                                if consecutive_blur_skips > 5:
-                                    logger.warning(f"Force accepting frame due to consecutive skips: {filename} - Frame {frame_idx}")
-                                    is_blurry = False
-                                    consecutive_blur_skips = 0
-                            
-                            # 4. Update History (if accepted, either naturally or forced)
-                            if not is_blurry:
-                                consecutive_blur_skips = 0
-                                blur_history.append(score)
-                        else:
-                            # Standard Mode
-                            if score < blur_threshold:
-                                is_blurry = True
+                if frame_idx % interval == 0:
+                    # Update GPS for current time
+                    if telemetry_handler:
+                        current_time = frame_idx / fps if fps > 0 else 0
+                        current_gps = telemetry_handler.get_gps_at_time(current_time)
 
-                        if is_blurry:
-                            logger.info(f"Skipped blurry view: {filename} - Frame {frame_idx} - {name} (Score: {score:.1f})")
-                            skipped_blur_count += 1
-                            continue
+                    # Progress calculation (per job 0-100%)
+                    current_job_progress = int((frame_idx / total_frames_video) * 100)
 
-                    # 3. Sharpening (Post-Reprojection Recovery)
-                    if sharpen_enabled:
-                        gaussian = cv2.GaussianBlur(rect_img, (0, 0), 2.0)
-                        rect_img = cv2.addWeighted(rect_img, 1.0 + sharpen_strength, gaussian, -sharpen_strength, 0)
-
-                    batch_images.append(rect_img)
-                    batch_names.append(name)
-                    batch_contexts.append({
-                        'filename': name_no_ext,
-                        'frame': f"{frame_idx:06d}",
-                        'camera': name,
-                        'ext': ext
-                    })
-
-                # 4. AI Processing
-                ai_results = []
-                if batch_images:
-                    if self.ai_service and ai_mode_internal != 'none':
-                        ai_results = self.ai_service.process_batch(
-                            batch_images, mode=ai_mode_internal, conf=ai_confidence, 
-                            classes=target_classes, invert_mask=ai_invert_mask, 
-                            feather_mask=ai_feather_mask
-                        )
+                    # ETA Calculation
+                    elapsed = time.time() - job_start_time
+                    if frame_idx > 0 and elapsed > 0:
+                        rate = frame_idx / elapsed # frames per second
+                        remaining_frames = total_frames_video - frame_idx
+                        eta_seconds = remaining_frames / rate
+                        eta_min = int(eta_seconds // 60)
+                        eta_sec = int(eta_seconds % 60)
+                        eta_str = f"ETA: {eta_min}m {eta_sec}s"
                     else:
-                        ai_results = [(img, None) for img in batch_images]
+                        eta_str = "ETA: --m --s"
 
-                # 5. Save (Multi-threaded I/O)
-                futures = []
-                naming_mode = job.settings.get('naming_mode', 'realityscan')
-                img_pattern = job.settings.get('image_pattern', '{filename}_frame{frame}_{camera}')
-                mask_pattern = job.settings.get('mask_pattern', '{filename}_frame{frame}_{camera}_mask')
+                    self.progress_updated.emit(
+                        current_job_progress,
+                        f"Processing {filename} - Frame {frame_idx}/{total_frames_video} - {eta_str}"
+                    )
 
-                def io_save_task(save_path, final_img, params, gps, handler, mask_path, mask_img):
-                    FileManager.save_image(save_path, final_img, params)
-                    if gps and handler:
-                        handler.embed_exif(save_path, *gps)
-                    if mask_img is not None and isinstance(mask_img, np.ndarray):
-                        FileManager.save_mask(mask_path, mask_img)
+                    # Adaptive Check
+                    if adaptive_mode:
+                        if last_extracted_frame is not None:
+                            motion_score = self.motion_detector.calculate_motion_score(last_extracted_frame, frame)
+                            if motion_score <= adaptive_threshold:
+                                # Skip extraction
+                                frame_idx += 1
+                                continue
 
-                for i, (final_img, mask_or_skip) in enumerate(ai_results):
-                    if final_img is None and mask_or_skip is True:
-                        continue # Skipped
-                        
-                    name = batch_names[i]
-                    ctx = batch_contexts[i]
-                    
-                    save_name = ""
-                    mask_name = ""
+                        last_extracted_frame = frame.copy()
 
-                    if naming_mode == 'realityscan':
-                         save_name = f"{name_no_ext}_frame{frame_idx:06d}_{name}{ext}"
-                         mask_name = f"{save_name}.mask.png"
-                    elif naming_mode == 'simple':
-                        save_name = f"{name_no_ext}_frame{frame_idx:06d}_{name}{ext}"
-                        mask_name = f"{name_no_ext}_frame{frame_idx:06d}_{name}_mask.png"
-                    elif naming_mode == 'custom':
-                        if '{ext}' in img_pattern:
-                            save_name = self.generate_filename(img_pattern, ctx)
+                    batch_images = []
+                    batch_contexts = []
+                    batch_names = []
+
+                    for name, _, _, _ in views:
+                        if name not in maps:
+                            continue
+
+                        map_x, map_y = maps[name]
+                        # 1. Reproject
+                        rect_img = cv2.remap(frame, map_x, map_y, interp_flag, borderMode=cv2.BORDER_WRAP)
+
+                        # 2. Blur Detection
+                        if blur_enabled:
+                            score = ImageUtils.calculate_blur_score(rect_img)
+                            is_blurry = False
+
+                            if smart_blur_enabled:
+                                # 1. Check Minimum Floor (Safety net against black/garbage frames)
+                                if score < blur_threshold:
+                                    is_blurry = True
+
+                                # 2. Adaptive Check
+                                elif len(blur_history) > 0:
+                                    avg_score = sum(blur_history) / len(blur_history)
+                                    if score < avg_score * 0.6:
+                                        is_blurry = True
+
+                                # 3. Safety Override (Force accept if too many consecutive skips)
+                                if is_blurry:
+                                    consecutive_blur_skips += 1
+                                    if consecutive_blur_skips > 5:
+                                        logger.warning(f"Force accepting frame due to consecutive skips: {filename} - Frame {frame_idx}")
+                                        is_blurry = False
+                                        consecutive_blur_skips = 0
+
+                                # 4. Update History (if accepted, either naturally or forced)
+                                if not is_blurry:
+                                    consecutive_blur_skips = 0
+                                    blur_history.append(score)
+                            else:
+                                # Standard Mode
+                                if score < blur_threshold:
+                                    is_blurry = True
+
+                            if is_blurry:
+                                logger.info(f"Skipped blurry view: {filename} - Frame {frame_idx} - {name} (Score: {score:.1f})")
+                                skipped_blur_count += 1
+                                continue
+
+                        # 3. Sharpening (Post-Reprojection Recovery)
+                        if sharpen_enabled:
+                            gaussian = cv2.GaussianBlur(rect_img, (0, 0), 2.0)
+                            rect_img = cv2.addWeighted(rect_img, 1.0 + sharpen_strength, gaussian, -sharpen_strength, 0)
+
+                        batch_images.append(rect_img)
+                        batch_names.append(name)
+                        batch_contexts.append({
+                            'filename': name_no_ext,
+                            'frame': f"{frame_idx:06d}",
+                            'camera': name,
+                            'ext': ext
+                        })
+
+                    # 4. AI Processing
+                    ai_results = []
+                    if batch_images:
+                        if self.ai_service and ai_mode_internal != 'none':
+                            ai_results = self.ai_service.process_batch(
+                                batch_images, mode=ai_mode_internal, conf=ai_confidence,
+                                classes=target_classes, invert_mask=ai_invert_mask,
+                                feather_mask=ai_feather_mask
+                            )
                         else:
-                            save_name = self.generate_filename(img_pattern, ctx) + ext
-                        ctx['image_name'] = save_name
-                        if '{ext}' in mask_pattern:
-                            mask_name = self.generate_filename(mask_pattern, ctx)
-                        else:
-                            mask_name = self.generate_filename(mask_pattern, ctx) + ".png"
+                            ai_results = [(img, None) for img in batch_images]
 
-                    full_save_path = os.path.join(output_dir, save_name)
-                    full_mask_path = os.path.join(output_dir, mask_name)
+                    # 5. Save (Multi-threaded I/O)
+                    futures = []
+                    naming_mode = job.settings.get('naming_mode', 'realityscan')
+                    img_pattern = job.settings.get('image_pattern', '{filename}_frame{frame}_{camera}')
+                    mask_pattern = job.settings.get('mask_pattern', '{filename}_frame{frame}_{camera}_mask')
 
-                    # Submit to thread pool (with safety check for shutdown)
-                    if not self.is_running:
-                        break
-                        
-                    try:
-                        futures.append(self.io_pool.submit(
-                            io_save_task, full_save_path, final_img, save_params, 
-                            current_gps, telemetry_handler, full_mask_path, mask_or_skip
-                        ))
-                    except RuntimeError:
-                        # Pool closed, stop loop
-                        logger.warning("I/O Pool closed, stopping save loop.")
-                        break
-                
-                # Wait for all saves for this frame to complete before moving to the next
-                # This prevents unbounded memory buildup if GPU is faster than SSD
-                if futures:
-                    concurrent.futures.wait(futures)
-            
-            frame_idx += 1
-            
-        if cap:
-            cap.release()
+                    def io_save_task(save_path, final_img, params, gps, handler, mask_path, mask_img):
+                        FileManager.save_image(save_path, final_img, params)
+                        if gps and handler:
+                            handler.embed_exif(save_path, *gps)
+                        if mask_img is not None and isinstance(mask_img, np.ndarray):
+                            FileManager.save_mask(mask_path, mask_img)
+
+                    for i, (final_img, mask_or_skip) in enumerate(ai_results):
+                        if final_img is None and mask_or_skip is True:
+                            continue # Skipped
+
+                        name = batch_names[i]
+                        ctx = batch_contexts[i]
+
+                        save_name = ""
+                        mask_name = ""
+
+                        if naming_mode == 'realityscan':
+                             save_name = f"{name_no_ext}_frame{frame_idx:06d}_{name}{ext}"
+                             mask_name = f"{save_name}.mask.png"
+                        elif naming_mode == 'simple':
+                            save_name = f"{name_no_ext}_frame{frame_idx:06d}_{name}{ext}"
+                            mask_name = f"{name_no_ext}_frame{frame_idx:06d}_{name}_mask.png"
+                        elif naming_mode == 'custom':
+                            if '{ext}' in img_pattern:
+                                save_name = self.generate_filename(img_pattern, ctx)
+                            else:
+                                save_name = self.generate_filename(img_pattern, ctx) + ext
+                            ctx['image_name'] = save_name
+                            if '{ext}' in mask_pattern:
+                                mask_name = self.generate_filename(mask_pattern, ctx)
+                            else:
+                                mask_name = self.generate_filename(mask_pattern, ctx) + ".png"
+
+                        # Confine outputs to output_dir: a custom naming pattern must
+                        # not be able to escape the destination folder via '../'.
+                        save_name = os.path.basename(save_name)
+                        mask_name = os.path.basename(mask_name)
+
+                        full_save_path = os.path.join(output_dir, save_name)
+                        full_mask_path = os.path.join(output_dir, mask_name)
+
+                        # Submit to thread pool (with safety check for shutdown)
+                        if not self.is_running:
+                            break
+
+                        try:
+                            futures.append(self.io_pool.submit(
+                                io_save_task, full_save_path, final_img, save_params,
+                                current_gps, telemetry_handler, full_mask_path, mask_or_skip
+                            ))
+                        except RuntimeError:
+                            # Pool closed, stop loop
+                            logger.warning("I/O Pool closed, stopping save loop.")
+                            break
+
+                    # Wait for all saves for this frame to complete before moving to the next
+                    # This prevents unbounded memory buildup if GPU is faster than SSD
+                    if futures:
+                        concurrent.futures.wait(futures)
+
+                frame_idx += 1
+        finally:
+            if cap:
+                cap.release()
 
         if skipped_blur_count > 0:
             logger.info(f"Total blurry views skipped for {filename}: {skipped_blur_count}")
