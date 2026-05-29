@@ -62,6 +62,12 @@ class PreviewWorker(QRunnable):
             sharpen_enabled = self.settings.get('sharpening_enabled', False)
             sharpen_strength = self.settings.get('sharpening_strength', 0.5)
 
+            # Use the same layout as the export so the preview reflects the
+            # actually-exported view. 'adaptive' is a legacy alias for 'ring'.
+            layout_mode = self.settings.get('layout_mode', 'ring')
+            if layout_mode == 'adaptive':
+                layout_mode = 'ring'
+
             # Determine PREVIEW aspect ratio and resolution
             # We want the preview to match the aspect ratio of the final output.
             # Standard pinhole is usually 1:1 or 4:3 or 16:9. 
@@ -83,7 +89,7 @@ class PreviewWorker(QRunnable):
                 h, w = frame.shape[:2]
 
             # Get the first view configuration
-            views = GeometryProcessor.generate_views(cam_count, pitch_offset)
+            views = GeometryProcessor.generate_views(cam_count, pitch_offset, layout_mode)
             if not views:
                  self.signals.error.emit("No views generated")
                  return

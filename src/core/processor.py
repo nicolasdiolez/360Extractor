@@ -165,7 +165,9 @@ class ProcessingWorker(QObject):
             fov = job.settings.get('fov', 90)
             camera_count = job.settings.get('camera_count', 6)
             pitch_offset = job.settings.get('pitch_offset', 0)
-            layout_mode = job.settings.get('layout_mode', 'adaptive')
+            layout_mode = job.settings.get('layout_mode', 'ring')
+            if layout_mode == 'adaptive':  # legacy alias
+                layout_mode = 'ring'
 
             # AI Mode per job
             ai_mode_ui = job.settings.get('ai_mode', 'None')

@@ -2,6 +2,7 @@ import subprocess
 import json
 import logging
 import bisect
+import math
 from typing import Optional, Tuple, Any, List, Dict
 import piexif
 from PIL import Image
@@ -18,6 +19,36 @@ class TelemetryHandler:
         self.metadata = {}
         self.has_gps = False
         self.gps_samples: List[Dict[str, float]] = []
+
+    @staticmethod
+    def _sanitize_gps_samples(samples: List[Dict[str, float]]) -> List[Dict[str, float]]:
+        """
+        Validate GPS samples and return a clean, time-sorted list.
+
+        Drops samples with missing/non-numeric coordinates, NaN/Inf values, or
+        coordinates outside the valid ranges (lat in [-90, 90], lon in
+        [-180, 180]). Sorting by timestamp is required for the bisect-based
+        lookup in get_gps_at_time to be correct.
+        """
+        cleaned: List[Dict[str, float]] = []
+        for s in samples or []:
+            try:
+                lat = float(s['lat'])
+                lon = float(s['lon'])
+                alt = float(s.get('alt', 0.0))
+                ts = float(s.get('timestamp', 0.0))
+            except (KeyError, TypeError, ValueError):
+                continue
+
+            if not all(math.isfinite(v) for v in (lat, lon, alt, ts)):
+                continue
+            if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+                continue
+
+            cleaned.append({'lat': lat, 'lon': lon, 'alt': alt, 'timestamp': ts})
+
+        cleaned.sort(key=lambda x: x['timestamp'])
+        return cleaned
 
     def extract_metadata(self, video_path: str) -> bool:
         """
@@ -114,7 +145,7 @@ class TelemetryHandler:
             result = subprocess.run(cmd, capture_output=True, check=True)
             raw_data = result.stdout
             
-            self.gps_samples = parse_camm_data(raw_data, duration)
+            self.gps_samples = self._sanitize_gps_samples(parse_camm_data(raw_data, duration))
             if self.gps_samples:
                 self.has_gps = True
                 logger.info(f"Extracted {len(self.gps_samples)} CAMM GPS samples.")
@@ -144,7 +175,7 @@ class TelemetryHandler:
             raw_data = result.stdout
             
             parser = GPMFParser()
-            self.gps_samples = parser.parse(raw_data)
+            self.gps_samples = self._sanitize_gps_samples(parser.parse(raw_data))
             logger.info(f"Extracted {len(self.gps_samples)} GPS samples.")
             
         except subprocess.CalledProcessError as e:
@@ -168,8 +199,8 @@ class TelemetryHandler:
             result = subprocess.run(cmd, capture_output=True, check=True)
             raw_data = result.stdout
             
-            self.gps_samples = parse_srt_data(raw_data)
-            
+            self.gps_samples = self._sanitize_gps_samples(parse_srt_data(raw_data))
+
             if self.gps_samples:
                 self.has_gps = True
                 logger.info(f"Extracted {len(self.gps_samples)} GPS samples from subtitles.")
@@ -189,7 +220,7 @@ class TelemetryHandler:
             with open(gpx_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            samples = parse_gpx_data(content)
+            samples = self._sanitize_gps_samples(parse_gpx_data(content))
             if samples:
                 self.gps_samples = samples
                 logger.info(f"Loaded {len(samples)} samples from GPX sidecar.")
