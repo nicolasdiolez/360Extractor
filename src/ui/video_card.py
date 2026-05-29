@@ -2,16 +2,16 @@
 Video Card Widget for the job queue.
 Modern card-style widget for displaying video jobs with thumbnail.
 """
-import os
 import cv2
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, 
-    QProgressBar, QSizePolicy, QPushButton
+    QProgressBar, QPushButton
 )
-from PySide6.QtCore import Qt, Signal, QThread, QObject, QSize
-from PySide6.QtGui import QPixmap, QImage, QColor, QPainter, QPainterPath
+from PySide6.QtCore import Qt, Signal, QThread, QObject
+from PySide6.QtGui import QPixmap, QImage, QPainter, QPainterPath
 
 from ui.icons import get_icon, get_pixmap
+from utils.logger import logger
 
 
 class ThumbnailWorker(QObject):
@@ -75,7 +75,7 @@ class ThumbnailWorker(QObject):
                 self.finished.emit(QPixmap())
             
         except Exception as e:
-            print(f"Thumbnail error: {e}")
+            logger.error(f"Thumbnail error: {e}")
             self.finished.emit(QPixmap())
 
 

@@ -72,7 +72,6 @@ def setup_gpu():
     
     # 1. OS Check
     is_win = sys.platform.startswith('win')
-    is_linux = sys.platform.startswith('linux')
     is_mac = sys.platform.startswith('darwin')
     
     if is_mac:

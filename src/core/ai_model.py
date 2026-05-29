@@ -74,83 +74,53 @@ class AIService:
 
     def process_image(self, image, mode='none', conf=0.25, classes=None, invert_mask=True, feather_mask=False):
         """
-        Process an image to detect/remove target objects.
-        
-        Args:
-            image (np.ndarray): The input image (BGR).
-            mode (str): Processing mode - 'none', 'skip_frame', 'generate_mask'.
-            conf (float): Confidence threshold.
-            classes (list): List of COCO class IDs to target.
-            invert_mask (bool): If True, invert masks (black targets, white bg).
-            
+        Process a single image. Thin wrapper around process_batch for callers
+        that only have one image.
+
         Returns:
-            tuple: (processed_image, mask_or_status)
-                - If mode='skip_frame': returns (None, True) if targets found, (image, False) otherwise.
-                - If mode='generate_mask': returns (image, mask) where mask is binary.
-                - If mode='none': returns (image, None).
+            tuple: (processed_image, mask_or_status). See process_batch.
         """
         if mode == 'none' or self.model is None:
             return image, None
-            
-        # Run inference
-        # stream=False ensures we get all results
-        target_classes = classes if classes is not None else self.target_classes
-        results = self.model(image, classes=target_classes, device=self.device, verbose=False, conf=conf)
-        
-        has_detection = False
-        if results and results[0].boxes:
-            has_detection = True
+        return self.process_batch(
+            [image], mode=mode, conf=conf, classes=classes,
+            invert_mask=invert_mask, feather_mask=feather_mask
+        )[0]
 
-        if mode == 'skip_frame':
-            if has_detection:
-                return None, True # Signal to skip
-            else:
-                return image, False
+    @staticmethod
+    def _build_mask(mask_tensors, image, invert_mask, feather_mask):
+        """
+        Build a binary/soft mask from YOLO segmentation tensors and resize it to
+        the image size. Shared by single and batch processing.
+        """
+        # Combined hard mask (any detection above 0.5), used for the non-feather path.
+        combined_mask = torch.any(mask_tensors > 0.5, dim=0).byte() * 255
 
-        if mode == 'generate_mask':
-            mask = None
-            if has_detection and results[0].masks:
-                # 1. Start from native probability maps (tensors)
-                # results[0].masks.data is a tensor of shape (N, H, W)
-                mask_tensors = results[0].masks.data
-                
-                # Combined mask (max across all detections)
-                # Move to CPU for CPU/GPU agnostic processing
-                combined_mask = torch.any(mask_tensors > 0.5, dim=0).byte() * 255
-                
-                if feather_mask:
-                    # For soft edges, use the probability values instead of hard thresholding
-                    # Max of mask probabilities (clamped 0-1)
-                    soft_mask_t = torch.max(mask_tensors, dim=0)[0]
-                    # Up-scale directly to image size using interpolation
-                    full_mask = soft_mask_t.cpu().numpy()
-                    full_mask = cv2.resize(full_mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
-                    full_mask = (full_mask * 255).astype(np.uint8)
-                else:
-                    # For hard edges, use the thresholded combined mask
-                    full_mask = combined_mask.cpu().numpy()
-                    full_mask = cv2.resize(full_mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
-                
-                # Refinement: Dilation to cover edges/halos (still useful)
-                k_size = max(3, int(image.shape[1] * 0.005))
-                kernel = np.ones((k_size, k_size), np.uint8) 
-                full_mask = cv2.dilate(full_mask, kernel, iterations=1)
+        if feather_mask:
+            # Soft edges: use probability values instead of hard thresholding.
+            soft_mask_t = torch.max(mask_tensors, dim=0)[0]
+            full_mask = soft_mask_t.cpu().numpy()
+            full_mask = cv2.resize(full_mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
+            full_mask = (full_mask * 255).astype(np.uint8)
+        else:
+            full_mask = combined_mask.cpu().numpy()
+            full_mask = cv2.resize(full_mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
 
-                # Invert mask for photogrammetry convention:
-                # Black (0) = Ignore/Masked (The Person), White (255) = Keep (Background).
-                if invert_mask:
-                    final_mask = cv2.bitwise_not(full_mask)
-                else:
-                    final_mask = full_mask
-                
-                return image, final_mask
-            else:
-                # No person, return full white mask (keep everything)
-                h, w = image.shape[:2]
-                bg_val = 255 if invert_mask else 0
-                return image, bg_val * np.ones((h, w), dtype=np.uint8)
+        # Refinement: dilation to cover edges/halos.
+        k_size = max(3, int(image.shape[1] * 0.005))
+        kernel = np.ones((k_size, k_size), np.uint8)
+        full_mask = cv2.dilate(full_mask, kernel, iterations=1)
 
-        return image, None
+        # Photogrammetry convention: black (0) = ignore (the person),
+        # white (255) = keep (background).
+        return cv2.bitwise_not(full_mask) if invert_mask else full_mask
+
+    @staticmethod
+    def _empty_mask(image, invert_mask):
+        """Full 'keep everything' mask when there is no detection."""
+        h, w = image.shape[:2]
+        bg_val = 255 if invert_mask else 0
+        return bg_val * np.ones((h, w), dtype=np.uint8)
 
     def process_batch(self, images, mode='none', conf=0.25, classes=None, invert_mask=True, feather_mask=False):
         """
@@ -187,39 +157,11 @@ class AIService:
                     batch_results.append((img, False))
             elif mode == 'generate_mask':
                 if has_detection and res.masks:
-                    # 1. Start from native probability maps (tensors)
                     # res.masks.data is shape (N, H, W)
-                    mask_tensors = res.masks.data
-                    
-                    # Combined mask (max across all detections)
-                    combined_mask = torch.any(mask_tensors > 0.5, dim=0).byte() * 255
-                    
-                    if feather_mask:
-                        # For soft edges, use the probability values instead of hard thresholding
-                        soft_mask_t = torch.max(mask_tensors, dim=0)[0]
-                        # Up-scale directly to image size using interpolation
-                        full_mask = soft_mask_t.cpu().numpy()
-                        full_mask = cv2.resize(full_mask, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR)
-                        full_mask = (full_mask * 255).astype(np.uint8)
-                    else:
-                        # For hard edges, use the thresholded combined mask
-                        full_mask = combined_mask.cpu().numpy()
-                        full_mask = cv2.resize(full_mask, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
-                        
-                    # Refinement: Dilation to cover edges/halos (still useful)
-                    k_size = max(3, int(img.shape[1] * 0.005))
-                    kernel = np.ones((k_size, k_size), np.uint8)
-                    full_mask = cv2.dilate(full_mask, kernel, iterations=1)
-                    
-                    if invert_mask:
-                        final_mask = cv2.bitwise_not(full_mask)
-                    else:
-                        final_mask = full_mask
+                    final_mask = self._build_mask(res.masks.data, img, invert_mask, feather_mask)
                     batch_results.append((img, final_mask))
                 else:
-                    h, w = img.shape[:2]
-                    bg_val = 255 if invert_mask else 0
-                    batch_results.append((img, bg_val * np.ones((h, w), dtype=np.uint8)))
+                    batch_results.append((img, self._empty_mask(img, invert_mask)))
             else:
                 batch_results.append((img, None))
                 

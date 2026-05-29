@@ -1,6 +1,6 @@
 import struct
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,6 @@ class GPMFParser:
             offset += padded_size
 
     def _unpack_values(self, data: bytes, type_char: str, structure_size: int, repeat_count: int) -> List[Any]:
-        values = []
         item_size = structure_size
         
         # Mapping for struct format

@@ -1,8 +1,7 @@
 import cv2
-import numpy as np
 from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QSizePolicy, QFrame, QHBoxLayout
-from PySide6.QtCore import Qt, QRunnable, QThreadPool, QObject, Signal, Slot, QSize
-from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QLinearGradient
+from PySide6.QtCore import Qt, QRunnable, QThreadPool, QObject, Signal, Slot
+from PySide6.QtGui import QImage, QPixmap
 
 from core.geometry import GeometryProcessor
 from utils.image_utils import ImageUtils
@@ -57,8 +56,7 @@ class PreviewWorker(QRunnable):
             fov = self.settings.get('fov', 90)
             pitch_offset = self.settings.get('pitch_offset', 0)
             cam_count = self.settings.get('camera_count', 6)
-            res_setting = self.settings.get('resolution', 2048) # Target width for final export
-            
+
             sharpen_enabled = self.settings.get('sharpening_enabled', False)
             sharpen_strength = self.settings.get('sharpening_strength', 0.5)
 

@@ -3,7 +3,7 @@ import json
 import logging
 import bisect
 import math
-from typing import Optional, Tuple, Any, List, Dict
+from typing import Optional, Tuple, List, Dict
 import piexif
 from PIL import Image
 from utils.gpmf_parser import GPMFParser

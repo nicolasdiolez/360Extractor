@@ -1,5 +1,5 @@
-from PySide6.QtWidgets import QLabel, QFrame, QVBoxLayout, QHBoxLayout
-from PySide6.QtCore import Qt, Signal, QMimeData, QSize
+from PySide6.QtWidgets import QLabel, QFrame, QVBoxLayout
+from PySide6.QtCore import Qt, Signal
 from ui.icons import get_icon
 
 class DropZone(QFrame):

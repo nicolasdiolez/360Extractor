@@ -6,22 +6,18 @@ import os
 import copy
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QGroupBox, QLabel, QSpinBox,
+    QPushButton, QLabel, QSpinBox,
     QComboBox, QFileDialog, QProgressBar, QMessageBox,
-    QDoubleSpinBox, QListWidget, QListWidgetItem, QAbstractItemView,
-    QCheckBox, QSplitter, QScrollArea, QMenu, QStackedWidget,
-    QLineEdit, QFrame, QSizePolicy
+    QDoubleSpinBox, QCheckBox, QSplitter, QScrollArea, QStackedWidget,
+    QLineEdit
 )
-from PySide6.QtGui import QAction, QDesktopServices
-from PySide6.QtCore import Qt, QFile, QTextStream, QThread, QUrl, QEvent, QObject, Signal, QSize
-import subprocess
-import platform
+from PySide6.QtCore import Qt, QFile, QTextStream, QThread, QEvent, QObject, QSize
 
 from ui.widgets import DropZone
 from ui.preview_widget import PreviewWidget
 from ui.sidebar import Sidebar
 from ui.video_card import VideoCard
-from ui.toggle_switch import ToggleSwitch, ToggleSwitchWithDescription
+from ui.toggle_switch import ToggleSwitchWithDescription
 from ui.collapsible_section import CollapsibleSection
 from ui.log_panel import LogPanel
 from ui.icons import get_icon
@@ -29,7 +25,7 @@ from core.processor import ProcessingWorker
 from core.analyzer import BlurAnalysisWorker
 from core.job import Job
 from core.settings_manager import SettingsManager
-from core.version import APP_NAME, VERSION
+from core.version import APP_NAME
 from core.ai_classes import COCO_CLASSES
 from utils.logger import logger
 

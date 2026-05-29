@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Non-360 (Flat) Media Support**: New "360° Input" toggle in the GUI (and `--flat` flag in the CLI) lets you process standard video and images without equirectangular reprojection. Blur filtering, AI masking, sharpening, telemetry and naming all still apply. When disabled, the 360-only controls (FOV, virtual cameras, layout, inclination) are turned off.
 - **CLI Image Inputs**: Directory scans now also pick up image files (`.jpg`, `.jpeg`, `.png`, `.tiff`, `.tif`) in addition to video.
+- **Packaging (`pyproject.toml`)**: Standardized project metadata, dependencies, a `360extractor` console entry point, and `ruff`/`mypy`/`pytest` configuration. Optional extras: `[gpu]` and `[dev]`.
+- **Continuous Integration**: GitHub Actions workflow running `ruff` (blocking, real-bug rules) and the test suite on every push/PR, plus informational full-lint and `mypy` reports.
+- **Tests**: Added unit tests for the SRT and CAMM telemetry parsers (`tests/test_parsers.py`).
+
+### Dependencies
+- **Declared `Pillow`**: `Pillow` (used by the EXIF writer for PNG/TIFF) was a runtime dependency that was previously undeclared; it is now in `requirements.txt`/`pyproject.toml`.
 
 ### Fixed
 - **Video Handle Leak**: `process_video` now wraps processing in `try/finally`, guaranteeing the `cv2.VideoCapture` handle is released even if an exception occurs mid-processing (previously the file could remain locked).
@@ -20,7 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Path Safety**: Custom output filename patterns are confined to the destination folder via `os.path.basename`, preventing path traversal.
 - **Unified Default Layout**: `layout_mode` now defaults consistently to `ring` (`adaptive` kept as a legacy alias).
-- **Logging**: Processing errors are logged with full tracebacks via the logger (`exc_info=True`) instead of `print`/`traceback.print_exc`.
+- **Logging**: Processing errors are logged with full tracebacks via the logger (`exc_info=True`) instead of `print`/`traceback.print_exc`; remaining `print()` calls in `SettingsManager` and `VideoCard` now use the logger.
+- **Code Cleanup**: Removed duplicated mask-building logic in `ai_model.py` (now a shared `_build_mask`/`_empty_mask` helper), and removed unused imports and dead local variables across the codebase.
 
 ## [2.5.2] - 2026-05-25
 

@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, QPushButton, QHBoxLayout, QLabel
 )
 from PySide6.QtCore import Qt, Signal, Slot, QObject
-from PySide6.QtGui import QTextCursor, QColor
+from PySide6.QtGui import QTextCursor
 import logging
 from datetime import datetime
 

@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (ruff) + type-check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install lint tools
+        run: python -m pip install --upgrade pip ruff mypy
+
+      - name: Ruff (blocking — real bugs only, configured in pyproject.toml)
+        run: ruff check .
+
+      - name: Ruff full report (informational)
+        run: ruff check . --select=ALL --statistics || true
+
+      - name: Mypy (informational)
+        run: mypy src || true
+
+  test:
+    name: Tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        # Lightweight subset: enough to import the tested modules without the
+        # heavy GPU stack (torch/ultralytics) or the Qt/GUI layer.
+        # opencv-python-headless avoids needing system OpenGL libraries.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy "opencv-python-headless>=4.8.0" defusedxml pytest
+
+      - name: Run tests
+        run: pytest tests/ -v

@@ -1,5 +1,4 @@
 import cv2
-import numpy as np
 from PySide6.QtCore import QObject, Signal
 from core.geometry import GeometryProcessor
 from utils.image_utils import ImageUtils

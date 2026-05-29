@@ -24,8 +24,7 @@ def parse_gpx_data(gpx_content: str) -> list[dict]:
         }
         
         # Try to find trkpts with or without namespace
-        points = []
-        
+
         # Helper to find elements
         def find_all_points(element):
             # Try namespaced first (GPX 1.1)
@@ -73,7 +72,7 @@ def parse_gpx_data(gpx_content: str) -> list[dict]:
                         'lon': lon,
                         'alt': alt
                     })
-            except (ValueError, TypeError) as e:
+            except (ValueError, TypeError):
                 continue
 
         logger.info(f"Successfully parsed {len(parsed_points)} GPX points.")

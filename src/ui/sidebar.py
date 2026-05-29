@@ -1,9 +1,8 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton, 
-    QSizePolicy, QHBoxLayout, QFrame
+    QHBoxLayout, QFrame
 )
-from PySide6.QtCore import Qt, Signal, QSize, QPropertyAnimation, QEasingCurve, QRect
-from PySide6.QtGui import QIcon, QFont, QColor, QPainter
+from PySide6.QtCore import Qt, Signal, QSize
 
 from core.version import VERSION
 from ui.icons import get_icon

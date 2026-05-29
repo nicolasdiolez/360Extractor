@@ -3,11 +3,10 @@ Collapsible Section Widget for Qt applications.
 Animated expandable/collapsible sections for settings panels.
 """
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-    QFrame, QSizePolicy, QGraphicsOpacityEffect
+    QWidget, QVBoxLayout, QPushButton, 
+    QFrame
 )
-from PySide6.QtCore import Qt, QPropertyAnimation, QParallelAnimationGroup, QEasingCurve, Property
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
 
 
 class CollapsibleSection(QWidget):

@@ -248,8 +248,9 @@ def run_cli(args):
 
     jobs = [Job(file_path=f, settings=settings) for f in files_to_process]
     
-    # Initialize Core Application for Signal/Slot support
-    core_app = QCoreApplication(sys.argv)
+    # Initialize Core Application for Signal/Slot support. The instance must be
+    # kept alive for the duration of processing even though it is not referenced.
+    core_app = QCoreApplication(sys.argv)  # noqa: F841
 
     worker = ProcessingWorker(jobs)
     

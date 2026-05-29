@@ -1,6 +1,7 @@
 import json
-import os
 from pathlib import Path
+
+from utils.logger import logger
 
 class SettingsManager:
     _instance = None
@@ -70,7 +71,7 @@ class SettingsManager:
                 for key, value in loaded_settings.items():
                     self.settings[key] = value
         except (json.JSONDecodeError, OSError) as e:
-            print(f"Error loading settings from {self.config_file}: {e}. Using defaults.")
+            logger.warning(f"Error loading settings from {self.config_file}: {e}. Using defaults.")
 
     def save_settings(self, settings=None):
         """Write settings to the JSON file."""
@@ -82,7 +83,7 @@ class SettingsManager:
             with open(self.config_file, 'w') as f:
                 json.dump(self.settings, f, indent=4)
         except OSError as e:
-            print(f"Error saving settings to {self.config_file}: {e}")
+            logger.error(f"Error saving settings to {self.config_file}: {e}")
 
     def get(self, key, default=None):
         """Get a setting value."""
