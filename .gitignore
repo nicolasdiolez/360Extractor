@@ -67,3 +67,4 @@ tests/verify_*.py
 # YOLO Model (auto-downloaded by ultralytics)
 yolov8n-seg.pt
 yolo26n-seg.pt
+AUDIT.md
