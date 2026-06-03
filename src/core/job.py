@@ -55,13 +55,32 @@ class Job:
     def summary(self) -> str:
         """Returns a short summary of the job settings."""
         # e.g., "High (-20°), 6 cams"
-        pitch_val = self.settings.get('pitch_offset', 0)
-        pitch_name = "Std"
-        if pitch_val == -20: pitch_name = "High"
-        elif pitch_val == 20: pitch_name = "Low"
+        is_360 = self.settings.get('is_360', True)
         
-        cams = self.settings.get('camera_count', 6)
-        layout = self.settings.get('layout_mode', 'adaptive')
-        layout_info = " (Ring)" if layout == 'ring' else ""
+        # 360 settings vs Flat settings
+        if is_360:
+            pitch_val = self.settings.get('pitch_offset', 0)
+            pitch_name = "Std"
+            if pitch_val == -20: pitch_name = "High"
+            elif pitch_val == 20: pitch_name = "Low"
+            
+            cams = self.settings.get('camera_count', 6)
+            layout = self.settings.get('layout_mode', 'adaptive')
+            layout_info = " (Ring)" if layout == 'ring' else (" (Cube)" if layout == 'cube' else " (Fibonacci)" if layout == 'fibonacci' else "")
+            cam_str = f", {cams} cams{layout_info}"
+            pitch_str = f"{pitch_name} ({pitch_val}°)"
+        else:
+            pitch_str = "Flat (Non-360)"
+            cam_str = ""
+
         adaptive = " [Adaptive]" if self.adaptive_mode else ""
-        return f"{pitch_name} ({pitch_val}°), {cams} cams{layout_info}{adaptive}"
+        
+        # AI Mode info
+        ai_mode = self.settings.get('ai_mode', 'None')
+        ai_str = ""
+        if ai_mode == 'Generate Mask':
+            ai_str = " [AI Mask]"
+        elif ai_mode == 'Skip Frame':
+            ai_str = " [AI Skip]"
+            
+        return f"{pitch_str}{cam_str}{adaptive}{ai_str}"

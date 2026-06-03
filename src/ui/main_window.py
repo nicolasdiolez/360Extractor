@@ -1040,6 +1040,10 @@ class MainWindow(QMainWindow):
         # Insert before stretch
         self.queue_layout.insertWidget(self.queue_layout.count() - 1, card)
         self._video_cards.append(card)
+        
+        # Automatically select the newly added card
+        self.on_card_clicked(card)
+
 
     def on_card_clicked(self, card):
         """Single click: select only this card, deselect others."""

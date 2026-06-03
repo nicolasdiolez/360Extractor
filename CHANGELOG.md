@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Misleading Completion Dialog**: A failed job no longer aborts the whole batch and no longer triggers a false "Success" dialog. The final message is now conditional (success / completed with N errors / cancelled), failing jobs are marked "Error", and a new `job_error` signal reports per-job failures.
 - **GPS Data Validation**: GPS samples from all sources (GPMF/CAMM/SRT/GPX) are now validated (NaN/Inf and out-of-range coordinates dropped) and sorted by timestamp, fixing potentially corrupt EXIF GPS and incorrect time lookups.
 - **Preview vs Export Mismatch**: The live preview now uses the selected layout mode (Ring/Cube/Fibonacci) instead of always defaulting to Ring.
+- **UX Settings Sync Trap**: Toggling settings in the UI now always targets the active job because the newly added/dropped job card in the queue is automatically selected.
+- **Card Settings Summary**: Job cards in the queue now explicitly display the `[Flat]` and `[AI Mask]` / `[AI Skip]` statuses to prevent any confusion about what settings are currently active on each job.
+
 
 ### Changed
 - **Path Safety**: Custom output filename patterns are confined to the destination folder via `os.path.basename`, preventing path traversal.
