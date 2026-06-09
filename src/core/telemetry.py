@@ -15,10 +15,13 @@ import os
 logger = logging.getLogger(__name__)
 
 class TelemetryHandler:
-    def __init__(self):
+    def __init__(self, altitude_mode: str = 'absolute'):
         self.metadata = {}
         self.has_gps = False
         self.gps_samples: List[Dict[str, float]] = []
+        # Only affects DJI SRT clips that expose both rel_alt and abs_alt.
+        # CAMM/GPMF/GPX sources carry a single altitude and ignore this.
+        self.altitude_mode = altitude_mode
 
     @staticmethod
     def _sanitize_gps_samples(samples: List[Dict[str, float]]) -> List[Dict[str, float]]:
@@ -199,11 +202,11 @@ class TelemetryHandler:
             result = subprocess.run(cmd, capture_output=True, check=True)
             raw_data = result.stdout
             
-            self.gps_samples = self._sanitize_gps_samples(parse_srt_data(raw_data))
+            self.gps_samples = self._sanitize_gps_samples(parse_srt_data(raw_data, self.altitude_mode))
 
             if self.gps_samples:
                 self.has_gps = True
-                logger.info(f"Extracted {len(self.gps_samples)} GPS samples from subtitles.")
+                logger.info(f"Extracted {len(self.gps_samples)} GPS samples from subtitles (altitude: {self.altitude_mode}).")
             else:
                 logger.warning("Subtitle stream found, but no GPS data extracted.")
                 
@@ -290,14 +293,20 @@ class TelemetryHandler:
 
             lat_deg = to_deg_min_sec(lat)
             lon_deg = to_deg_min_sec(lon)
-            
+
+            # GPSAltitude is an UNSIGNED rational; sign is carried by GPSAltitudeRef
+            # (0 = above sea level, 1 = below). Use abs() so negative altitudes
+            # (e.g. below-sea-level abs_alt) don't produce an invalid rational.
+            alt_ref = 0 if alt >= 0 else 1
+            alt_rational = to_rational(abs(alt))
+
             gps_ifd = {
                 piexif.GPSIFD.GPSLatitudeRef: b'N' if lat >= 0 else b'S',
                 piexif.GPSIFD.GPSLatitude: lat_deg,
                 piexif.GPSIFD.GPSLongitudeRef: b'E' if lon >= 0 else b'W',
                 piexif.GPSIFD.GPSLongitude: lon_deg,
-                piexif.GPSIFD.GPSAltitudeRef: 0, # Above sea level
-                piexif.GPSIFD.GPSAltitude: to_rational(alt)
+                piexif.GPSIFD.GPSAltitudeRef: alt_ref,
+                piexif.GPSIFD.GPSAltitude: alt_rational
             }
             
             exif_dict['GPS'] = gps_ifd

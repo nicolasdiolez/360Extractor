@@ -33,6 +33,9 @@ This guide explains the various settings available in the 360 Extractor Pro GUI 
 *   **Intelligent Keyframing (Adaptive Interval):**
     *   *Enable:* Toggle adaptive extraction.
     *   *Motion Threshold:* Adjust sensitivity (0.0-100.0). Higher values require more motion to trigger extraction. Default is 5.0.
+*   **Telemetry (Export GPS/IMU):**
+    *   *Enable:* Extract GPS/IMU metadata (GoPro GPMF, Insta360 CAMM, DJI SRT, or a sidecar `.gpx`) and embed GPS coordinates into each output image's EXIF.
+    *   *Altitude Source:* For DJI clips that expose both a relative and an absolute altitude (`[rel_alt: … abs_alt: …]`), choose which one to write to EXIF. **Absolute** (above sea level) is recommended for RealityScan/COLMAP geo-referencing and scale; **Relative** is height above the takeoff point. Other devices carry a single altitude and ignore this setting. Default is `absolute`. (CLI: `--altitude-mode`.)
 
 ## File Naming
 

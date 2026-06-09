@@ -2,7 +2,7 @@
 
 High-performance desktop application and command-line tool for 360° and standard video/image preprocessing. This tool generates optimized datasets for Gaussian Splatting and photogrammetry (COLMAP, RealityScan) by converting equirectangular media into rectilinear pinhole views and removing operators using AI.
 
-> **v3.0.0** - Added **non-360 (flat) media support**, GPS data validation, and major robustness fixes to the processing pipeline and Qt lifecycle (see [CHANGELOG](CHANGELOG.md)).
+> **v3.1.0** - Added **DJI altitude extraction** (rel/abs) with a selectable EXIF altitude source. See the [CHANGELOG](CHANGELOG.md) for details and prior releases.
 
 ## Key Features
 

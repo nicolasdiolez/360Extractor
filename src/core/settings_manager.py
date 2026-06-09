@@ -32,6 +32,7 @@ class SettingsManager:
         "adaptive_mode": False,
         "adaptive_threshold": 0.5,
         "export_telemetry": False,
+        "altitude_mode": "absolute",
         "interpolation_mode": "linear",
         "feather_mask": False,
         "naming_mode": "realityscan",

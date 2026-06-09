@@ -45,6 +45,11 @@ class Job:
         return self.settings.get('export_telemetry', False)
 
     @property
+    def altitude_mode(self) -> str:
+        # 'absolute' (above sea level) or 'relative' (above takeoff); DJI SRT only.
+        return self.settings.get('altitude_mode', 'absolute')
+
+    @property
     def interpolation_mode(self) -> str:
         return self.settings.get('interpolation_mode', 'linear')
 

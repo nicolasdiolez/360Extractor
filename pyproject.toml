@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "360-extractor-pro"
-version = "3.0.0"
+version = "3.1.0"
 description = "Desktop and CLI tool to preprocess 360 and standard video/images into rectilinear datasets for photogrammetry and Gaussian Splatting, with AI operator removal."
 readme = "README.md"
 requires-python = ">=3.10"

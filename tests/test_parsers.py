@@ -37,6 +37,37 @@ class TestSRTParser(unittest.TestCase):
         self.assertAlmostEqual(samples[0]['timestamp'], 0.0, places=3)
         self.assertAlmostEqual(samples[1]['timestamp'], 1.0, places=3)
 
+    def test_dji_rel_abs_alt_absolute_mode(self):
+        # DJI packs altitude as [rel_alt: X abs_alt: Y]; there is no [altitude:].
+        raw = (
+            b"1\n"
+            b"00:00:00,000 --> 00:00:00,033\n"
+            b"[latitude: 47.1234] [longitude: 8.1234] [rel_alt: 1.300 abs_alt: 425.971]\n"
+        )
+        samples = parse_srt_data(raw)  # default = absolute
+        self.assertEqual(len(samples), 1)
+        self.assertAlmostEqual(samples[0]['alt'], 425.971, places=3)
+
+    def test_dji_rel_abs_alt_relative_mode(self):
+        raw = (
+            b"1\n"
+            b"00:00:00,000 --> 00:00:00,033\n"
+            b"[latitude: 47.1234] [longitude: 8.1234] [rel_alt: 1.300 abs_alt: 425.971]\n"
+        )
+        samples = parse_srt_data(raw, altitude_mode='relative')
+        self.assertEqual(len(samples), 1)
+        self.assertAlmostEqual(samples[0]['alt'], 1.300, places=3)
+
+    def test_relative_mode_falls_back_when_only_abs_present(self):
+        raw = (
+            b"1\n"
+            b"00:00:00,000 --> 00:00:00,033\n"
+            b"[latitude: 47.1234] [longitude: 8.1234] [abs_alt: 425.971]\n"
+        )
+        samples = parse_srt_data(raw, altitude_mode='relative')
+        self.assertEqual(len(samples), 1)
+        self.assertAlmostEqual(samples[0]['alt'], 425.971, places=3)
+
     def test_gps_tuple_fallback(self):
         raw = (
             b"1\n"

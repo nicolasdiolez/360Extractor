@@ -716,7 +716,24 @@ class MainWindow(QMainWindow):
         self.telemetry_toggle = ToggleSwitchWithDescription("Export GPS/IMU", "Embed metadata in images")
         self.telemetry_toggle.toggled.connect(self.on_setting_changed)
         exp_section.addWidget(self.telemetry_toggle)
-        
+
+        # Altitude Source (DJI clips expose both absolute and relative altitude)
+        altitude_row = QHBoxLayout()
+        altitude_row.addWidget(QLabel("Altitude Source"))
+        altitude_row.addStretch()
+        self.altitude_combo = QComboBox()
+        self.altitude_combo.addItem("Absolute (sea level)", "absolute")
+        self.altitude_combo.addItem("Relative (takeoff)", "relative")
+        self.altitude_combo.setFixedWidth(160)
+        self.altitude_combo.setToolTip(
+            "EXIF GPS altitude for DJI clips. Absolute (above sea level) is best for "
+            "RealityScan/COLMAP geo-referencing; Relative is height above takeoff."
+        )
+        self.altitude_combo.currentTextChanged.connect(self.on_setting_changed)
+        self.altitude_combo.installEventFilter(self.scroll_blocker)
+        altitude_row.addWidget(self.altitude_combo)
+        exp_section.addLayout(altitude_row)
+
         content_layout.addWidget(exp_section)
         content_layout.addStretch()
         
@@ -822,6 +839,7 @@ class MainWindow(QMainWindow):
             'layout_mode': self.layout_combo.currentData(),
             'pitch_offset': self.pitch_combo.currentData(),
             'export_telemetry': self.telemetry_toggle.isChecked(),
+            'altitude_mode': self.altitude_combo.currentData(),
             'interpolation_mode': 'lanczos' if self.lanczos_toggle.isChecked() else 'linear',
             'feather_mask': self.ai_feather_toggle.isChecked(),
             'ai_mode': self.ai_combo.currentText(),
@@ -853,7 +871,8 @@ class MainWindow(QMainWindow):
             self.blur_threshold_spin, self.sharpen_slider,
             self.motion_threshold_spin, self.naming_mode_combo,
             self.image_pattern_input, self.mask_pattern_input,
-            self.lanczos_toggle, self.ai_feather_toggle, self.input_360_toggle
+            self.lanczos_toggle, self.ai_feather_toggle, self.input_360_toggle,
+            self.altitude_combo
         ]
         for w in widgets:
             w.blockSignals(True)
@@ -904,7 +923,12 @@ class MainWindow(QMainWindow):
         self.motion_threshold_spin.setEnabled(self.adaptive_toggle.isChecked())
         
         self.telemetry_toggle.setChecked(settings.get('export_telemetry', False))
-        
+
+        alt_mode = settings.get('altitude_mode', 'absolute')
+        idx = self.altitude_combo.findData(alt_mode)
+        if idx >= 0:
+            self.altitude_combo.setCurrentIndex(idx)
+
         # High Quality / Feathering
         self.lanczos_toggle.setChecked(settings.get('interpolation_mode', 'linear') == 'lanczos')
         self.ai_feather_toggle.setChecked(settings.get('feather_mask', False))
