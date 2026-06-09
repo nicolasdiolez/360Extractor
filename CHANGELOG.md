@@ -4,6 +4,15 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-06-09
+
+### Added
+- **DJI Altitude in EXIF**: GPS altitude is now extracted from DJI SRT telemetry. DJI clips (incl. Avata 360) pack altitude as `[rel_alt: … abs_alt: …]` rather than a plain `[altitude:]` field, which previously caused all EXIF altitudes to be written as `0`.
+- **Altitude Source Selection**: New `Altitude Source` setting (GUI dropdown under Telemetry, `--altitude-mode {absolute,relative}` in the CLI, `altitude_mode` in JSON config). `absolute` (above sea level, default) is recommended for RealityScan/COLMAP geo-referencing; `relative` is height above takeoff. Falls back gracefully when only one altitude is present.
+
+### Fixed
+- **Negative EXIF Altitude**: `embed_exif` now writes the unsigned `GPSAltitude` rational with the correct `GPSAltitudeRef` (0 = above / 1 = below sea level) instead of producing an invalid negative rational for below-sea-level altitudes.
+
 ## [3.0.0] - 2026-05-29
 
 ### Added

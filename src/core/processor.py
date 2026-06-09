@@ -228,7 +228,7 @@ class ProcessingWorker(QObject):
             telemetry_handler = None
             current_gps = None
             if job.export_telemetry:
-                telemetry_handler = TelemetryHandler()
+                telemetry_handler = TelemetryHandler(altitude_mode=job.altitude_mode)
                 logger.info(f"Extracting telemetry for {filename}...")
                 telemetry_handler.extract_metadata(file_path)
 

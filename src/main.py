@@ -39,6 +39,7 @@ def parse_arguments():
     parser.add_argument("--adaptive", action="store_true", help="Enable adaptive interval (motion-based)")
     parser.add_argument("--motion-threshold", type=float, help="Motion threshold for adaptive interval (default: 0.5)")
     parser.add_argument("--export-telemetry", action="store_true", help="Export GPS/IMU metadata (if available)")
+    parser.add_argument("--altitude-mode", type=str, choices=['absolute', 'relative'], help="EXIF altitude source for DJI clips: 'absolute' (above sea level, default) or 'relative' (above takeoff)")
     
     # AI Targets
     parser.add_argument("--targets", type=str, help="Comma-separated list of basic targets (humans,vehicles,plants)")
@@ -194,6 +195,8 @@ def run_cli(args):
     if not export_telemetry:
         export_telemetry = config.get('export_telemetry', False)
 
+    altitude_mode = args.altitude_mode if args.altitude_mode is not None else config.get('altitude_mode', 'absolute')
+
     # AI Targets logic
     ai_detect_humans = config.get('ai_detect_humans', True)
     ai_detect_vehicles = config.get('ai_detect_vehicles', False)
@@ -241,6 +244,7 @@ def run_cli(args):
         'adaptive_mode': adaptive,
         'adaptive_threshold': motion_threshold,
         'export_telemetry': export_telemetry,
+        'altitude_mode': altitude_mode,
         'naming_mode': naming_mode,
         'image_pattern': image_pattern,
         'mask_pattern': mask_pattern
