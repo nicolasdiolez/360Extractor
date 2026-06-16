@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QCoreApplication
 
 from ui.main_window import MainWindow
-from core.settings_manager import SettingsManager
+from core.settings_manager import SettingsManager, build_settings
 from core.job import Job
 from core.processor import ProcessingWorker
 from utils.logger import logger
@@ -152,103 +152,9 @@ def run_cli(args):
             logger.error(f"Error: Invalid format for active-cameras: {active_cameras_str}")
             sys.exit(1)
 
-    # Prepare settings
-    # Note: args.interval etc are None if not provided because I removed default in add_argument for some
-    # Actually I should verify defaults logic. 
-    # To properly support "CLI overrides Config overrides Default", I removed defaults from add_argument 
-    # except for flags where it's trickier.
-    # Let's adjust get_arg logic to handle defaults manually.
-    
-    interval = args.interval if args.interval is not None else config.get('interval', 1.0)
-    fmt = args.format if args.format is not None else config.get('format', 'jpg')
-    cam_count = args.camera_count if args.camera_count is not None else config.get('camera_count', 6)
-    quality = args.quality if args.quality is not None else config.get('quality', 95)
-    resolution = args.resolution if args.resolution is not None else config.get('resolution', 2048)
-    layout_mode = args.layout if args.layout is not None else config.get('layout_mode', 'ring')
-
-    # 360 vs flat (non-360) input. --flat forces non-360; otherwise use config.
-    is_360 = config.get('is_360', True)
-    if args.flat:
-        is_360 = False
-    
-    # AI Mode logic
-    ai_mode = 'None'
-    if args.ai_skip:
-        ai_mode = 'Skip Frame'
-    elif args.ai_mask or args.ai:
-        ai_mode = 'Generate Mask'
-    else:
-        # Check config
-        ai_mode = config.get('ai_mode', 'None')
-        # Handle legacy config 'ai': boolean if ai_mode is still None
-        if ai_mode == 'None' and config.get('ai', False):
-            ai_mode = 'Generate Mask'
-
-    # Adaptive Mode logic
-    adaptive = args.adaptive
-    if not adaptive:
-        adaptive = config.get('adaptive_mode', False)
-    
-    motion_threshold = args.motion_threshold if args.motion_threshold is not None else config.get('adaptive_threshold', 0.5)
-    
-    export_telemetry = args.export_telemetry
-    if not export_telemetry:
-        export_telemetry = config.get('export_telemetry', False)
-
-    altitude_mode = args.altitude_mode if args.altitude_mode is not None else config.get('altitude_mode', 'absolute')
-
-    # AI Targets logic
-    ai_detect_humans = config.get('ai_detect_humans', True)
-    ai_detect_vehicles = config.get('ai_detect_vehicles', False)
-    ai_detect_plants = config.get('ai_detect_plants', False)
-    
-    if args.targets is not None:
-        targets_list = [t.strip().lower() for t in args.targets.split(',')]
-        ai_detect_humans = 'humans' in targets_list
-        ai_detect_vehicles = 'vehicles' in targets_list
-        ai_detect_plants = 'plants' in targets_list
-
-    ai_custom_classes = args.custom_classes if args.custom_classes is not None else config.get('ai_custom_classes', "")
-
-    # Naming Configuration
-    naming_mode = args.naming_mode or config.get('naming_mode', 'realityscan')
-    image_pattern = args.image_pattern or config.get('image_pattern')
-    mask_pattern = args.mask_pattern or config.get('mask_pattern')
-    
-    # Auto-switch to custom if patterns provided
-    if (args.image_pattern or args.mask_pattern) and not args.naming_mode:
-        naming_mode = 'custom'
-
-    settings = {
-        'is_360': is_360,
-        'interval_value': interval,
-        'interval_unit': 'Seconds',
-        'output_format': fmt,
-        'camera_count': cam_count,
-        'quality': quality,
-        'layout_mode': layout_mode,
-        'ai_mode': ai_mode,
-        'custom_output_dir': output_path,
-        'active_cameras': active_cameras,
-        'ai_detect_humans': ai_detect_humans,
-        'ai_detect_vehicles': ai_detect_vehicles,
-        'ai_detect_plants': ai_detect_plants,
-        'ai_custom_classes': ai_custom_classes,
-        # Defaults for others (could be exposed to config later)
-        'resolution': resolution,
-        'fov': config.get('fov', 90),
-        'pitch_offset': config.get('pitch_offset', 0),
-        'blur_filter_enabled': config.get('blur_filter_enabled', False),
-        'smart_blur_enabled': config.get('smart_blur_enabled', False),
-        'sharpening_enabled': config.get('sharpening_enabled', False),
-        'adaptive_mode': adaptive,
-        'adaptive_threshold': motion_threshold,
-        'export_telemetry': export_telemetry,
-        'altitude_mode': altitude_mode,
-        'naming_mode': naming_mode,
-        'image_pattern': image_pattern,
-        'mask_pattern': mask_pattern
-    }
+    # Build the settings dict the processor consumes.
+    # Precedence: DEFAULT_SETTINGS < config file < explicit CLI arguments.
+    settings = build_settings(args, config, active_cameras, output_path)
 
     jobs = [Job(file_path=f, settings=settings) for f in files_to_process]
     
