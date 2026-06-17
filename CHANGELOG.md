@@ -4,6 +4,35 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **CLI config keys silently dropped**: the CLI hand-built the settings dict it
+  passed to the processor and omitted several keys (`blur_threshold`,
+  `interpolation_mode`, `ai_confidence`, `ai_invert_mask`, `feather_mask`,
+  `sharpening_strength`) and misread others (`interval_value`/`interval_unit`
+  were read from the wrong key and the unit forced to `Seconds`; `output_format`
+  was read as `format`). As a result, e.g. `blur_threshold` from the config was
+  ignored and the processor's hard-coded default of `100.0` was always used.
+  CLI settings are now seeded from `SettingsManager.DEFAULT_SETTINGS` and merged
+  as defaults < config file < CLI args, so every key flows through. Older configs
+  using `interval`/`format` are still accepted as aliases.
+- **`quality` missing from defaults**: `quality` was read by the processor but
+  absent from `DEFAULT_SETTINGS`; it is now defined there (`95`).
+
+### Added
+- **`build_settings()`** in `core.settings_manager`, a unit-testable function for
+  the defaults/config/CLI merge used by CLI mode.
+- **Tests** (`tests/test_cli_settings.py`), including a regression guard that
+  asserts every key the processor reads via `settings.get(...)` is present in the
+  assembled settings dict.
+
+### Docs
+- **`docs/SETTINGS.md`**: corrected the example config (which used non-functional
+  `interval`/`format`/`ai_mask`/`adaptive` keys), added a complete key reference
+  table generated from the defaults, and fixed the adaptive Motion Threshold
+  default (`0.5`, not `5.0`).
+
 ## [3.1.0] - 2026-06-09
 
 ### Added
