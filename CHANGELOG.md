@@ -2,9 +2,10 @@
 
 All notable changes to 360 Extractor Pro will be documented in this file.
 
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.1.1] - 2026-06-17
 
 ### Fixed
 - **CLI config keys silently dropped**: the CLI hand-built the settings dict it
