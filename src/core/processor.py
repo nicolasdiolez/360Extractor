@@ -11,6 +11,7 @@ from core.ai_model import AIService
 from core.motion_detector import MotionDetector
 from core.telemetry import TelemetryHandler
 from core.ai_classes import PRESETS, parse_custom_classes
+from core.settings_manager import normalize_mask_faces
 from utils.file_manager import FileManager
 from utils.image_utils import ImageUtils
 from utils.logger import logger
@@ -185,6 +186,14 @@ class ProcessingWorker(QObject):
             ai_confidence = job.settings.get('ai_confidence', 0.25)
             ai_invert_mask = job.settings.get('ai_invert_mask', True)
             ai_feather_mask = job.settings.get('feather_mask', False)
+
+            # Per-face masking scope: restrict AI masking to a subset of views
+            # (e.g. only the face that contains the operator), leaving the other
+            # faces untouched. Useful when YOLO would otherwise mask people in
+            # paintings/posters on the other faces. None/empty => all faces.
+            mask_face_filter = normalize_mask_faces(job.settings.get('ai_mask_cameras', None))
+            if mask_face_filter:
+                logger.info(f"AI masking restricted to faces: {sorted(mask_face_filter)}")
 
             # Interpolation Settings
             interp_mode = job.settings.get('interpolation_mode', 'linear')
@@ -384,11 +393,29 @@ class ProcessingWorker(QObject):
                     ai_results = []
                     if batch_images:
                         if self.ai_service and ai_mode_internal != 'none':
-                            ai_results = self.ai_service.process_batch(
-                                batch_images, mode=ai_mode_internal, conf=ai_confidence,
-                                classes=target_classes, invert_mask=ai_invert_mask,
-                                feather_mask=ai_feather_mask
-                            )
+                            if mask_face_filter is None:
+                                ai_results = self.ai_service.process_batch(
+                                    batch_images, mode=ai_mode_internal, conf=ai_confidence,
+                                    classes=target_classes, invert_mask=ai_invert_mask,
+                                    feather_mask=ai_feather_mask
+                                )
+                            else:
+                                # Only run inference on the selected faces; the
+                                # rest pass through untouched (no mask, never skipped).
+                                eligible_idx = [
+                                    i for i, n in enumerate(batch_names)
+                                    if n.lower() in mask_face_filter
+                                ]
+                                ai_results = [(img, None) for img in batch_images]
+                                if eligible_idx:
+                                    sub_results = self.ai_service.process_batch(
+                                        [batch_images[i] for i in eligible_idx],
+                                        mode=ai_mode_internal, conf=ai_confidence,
+                                        classes=target_classes, invert_mask=ai_invert_mask,
+                                        feather_mask=ai_feather_mask
+                                    )
+                                    for slot, res in zip(eligible_idx, sub_results):
+                                        ai_results[slot] = res
                         else:
                             ai_results = [(img, None) for img in batch_images]
 

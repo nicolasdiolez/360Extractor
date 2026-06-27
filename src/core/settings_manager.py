@@ -20,6 +20,7 @@ class SettingsManager:
         "ai_detect_vehicles": False,
         "ai_detect_plants": False,
         "ai_custom_classes": "",
+        "ai_mask_cameras": [],
         "quality": 95,
         "output_format": "jpg",
         "custom_output_dir": "",
@@ -99,6 +100,22 @@ class SettingsManager:
         """Return a copy of all settings."""
         return self.settings.copy()
 
+def normalize_mask_faces(ai_mask_cameras):
+    """Normalize a per-face mask selection into a lowercase set of face names.
+
+    Accepts a list of names or a comma-separated string. Returns ``None`` when
+    no face is selected, meaning AI masking applies to every face (the default,
+    backward-compatible behavior). Returning a set makes membership tests in the
+    processor case-insensitive.
+    """
+    if not ai_mask_cameras:
+        return None
+    if isinstance(ai_mask_cameras, str):
+        ai_mask_cameras = ai_mask_cameras.split(',')
+    faces = {str(c).strip().lower() for c in ai_mask_cameras if str(c).strip()}
+    return faces or None
+
+
 def build_settings(args, config, active_cameras=None, output_path=""):
     """Assemble the settings dict consumed by the processor.
 
@@ -168,6 +185,18 @@ def build_settings(args, config, active_cameras=None, output_path=""):
     # Telemetry.
     if getattr(args, 'export_telemetry', False):
         settings['export_telemetry'] = True
+
+    # Per-face masking scope. Accepts a comma-separated string ("Down,Back") on
+    # the CLI or a list in the config file. Normalized to a list of face names;
+    # empty => mask every face (default).
+    if getattr(args, 'ai_mask_cameras', None) is not None:
+        settings['ai_mask_cameras'] = [
+            c.strip() for c in args.ai_mask_cameras.split(',') if c.strip()
+        ]
+    else:
+        raw = settings.get('ai_mask_cameras', [])
+        if isinstance(raw, str):
+            settings['ai_mask_cameras'] = [c.strip() for c in raw.split(',') if c.strip()]
 
     # AI detection targets.
     if args.targets is not None:

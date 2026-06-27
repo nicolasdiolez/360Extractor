@@ -5,6 +5,18 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-06-27
+
+### Added
+- **Per-face AI masking scope** (issue #14): AI masking can now be restricted to
+  a subset of cubemap faces instead of being applied to every view. This avoids
+  YOLO masking people in paintings/posters on the walls when you only need to
+  remove the operator (e.g. on the `Down` or `Back` face). New setting
+  `ai_mask_cameras` (list of face names; empty = all faces, the previous
+  behavior). Exposed in the GUI as face checkboxes under "AI Processing" (Cube
+  layout), and on the CLI via `--ai-mask-cameras "Down,Back"`. Inference only
+  runs on the selected faces, so unselected faces are also a little cheaper.
+
 ## [3.1.1] - 2026-06-17
 
 ### Fixed

@@ -2,7 +2,7 @@
 
 High-performance desktop application and command-line tool for 360° and standard video/image preprocessing. This tool generates optimized datasets for Gaussian Splatting and photogrammetry (COLMAP, RealityScan) by converting equirectangular media into rectilinear pinhole views and removing operators using AI.
 
-> **v3.1.0** - Added **DJI altitude extraction** (rel/abs) with a selectable EXIF altitude source. See the [CHANGELOG](CHANGELOG.md) for details and prior releases.
+> **v3.2.0** - Added **per-face AI masking**: restrict operator removal to specific cubemap faces (e.g. mask only `Down`/`Back`) so people in paintings/posters on the other faces are left untouched. See the [CHANGELOG](CHANGELOG.md) for details and prior releases.
 
 ## Key Features
 
@@ -10,7 +10,7 @@ High-performance desktop application and command-line tool for 360° and standar
 - **Standard (Non-360) Media:** Process regular video and images as-is — every filter (blur, AI masking, sharpening, telemetry) still applies, without equirectangular reprojection.
 - **Dual Interface:** Graphical UI for ease of use and CLI for automation.
 - **Advanced Control:** Multiple layouts (Ring, Cube Map, Fibonacci), inclination settings, and selective camera extraction.
-- **AI-Powered:** Automatic operator/object removal (supports 80 COCO classes like humans, vehicles, plants) with adjustable confidence, mask inversion, and intelligent motion-based keyframing.
+- **AI-Powered:** Automatic operator/object removal (supports 80 COCO classes like humans, vehicles, plants) with adjustable confidence, mask inversion, per-face masking scope, and intelligent motion-based keyframing.
 - **Metadata Integration:** Extract GPS/IMU data (GoPro, Insta360, DJI) and embed into EXIF.
 - **Quality Control:** Automatic blur detection, filtering, and optional **Lanczos interpolation** for maximum sharpness.
 - **AI-Powered Masking:** Next-gen operator removal with **Native Softness** (probabilistic alpha blending) for seamless photogrammetry integration.

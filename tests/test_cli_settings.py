@@ -15,7 +15,7 @@ import unittest
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from core.settings_manager import SettingsManager, build_settings
+from core.settings_manager import SettingsManager, build_settings, normalize_mask_faces
 
 SRC_DIR = os.path.join(os.path.dirname(__file__), '..', 'src')
 
@@ -34,7 +34,7 @@ def make_args(**overrides):
         resolution=None, layout=None, flat=False,
         adaptive=False, motion_threshold=None,
         export_telemetry=False, altitude_mode=None,
-        targets=None, custom_classes=None,
+        targets=None, custom_classes=None, ai_mask_cameras=None,
         naming_mode=None, image_pattern=None, mask_pattern=None,
     )
     defaults.update(overrides)
@@ -132,6 +132,53 @@ class TestBuildSettings(unittest.TestCase):
         self.assertEqual(build_settings(make_args(ai_mask=True), {})['ai_mode'], 'Generate Mask')
         # Legacy boolean 'ai' key in an older config still enables masking.
         self.assertEqual(build_settings(make_args(), {'ai': True})['ai_mode'], 'Generate Mask')
+
+    def test_ai_mask_cameras_default_is_empty(self):
+        """No selection => empty list, i.e. mask every face (current behavior)."""
+        self.assertEqual(build_settings(make_args(), config={})['ai_mask_cameras'], [])
+
+    def test_ai_mask_cameras_cli_parsing(self):
+        """The CLI accepts a comma-separated face list, trimmed into a clean list."""
+        settings = build_settings(make_args(ai_mask_cameras=' Down , Back '), config={})
+        self.assertEqual(settings['ai_mask_cameras'], ['Down', 'Back'])
+
+    def test_ai_mask_cameras_cli_overrides_config(self):
+        settings = build_settings(
+            make_args(ai_mask_cameras='Down'), config={'ai_mask_cameras': ['Front', 'Back']}
+        )
+        self.assertEqual(settings['ai_mask_cameras'], ['Down'])
+
+    def test_ai_mask_cameras_config_string_normalized_to_list(self):
+        """A config value stored as a string is normalized to a list."""
+        settings = build_settings(make_args(), config={'ai_mask_cameras': 'Up, Down'})
+        self.assertEqual(settings['ai_mask_cameras'], ['Up', 'Down'])
+
+    def test_ai_mask_cameras_config_list_passthrough(self):
+        settings = build_settings(make_args(), config={'ai_mask_cameras': ['Back']})
+        self.assertEqual(settings['ai_mask_cameras'], ['Back'])
+
+
+class TestNormalizeMaskFaces(unittest.TestCase):
+    """Tests for the per-face masking scope helper used by the processor."""
+
+    def test_empty_means_all_faces(self):
+        # None/empty => None sentinel => the processor masks every face.
+        self.assertIsNone(normalize_mask_faces(None))
+        self.assertIsNone(normalize_mask_faces([]))
+        self.assertIsNone(normalize_mask_faces(""))
+        self.assertIsNone(normalize_mask_faces(["", "  "]))
+
+    def test_list_lowercased_set(self):
+        self.assertEqual(normalize_mask_faces(["Down", "Back"]), {"down", "back"})
+
+    def test_string_parsed_and_trimmed(self):
+        self.assertEqual(normalize_mask_faces(" Down , Back "), {"down", "back"})
+
+    def test_membership_is_case_insensitive(self):
+        faces = normalize_mask_faces(["Down"])
+        self.assertIn("down", faces)
+        # The processor compares name.lower() in faces, so casing never matters.
+        self.assertIn("Down".lower(), faces)
 
 
 if __name__ == '__main__':
