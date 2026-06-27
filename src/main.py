@@ -44,6 +44,7 @@ def parse_arguments():
     # AI Targets
     parser.add_argument("--targets", type=str, help="Comma-separated list of basic targets (humans,vehicles,plants)")
     parser.add_argument("--custom-classes", type=str, help="Custom classes to detect (comma separated)")
+    parser.add_argument("--ai-mask-cameras", type=str, help="Restrict AI masking to these faces only, comma-separated (e.g. 'Down' or 'Back,Down'; cube faces: Front,Right,Back,Left,Up,Down; ring/fibonacci: View_0,View_1,...). Empty = all faces.")
     
     # Naming Control
     parser.add_argument("--naming-mode", type=str, choices=['realityscan', 'simple', 'custom'], help="Naming convention for output files")

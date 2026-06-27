@@ -36,6 +36,7 @@ python src/main.py --input <video_path> --output <output_dir> [options]
 | `--ai-mask` | Enable AI masking (Generate Mask) for operator removal. | `False` |
 | `--ai-skip` | Enable AI frame skipping (discard frames with persons). | `False` |
 | `--ai` | Alias for `--ai-mask` (for backward compatibility). | `False` |
+| `--ai-mask-cameras` | Restrict AI masking to these faces only, comma-separated (e.g. `Down` or `Back,Down`). Cube faces: `Front,Right,Back,Left,Up,Down`; ring/fibonacci: `View_0,View_1,…`. Empty = all faces. | All |
 | `--adaptive` | Enable intelligent keyframing (skip static scenes). | `False` |
 | `--motion-threshold` | Sensitivity for motion detection (0.0-100.0). Higher = needs more motion to extract. | `5.0` |
 | `--export-telemetry` | Extract GPS/IMU metadata and embed it into output images (EXIF). | `False` |
@@ -59,13 +60,20 @@ python src/main.py --input videos/trip.mp4 --output frames/trip --active-cameras
 ```
 *Camera Indices for 6-camera layout: 0:Front, 1:Right, 2:Back, 3:Left, 4:Up, 5:Down.*
 
-### 3. Standard (Non-360) Media
+### 3. Mask the Operator on One Face Only
+Generate masks but restrict them to the `Down` face (the operator/monopod),
+leaving people in paintings or posters on the other faces untouched.
+```bash
+python src/main.py --input videos/museum.mp4 --output frames/museum --layout cube --ai-mask --ai-mask-cameras "Down"
+```
+
+### 4. Standard (Non-360) Media
 Process a regular (non-panoramic) video or image without reprojection.
 ```bash
 python src/main.py --input clips/interview.mp4 --output frames/interview --flat
 ```
 
-### 4. Using a Config File
+### 5. Using a Config File
 Run a job defined in a JSON file.
 ```bash
 python src/main.py --config my_job.json

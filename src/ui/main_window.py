@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel, QSpinBox,
     QComboBox, QFileDialog, QProgressBar, QMessageBox,
     QDoubleSpinBox, QCheckBox, QSplitter, QScrollArea, QStackedWidget,
-    QLineEdit
+    QLineEdit, QGridLayout
 )
 from PySide6.QtCore import Qt, QFile, QTextStream, QThread, QEvent, QObject, QSize
 
@@ -622,7 +622,24 @@ class MainWindow(QMainWindow):
         custom_row.addWidget(self.btn_view_classes)
         
         ai_section.addLayout(custom_row)
-        
+
+        # Per-face masking scope (Cube layout only). When no face is checked,
+        # masking applies to every face (default). Selecting one or more faces
+        # restricts masking to them — e.g. mask the operator on "Down" without
+        # masking people in paintings on the other faces.
+        self.mask_faces_label = QLabel("Mask only on faces (none = all):")
+        ai_section.addWidget(self.mask_faces_label)
+
+        self.mask_face_checks = {}
+        mask_faces_grid = QGridLayout()
+        cube_faces = ["Front", "Right", "Back", "Left", "Up", "Down"]
+        for i, face in enumerate(cube_faces):
+            chk = QCheckBox(face)
+            chk.toggled.connect(self.on_setting_changed)
+            self.mask_face_checks[face] = chk
+            mask_faces_grid.addWidget(chk, i // 3, i % 3)
+        ai_section.addLayout(mask_faces_grid)
+
         content_layout.addWidget(ai_section)
         
         # Blur Section
@@ -849,6 +866,9 @@ class MainWindow(QMainWindow):
             'ai_detect_vehicles': self.chk_vehicles.isChecked(),
             'ai_detect_plants': self.chk_plants.isChecked(),
             'ai_custom_classes': self.txt_custom_classes.text(),
+            'ai_mask_cameras': [
+                name for name, chk in self.mask_face_checks.items() if chk.isChecked()
+            ],
             'adaptive_mode': self.adaptive_toggle.isChecked(),
             'adaptive_threshold': self.motion_threshold_spin.value(),
             'blur_filter_enabled': self.blur_toggle.isChecked(),
@@ -874,6 +894,7 @@ class MainWindow(QMainWindow):
             self.lanczos_toggle, self.ai_feather_toggle, self.input_360_toggle,
             self.altitude_combo
         ]
+        widgets += list(self.mask_face_checks.values())
         for w in widgets:
             w.blockSignals(True)
 
@@ -910,7 +931,14 @@ class MainWindow(QMainWindow):
         self.chk_vehicles.setChecked(settings.get('ai_detect_vehicles', False))
         self.chk_plants.setChecked(settings.get('ai_detect_plants', False))
         self.txt_custom_classes.setText(settings.get('ai_custom_classes', ""))
-        
+
+        mask_faces = settings.get('ai_mask_cameras', []) or []
+        if isinstance(mask_faces, str):
+            mask_faces = [c.strip() for c in mask_faces.split(',') if c.strip()]
+        mask_faces_lower = {str(f).strip().lower() for f in mask_faces}
+        for name, chk in self.mask_face_checks.items():
+            chk.setChecked(name.lower() in mask_faces_lower)
+
         self.blur_toggle.setChecked(settings.get('blur_filter_enabled', False))
         self.smart_blur_toggle.setChecked(settings.get('smart_blur_enabled', False))
         self.blur_threshold_spin.setValue(settings.get('blur_threshold', 100.0))
@@ -954,7 +982,8 @@ class MainWindow(QMainWindow):
     def on_setting_changed(self):
         if self.is_processing:
             return
-            
+
+        self._update_mask_faces_state()
         current_settings = self.get_settings_from_ui()
         
         if self._selected_cards:
@@ -996,6 +1025,19 @@ class MainWindow(QMainWindow):
             self.cam_count_spin.setEnabled(self.layout_combo.currentData() != 'cube')
         else:
             self.cam_count_spin.setEnabled(False)
+        self._update_mask_faces_state()
+
+    def _update_mask_faces_state(self):
+        """Per-face masking is named-face based, so it's GUI-exposed for the Cube
+        layout only, and only meaningful when an AI mode is active on 360 input."""
+        enabled = (
+            self.input_360_toggle.isChecked()
+            and self.layout_combo.currentData() == 'cube'
+            and self.ai_combo.currentText() != 'None'
+        )
+        self.mask_faces_label.setEnabled(enabled)
+        for chk in self.mask_face_checks.values():
+            chk.setEnabled(enabled)
 
     def on_blur_toggled(self, checked):
         self.blur_threshold_spin.setEnabled(checked)
