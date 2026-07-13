@@ -6,32 +6,39 @@ import time
 import concurrent.futures
 from collections import deque
 from datetime import datetime, timezone
-from PySide6.QtCore import QObject, Signal
 
+from extractor360.core.events import Event
 from extractor360.core.geometry import GeometryProcessor
-from extractor360.core.ai_model import AIService, resolve_ai_model_name, DEFAULT_AI_MODEL
 from extractor360.core.motion_detector import MotionDetector
 from extractor360.core.telemetry import TelemetryHandler
-from extractor360.core.ai_classes import PRESETS, parse_custom_classes
+from extractor360.core.ai_classes import (
+    PRESETS, parse_custom_classes, resolve_ai_model_name, DEFAULT_AI_MODEL,
+)
 from extractor360.core.settings_manager import normalize_mask_faces
 from extractor360.core.version import APP_NAME, VERSION
 from extractor360.utils.file_manager import FileManager
 from extractor360.utils.image_utils import ImageUtils
 from extractor360.utils.logger import logger
 
-class ProcessingWorker(QObject):
+class ProcessingWorker:
     """
-    Worker class to handle video processing in a separate thread.
+    Qt-free worker that processes a list of jobs.
+
+    Progress is reported through plain callback events (see
+    ``extractor360.core.events``): the CLI connects functions directly, the GUI
+    bridges them to Qt signals via ``extractor360.ui.workers.ProcessingBridge``.
+    Run it on whatever thread suits the caller (the GUI uses a plain
+    ``threading.Thread``; the CLI calls ``run()`` synchronously).
     """
-    progress_updated = Signal(int, str) # value (0-100), message
-    job_started = Signal(int)
-    job_finished = Signal(int)
-    job_error = Signal(int, str) # job index, error message
-    finished = Signal()
-    error_occurred = Signal(str)
 
     def __init__(self, jobs):
-        super().__init__()
+        self.progress_updated = Event()  # (value 0-100, message)
+        self.job_started = Event()       # (job index)
+        self.job_finished = Event()      # (job index)
+        self.job_error = Event()         # (job index, error message)
+        self.finished = Event()          # ()
+        self.error_occurred = Event()    # (error message)
+
         self.jobs = jobs
         self.is_running = True
         self.error_count = 0
@@ -56,6 +63,9 @@ class ProcessingWorker(QObject):
         if self.ai_service is not None and self._ai_model_name == model_name:
             return self.ai_service
         self.progress_updated.emit(0, f"Loading AI model ({model_name})…")
+        # Heavy import (torch/ultralytics) done lazily so the core stays
+        # importable — and AI-less jobs runnable — without the AI stack.
+        from extractor360.core.ai_model import AIService
         self.ai_service = AIService(model_name)
         self._ai_model_name = model_name
         return self.ai_service

@@ -4,10 +4,9 @@ import sys
 import os
 import argparse
 import json
-from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QCoreApplication
 
-from extractor360.ui.main_window import MainWindow
+# NOTE: no Qt/GUI imports at module level — the CLI must run headless (servers
+# without display libraries). The GUI stack is imported lazily in main().
 from extractor360.core.settings_manager import SettingsManager, build_settings
 from extractor360.core.job import Job
 from extractor360.core.processor import ProcessingWorker
@@ -149,11 +148,9 @@ def run_cli(args):
     settings = build_settings(args, config, active_cameras, output_path)
 
     jobs = [Job(file_path=f, settings=settings) for f in files_to_process]
-    
-    # Initialize Core Application for Signal/Slot support. The instance must be
-    # kept alive for the duration of processing even though it is not referenced.
-    core_app = QCoreApplication(sys.argv)  # noqa: F841
 
+    # The core is Qt-free: its events are plain callbacks, so no
+    # QCoreApplication is needed in CLI mode anymore.
     worker = ProcessingWorker(jobs)
     
     # Progress Bar Handling
@@ -218,15 +215,18 @@ def main():
     if args.input or args.config:
         run_cli(args)
     else:
-        # GUI Mode
+        # GUI Mode — import Qt lazily so headless/CLI environments never load it.
+        from PySide6.QtWidgets import QApplication
+        from extractor360.ui.main_window import MainWindow
+
         app = QApplication(sys.argv)
-        
+
         # Initialize settings
         SettingsManager()
-    
+
         window = MainWindow()
         window.show()
-        
+
         sys.exit(app.exec())
 
 if __name__ == "__main__":

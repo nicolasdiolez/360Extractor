@@ -6,6 +6,8 @@ This document provides detailed information about using the 360 Extractor Pro in
 
 Run the application in headless mode by providing the `--input` argument or a configuration file.
 
+The CLI is fully headless: it never loads Qt, and the AI stack (torch/ultralytics) is only imported when an AI mode is actually enabled. On servers you can install `opencv-python-headless` instead of `opencv-python` to avoid needing system OpenGL libraries.
+
 > **Note on Flags:** Boolean flags (like `--ai-mask`, `--ai-skip`, `--adaptive`, `--export-telemetry`) are toggles. Including them enables the feature; they do not take a value (e.g., use `--ai-mask`, not `--ai-mask true`).
 
 ## Visual Progress

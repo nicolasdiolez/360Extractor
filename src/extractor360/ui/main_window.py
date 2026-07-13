@@ -4,6 +4,7 @@ Redesigned UI with sidebar navigation and modern components.
 """
 import os
 import copy
+import threading
 import cv2
 from PIL import Image
 from PySide6.QtWidgets import (
@@ -25,7 +26,7 @@ from extractor360.ui.collapsible_section import CollapsibleSection
 from extractor360.ui.log_panel import LogPanel
 from extractor360.ui.icons import get_icon
 from extractor360.core.processor import ProcessingWorker
-from extractor360.core.analyzer import BlurAnalysisWorker
+from extractor360.ui.workers import ProcessingBridge, BlurAnalysisWorker
 from extractor360.core.job import Job
 from extractor360.core.settings_manager import SettingsManager
 from extractor360.core.version import APP_NAME
@@ -1393,22 +1394,23 @@ class MainWindow(QMainWindow):
         for card in self._video_cards:
             card.update_status("Pending")
 
-        self.thread = QThread()
+        # The worker is Qt-free; the bridge re-emits its callback events as Qt
+        # signals so they arrive queued on the GUI thread. A plain Python
+        # thread is enough (and avoids the classic self.thread/QObject.thread()
+        # shadowing trap).
         self.worker = ProcessingWorker(self.jobs)
-        self.worker.moveToThread(self.thread)
+        self._bridge = ProcessingBridge().attach(self.worker)
 
-        self.thread.started.connect(self.worker.run)
-        self.worker.job_started.connect(self.on_job_started)
-        self.worker.job_finished.connect(self.on_job_finished)
-        self.worker.job_error.connect(self.on_job_error)
-        self.worker.progress_updated.connect(self.update_progress)
-        self.worker.finished.connect(self.processing_finished)
+        self._bridge.job_started.connect(self.on_job_started)
+        self._bridge.job_finished.connect(self.on_job_finished)
+        self._bridge.job_error.connect(self.on_job_error)
+        self._bridge.progress_updated.connect(self.update_progress)
+        self._bridge.finished.connect(self.processing_finished)
 
-        self.worker.finished.connect(self.thread.quit)
-        self.worker.finished.connect(self.worker.deleteLater)
-        self.thread.finished.connect(self.thread.deleteLater)
-        
-        self.thread.start()
+        self._worker_thread = threading.Thread(
+            target=self.worker.run, name="ProcessingWorker", daemon=True
+        )
+        self._worker_thread.start()
 
     def cancel_processing(self):
         if hasattr(self, 'worker'):
@@ -1569,9 +1571,16 @@ class MainWindow(QMainWindow):
     # =========================================================================
 
     def closeEvent(self, event):
-        # Stop any running worker and wait for its thread so we never destroy a
-        # QThread while it is still running (avoids crashes / orphaned threads).
-        self._shutdown_thread('worker', 'thread')
+        # Stop the processing worker (plain thread) and wait for it so we never
+        # quit while a job is mid-write.
+        worker = getattr(self, 'worker', None)
+        if worker is not None:
+            worker.stop()
+        worker_thread = getattr(self, '_worker_thread', None)
+        if worker_thread is not None and worker_thread.is_alive():
+            worker_thread.join(timeout=5)
+
+        # The blur analysis still runs in a QThread; shut it down the Qt way.
         self._shutdown_thread('analysis_worker', 'analysis_thread')
 
         self.settings_manager.save_settings()
