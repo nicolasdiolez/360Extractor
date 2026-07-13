@@ -35,6 +35,7 @@ def make_args(**overrides):
         adaptive=False, motion_threshold=None,
         export_telemetry=False, altitude_mode=None,
         targets=None, custom_classes=None, ai_mask_cameras=None,
+        ai_model=None, nadir_mask=False, nadir_radius=None,
         naming_mode=None, image_pattern=None, mask_pattern=None,
     )
     defaults.update(overrides)
@@ -156,6 +157,29 @@ class TestBuildSettings(unittest.TestCase):
     def test_ai_mask_cameras_config_list_passthrough(self):
         settings = build_settings(make_args(), config={'ai_mask_cameras': ['Back']})
         self.assertEqual(settings['ai_mask_cameras'], ['Back'])
+
+    def test_ai_model_default_and_cli_override(self):
+        """The segmentation model defaults to nano and is overridable via CLI."""
+        self.assertEqual(
+            build_settings(make_args(), config={})['ai_model'],
+            SettingsManager.DEFAULT_SETTINGS['ai_model'],
+        )
+        self.assertEqual(build_settings(make_args(ai_model='l'), config={})['ai_model'], 'l')
+        # CLI wins over the config file.
+        settings = build_settings(make_args(ai_model='x'), config={'ai_model': 'n'})
+        self.assertEqual(settings['ai_model'], 'x')
+
+    def test_nadir_mask_flag_and_radius(self):
+        """--nadir-mask enables the disc; --nadir-radius sets its size."""
+        self.assertFalse(build_settings(make_args(), config={})['nadir_mask_enabled'])
+        settings = build_settings(make_args(nadir_mask=True, nadir_radius=55.0), config={})
+        self.assertTrue(settings['nadir_mask_enabled'])
+        self.assertEqual(settings['nadir_mask_radius'], 55.0)
+
+    def test_nadir_radius_config_default(self):
+        """Config value is used when the CLI omits --nadir-radius."""
+        settings = build_settings(make_args(), config={'nadir_mask_radius': 25.0})
+        self.assertEqual(settings['nadir_mask_radius'], 25.0)
 
 
 class TestNormalizeMaskFaces(unittest.TestCase):
