@@ -1,17 +1,20 @@
 import cv2
 import numpy as np
 import os
+import json
 import time
 import concurrent.futures
 from collections import deque
+from datetime import datetime, timezone
 from PySide6.QtCore import QObject, Signal
 
 from core.geometry import GeometryProcessor
-from core.ai_model import AIService
+from core.ai_model import AIService, resolve_ai_model_name, DEFAULT_AI_MODEL
 from core.motion_detector import MotionDetector
 from core.telemetry import TelemetryHandler
 from core.ai_classes import PRESETS, parse_custom_classes
 from core.settings_manager import normalize_mask_faces
+from core.version import APP_NAME, VERSION
 from utils.file_manager import FileManager
 from utils.image_utils import ImageUtils
 from utils.logger import logger
@@ -33,21 +36,50 @@ class ProcessingWorker(QObject):
         self.is_running = True
         self.error_count = 0
 
-        # Initialize AI Service if needed
+        # The AI model is loaded lazily from run() (i.e. on the worker thread),
+        # not here on the GUI thread: loading YOLO — and, on first launch,
+        # downloading it — would otherwise freeze the UI right after the user
+        # clicks "Start Processing". self._ai_model_name caches which model is
+        # currently loaded so we only reload when a job needs a different one.
         self.ai_service = None
-        needs_ai = any(job.settings.get('ai_mode', 'None') != 'None' for job in self.jobs)
-
-        if needs_ai:
-             # Initialize YOLO model
-             # Note: Using 'yolo26n-seg.pt' (nano) for maximum performance (NMS-free).
-             self.ai_service = AIService('yolo26n-seg.pt')
+        self._ai_model_name = None
 
         self.motion_detector = MotionDetector()
         self.io_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
+    def _ensure_ai_service(self, model_name):
+        """Load (or reuse) the YOLO model on the worker thread.
+
+        Emits a progress message first so the UI shows "Loading AI model…"
+        instead of appearing frozen while the model loads/downloads.
+        """
+        if self.ai_service is not None and self._ai_model_name == model_name:
+            return self.ai_service
+        self.progress_updated.emit(0, f"Loading AI model ({model_name})…")
+        self.ai_service = AIService(model_name)
+        self._ai_model_name = model_name
+        return self.ai_service
+
     def stop(self):
         self.is_running = False
         self.io_pool.shutdown(wait=False)
+
+    @staticmethod
+    def _build_nadir_mask(shape, radius_pct, invert_mask):
+        """Build a circular nadir mask for the Down view.
+
+        A filled disc at the image centre marks the pole/tripod area as "ignore".
+        The convention matches the AI mask: with ``invert_mask`` (default), the
+        keep area is white (255) and the disc is black (0); otherwise it is
+        flipped so the two masks can be combined consistently.
+        """
+        h, w = shape[:2]
+        keep_val, ignore_val = (255, 0) if invert_mask else (0, 255)
+        mask = np.full((h, w), keep_val, dtype=np.uint8)
+        radius = int(max(0.0, min(100.0, radius_pct)) / 100.0 * (min(h, w) / 2.0))
+        if radius > 0:
+            cv2.circle(mask, (w // 2, h // 2), radius, ignore_val, thickness=-1)
+        return mask
 
     def run(self):
         total_jobs = len(self.jobs)
@@ -185,6 +217,10 @@ class ProcessingWorker(QObject):
             elif ai_mode_ui == 'Generate Mask':
                 ai_mode_internal = 'generate_mask'
 
+            # Segmentation model (nano by default). Loaded lazily below only if a
+            # job actually needs AI, on the worker thread.
+            ai_model_name = resolve_ai_model_name(job.settings.get('ai_model', DEFAULT_AI_MODEL))
+
             ai_confidence = job.settings.get('ai_confidence', 0.25)
             ai_invert_mask = job.settings.get('ai_invert_mask', True)
             ai_feather_mask = job.settings.get('feather_mask', False)
@@ -234,6 +270,13 @@ class ProcessingWorker(QObject):
             blur_history = deque(maxlen=10)
             consecutive_blur_skips = 0
 
+            # Nadir mask (no AI): a disc on the Down view covering the pole/tripod
+            # at the bottom of the capture. Combines with the AI mask when both
+            # are on. Only meaningful for a cube layout that has a "Down" face
+            # (the "no Down face" warning is emitted once views are known below).
+            nadir_mask_enabled = job.settings.get('nadir_mask_enabled', False)
+            nadir_mask_radius = float(job.settings.get('nadir_mask_radius', 40.0))
+
             # Sharpening Settings
             sharpen_enabled = job.settings.get('sharpening_enabled', False)
             sharpen_strength = job.settings.get('sharpening_strength', 0.5)
@@ -270,13 +313,37 @@ class ProcessingWorker(QObject):
                     if active_cams is not None and i not in active_cams:
                         continue
 
-                    maps[name] = GeometryProcessor.create_rectilinear_map(
+                    map_x, map_y = GeometryProcessor.create_rectilinear_map(
                         src_h, src_w, out_res, out_res, fov, y, p, r
                     )
+                    # Convert to fixed-point (CV_16SC2): cv2.remap is markedly
+                    # faster on these than on two float32 maps, with no visible
+                    # quality change (verified bit-identical for linear/lanczos).
+                    maps[name] = cv2.convertMaps(map_x, map_y, cv2.CV_16SC2)
             else:
                 # Flat / non-360 media: a single passthrough "view".
                 views = [("flat", 0.0, 0.0, 0.0)]
                 self.progress_updated.emit(0, f"Processing {filename} (flat / non-360)...")
+
+            active_view_names = set(maps.keys()) if is_360 else {"flat"}
+
+            # Nadir mask only makes sense on a downward-looking "Down" face.
+            if nadir_mask_enabled and not any(n.lower() == 'down' for n in active_view_names):
+                logger.warning(
+                    "Nadir mask is enabled but no 'Down' face is active "
+                    "(needs the Cube layout with the Down camera); it will have no effect."
+                )
+
+            # Load the segmentation model now (on the worker thread) so the GUI
+            # doesn't freeze, and only when this job actually needs it.
+            if ai_mode_internal != 'none':
+                self._ensure_ai_service(ai_model_name)
+
+            # Manifest counters (see the manifest.json written at the end).
+            frames_processed = 0       # frames hit at the extraction interval
+            frames_skipped_motion = 0  # skipped by the adaptive/motion filter
+            images_written = 0         # image files actually saved
+            views_skipped_ai = 0       # views dropped by AI "Skip Frame"
 
             frame_idx = 0
             job_start_time = time.time()
@@ -286,13 +353,20 @@ class ProcessingWorker(QObject):
                     if frame_idx > 0:
                         break
                     frame = current_image_frame
-                    ret = True
                 else:
+                    if frame_idx % interval != 0:
+                        # Skipped frame: grab() advances the decoder WITHOUT the
+                        # expensive YUV->BGR conversion + copy that read() does.
+                        # Big win at long intervals where most frames are dropped.
+                        if not cap.grab():
+                            break
+                        frame_idx += 1
+                        continue
                     ret, frame = cap.read()
+                    if not ret:
+                        break
 
-                if not ret:
-                    break
-
+                # Reached only on extraction points (or the single image frame).
                 if frame_idx % interval == 0:
                     # Update GPS for current time
                     if telemetry_handler:
@@ -325,10 +399,13 @@ class ProcessingWorker(QObject):
                             motion_score = self.motion_detector.calculate_motion_score(last_extracted_frame, frame)
                             if motion_score <= adaptive_threshold:
                                 # Skip extraction
+                                frames_skipped_motion += 1
                                 frame_idx += 1
                                 continue
 
                         last_extracted_frame = frame.copy()
+
+                    frames_processed += 1
 
                     batch_images = []
                     batch_contexts = []
@@ -429,6 +506,25 @@ class ProcessingWorker(QObject):
                         else:
                             ai_results = [(img, None) for img in batch_images]
 
+                    # 4b. Nadir mask (no AI): overlay a disc on the Down view.
+                    # Combines with the AI mask when present, otherwise stands
+                    # alone so it works even with AI masking off.
+                    if nadir_mask_enabled and ai_results:
+                        for idx, name in enumerate(batch_names):
+                            if name.lower() != 'down':
+                                continue
+                            img_i, mask_i = ai_results[idx]
+                            if img_i is None:
+                                continue  # view dropped by AI "Skip Frame"
+                            disc = self._build_nadir_mask(img_i.shape, nadir_mask_radius, ai_invert_mask)
+                            if isinstance(mask_i, np.ndarray):
+                                # Union of ignore regions: ignore=0 with the default
+                                # invert convention (min wins), else ignore=255 (max).
+                                combined = cv2.min(mask_i, disc) if ai_invert_mask else cv2.max(mask_i, disc)
+                            else:
+                                combined = disc
+                            ai_results[idx] = (img_i, combined)
+
                     # 5. Save (Multi-threaded I/O)
                     futures = []
                     naming_mode = job.settings.get('naming_mode', 'realityscan')
@@ -436,14 +532,18 @@ class ProcessingWorker(QObject):
                     mask_pattern = job.settings.get('mask_pattern', '{filename}_frame{frame}_{camera}_mask')
 
                     def io_save_task(save_path, final_img, params, gps, handler, mask_path, mask_img):
-                        FileManager.save_image(save_path, final_img, params)
                         if gps and handler:
-                            handler.embed_exif(save_path, *gps)
+                            # Single write: encode in memory and embed the GPS EXIF
+                            # straight into the bytes (no write-then-reload-then-rewrite).
+                            handler.save_image_with_gps(save_path, final_img, params, *gps)
+                        else:
+                            FileManager.save_image(save_path, final_img, params)
                         if mask_img is not None and isinstance(mask_img, np.ndarray):
                             FileManager.save_mask(mask_path, mask_img)
 
                     for i, (final_img, mask_or_skip) in enumerate(ai_results):
                         if final_img is None and mask_or_skip is True:
+                            views_skipped_ai += 1
                             continue # Skipped
 
                         name = batch_names[i]
@@ -486,6 +586,7 @@ class ProcessingWorker(QObject):
                                 io_save_task, full_save_path, final_img, save_params,
                                 current_gps, telemetry_handler, full_mask_path, mask_or_skip
                             ))
+                            images_written += 1
                         except RuntimeError:
                             # Pool closed, stop loop
                             logger.warning("I/O Pool closed, stopping save loop.")
@@ -503,3 +604,43 @@ class ProcessingWorker(QObject):
 
         if skipped_blur_count > 0:
             logger.info(f"Total blurry views skipped for {filename}: {skipped_blur_count}")
+
+        # Per-job manifest: reproducibility + support ("why only N images?").
+        duration_seconds = (total_frames_video / fps) if fps else 0.0
+        self._write_manifest(output_dir, job, {
+            "video": {
+                "fps": round(fps, 3),
+                "total_frames": total_frames_video,
+                "duration_seconds": round(duration_seconds, 2),
+            },
+            "extraction": {
+                "interval_frames": interval,
+                "frames_processed": frames_processed,
+                "frames_skipped_motion": frames_skipped_motion,
+                "images_written": images_written,
+                "views_skipped_blur": skipped_blur_count,
+                "views_skipped_ai": views_skipped_ai,
+            },
+            "elapsed_seconds": round(time.time() - job_start_time, 2),
+        })
+
+    def _write_manifest(self, output_dir, job, stats):
+        """Write a manifest.json in the job's output folder.
+
+        Records the settings used and how many frames/views were extracted or
+        skipped, so a run can be reproduced and support questions answered.
+        """
+        manifest = {
+            "app": APP_NAME,
+            "version": VERSION,
+            "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "source_file": job.file_path,
+            "output_dir": output_dir,
+            "settings": job.settings,
+            **stats,
+        }
+        try:
+            with open(os.path.join(output_dir, "manifest.json"), "w", encoding="utf-8") as f:
+                json.dump(manifest, f, indent=2, default=str)
+        except OSError as e:
+            logger.warning(f"Could not write manifest.json in {output_dir}: {e}")

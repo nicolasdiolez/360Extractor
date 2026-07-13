@@ -14,6 +14,7 @@ class SettingsManager:
         "pitch_offset": 0,
         "layout_mode": "ring",
         "ai_mode": "None",
+        "ai_model": "yolo26n-seg.pt",
         "ai_confidence": 0.25,
         "ai_invert_mask": True,
         "ai_detect_humans": True,
@@ -21,6 +22,8 @@ class SettingsManager:
         "ai_detect_plants": False,
         "ai_custom_classes": "",
         "ai_mask_cameras": [],
+        "nadir_mask_enabled": False,
+        "nadir_mask_radius": 40.0,
         "quality": 95,
         "output_format": "jpg",
         "custom_output_dir": "",
@@ -151,6 +154,8 @@ def build_settings(args, config, active_cameras=None, output_path=""):
         'output_format': args.format,
         'altitude_mode': args.altitude_mode,
         'ai_custom_classes': args.custom_classes,
+        'ai_model': getattr(args, 'ai_model', None),
+        'nadir_mask_radius': getattr(args, 'nadir_radius', None),
         'naming_mode': args.naming_mode,
         'image_pattern': args.image_pattern,
         'mask_pattern': args.mask_pattern,
@@ -158,6 +163,10 @@ def build_settings(args, config, active_cameras=None, output_path=""):
     for key, value in cli_overrides.items():
         if value is not None:
             settings[key] = value
+
+    # Nadir disc mask (no AI) on the Down face.
+    if getattr(args, 'nadir_mask', False):
+        settings['nadir_mask_enabled'] = True
 
     # --interval is expressed in seconds.
     if args.interval is not None:
