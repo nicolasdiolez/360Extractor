@@ -1,8 +1,42 @@
+import os
 import cv2
 import numpy as np
 import torch
 from ultralytics import YOLO
 from utils.logger import logger
+
+# Segmentation model variants shipped by Ultralytics, smallest/fastest first.
+# The nano model is bundled with the app; the others are auto-downloaded by
+# Ultralytics on first use.
+AI_MODEL_VARIANTS = {
+    'n': 'yolo26n-seg.pt',
+    's': 'yolo26s-seg.pt',
+    'm': 'yolo26m-seg.pt',
+    'l': 'yolo26l-seg.pt',
+    'x': 'yolo26x-seg.pt',
+}
+DEFAULT_AI_MODEL = AI_MODEL_VARIANTS['n']
+
+
+def resolve_ai_model_name(value) -> str:
+    """Resolve an ``ai_model`` setting into a concrete model name or path.
+
+    Accepts a size letter (``n``/``s``/``m``/``l``/``x``), a full model name
+    (``yolo26l-seg.pt``) or a custom path to a ``.pt`` file. Empty/unknown
+    values fall back to the bundled nano model, so a bad setting can never
+    crash the pipeline before inference even starts.
+    """
+    if not value:
+        return DEFAULT_AI_MODEL
+    value = str(value).strip()
+    key = value.lower()
+    if key in AI_MODEL_VARIANTS:
+        return AI_MODEL_VARIANTS[key]
+    # A path or an explicit .pt filename is passed through untouched.
+    if value.endswith('.pt') or os.sep in value or (os.altsep and os.altsep in value):
+        return value
+    return DEFAULT_AI_MODEL
+
 
 class AIService:
     """
@@ -44,10 +78,13 @@ class AIService:
              
         return info
     
-    def __init__(self, model_name='yolo26n-seg.pt'):
+    def __init__(self, model_name=DEFAULT_AI_MODEL):
         """
         Initialize the AI model.
         """
+        # Remember which model was loaded so callers can cache / avoid reloads.
+        self.model_name = model_name
+
         # 1. Setup Device
         device_info = self.get_device_info()
         self.device = device_info['device']
