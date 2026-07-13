@@ -50,6 +50,13 @@ Bugfix release from a full application audit.
   `--version`.
 - **`docs/SETTINGS.md`**: `output_format` now documents `tiff`.
 
+### CI
+- CI now also runs on pushes to `dev` (previously only `main` and pull
+  requests), so work-in-progress on the development branch is validated
+  before a PR exists.
+- The test job installs `piexif`/`Pillow` so `core.telemetry` is importable
+  by the new telemetry tests.
+
 ## [3.2.0] - 2026-06-27
 
 ### Added
