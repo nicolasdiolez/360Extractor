@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from utils.logger import logger
+from extractor360.utils.logger import logger
 
 class MotionDetector:
     def __init__(self, target_size=(256, 144)):

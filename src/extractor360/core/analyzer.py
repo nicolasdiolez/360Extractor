@@ -1,7 +1,7 @@
 import cv2
 from PySide6.QtCore import QObject, Signal
-from core.geometry import GeometryProcessor
-from utils.image_utils import ImageUtils
+from extractor360.core.geometry import GeometryProcessor
+from extractor360.utils.image_utils import ImageUtils
 
 class BlurAnalyzer:
     @staticmethod

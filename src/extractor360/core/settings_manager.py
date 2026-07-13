@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from utils.logger import logger
+from extractor360.utils.logger import logger
 
 class SettingsManager:
     _instance = None

@@ -16,21 +16,21 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QFile, QTextStream, QThread, QEvent, QObject, QSize, QUrl
 from PySide6.QtGui import QDesktopServices
 
-from ui.widgets import DropZone
-from ui.preview_widget import PreviewWidget
-from ui.sidebar import Sidebar
-from ui.video_card import VideoCard
-from ui.toggle_switch import ToggleSwitchWithDescription
-from ui.collapsible_section import CollapsibleSection
-from ui.log_panel import LogPanel
-from ui.icons import get_icon
-from core.processor import ProcessingWorker
-from core.analyzer import BlurAnalysisWorker
-from core.job import Job
-from core.settings_manager import SettingsManager
-from core.version import APP_NAME
-from core.ai_classes import COCO_CLASSES
-from utils.logger import logger
+from extractor360.ui.widgets import DropZone
+from extractor360.ui.preview_widget import PreviewWidget
+from extractor360.ui.sidebar import Sidebar
+from extractor360.ui.video_card import VideoCard
+from extractor360.ui.toggle_switch import ToggleSwitchWithDescription
+from extractor360.ui.collapsible_section import CollapsibleSection
+from extractor360.ui.log_panel import LogPanel
+from extractor360.ui.icons import get_icon
+from extractor360.core.processor import ProcessingWorker
+from extractor360.core.analyzer import BlurAnalysisWorker
+from extractor360.core.job import Job
+from extractor360.core.settings_manager import SettingsManager
+from extractor360.core.version import APP_NAME
+from extractor360.core.ai_classes import COCO_CLASSES
+from extractor360.utils.logger import logger
 
 
 class ScrollBlocker(QObject):

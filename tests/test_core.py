@@ -10,9 +10,9 @@ import sys
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from core.geometry import GeometryProcessor
-from utils.image_utils import ImageUtils
-from utils.gpx_parser import parse_gpx_data
+from extractor360.core.geometry import GeometryProcessor
+from extractor360.utils.image_utils import ImageUtils
+from extractor360.utils.gpx_parser import parse_gpx_data
 
 
 class TestGeometryProcessor(unittest.TestCase):
@@ -188,7 +188,7 @@ class TestJobModel(unittest.TestCase):
     
     def test_job_creation(self):
         """Test creating a job with default settings."""
-        from core.job import Job
+        from extractor360.core.job import Job
         
         job = Job(file_path="/path/to/video.mp4")
         
@@ -198,7 +198,7 @@ class TestJobModel(unittest.TestCase):
     
     def test_job_settings_properties(self):
         """Test job property accessors."""
-        from core.job import Job
+        from extractor360.core.job import Job
         
         job = Job(
             file_path="/path/to/video.mp4",
@@ -215,7 +215,7 @@ class TestJobModel(unittest.TestCase):
     
     def test_job_summary(self):
         """Test job summary generation."""
-        from core.job import Job
+        from extractor360.core.job import Job
         
         job = Job(
             file_path="/test.mp4",
@@ -233,7 +233,7 @@ class TestSettingsManager(unittest.TestCase):
     
     def test_singleton_pattern(self):
         """Test that SettingsManager is a singleton."""
-        from core.settings_manager import SettingsManager
+        from extractor360.core.settings_manager import SettingsManager
         
         sm1 = SettingsManager()
         sm2 = SettingsManager()
@@ -242,7 +242,7 @@ class TestSettingsManager(unittest.TestCase):
     
     def test_default_settings(self):
         """Test default settings structure is correct."""
-        from core.settings_manager import SettingsManager
+        from extractor360.core.settings_manager import SettingsManager
         
         # Check DEFAULT_SETTINGS directly (not loaded user settings)
         defaults = SettingsManager.DEFAULT_SETTINGS
@@ -255,7 +255,7 @@ class TestSettingsManager(unittest.TestCase):
     
     def test_get_set(self):
         """Test get and set methods."""
-        from core.settings_manager import SettingsManager
+        from extractor360.core.settings_manager import SettingsManager
         
         sm = SettingsManager()
         

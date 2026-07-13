@@ -8,10 +8,10 @@ import cv2
 import numpy as np
 import piexif
 from PIL import Image
-from utils.gpmf_parser import GPMFParser
-from utils.srt_parser import parse_srt_data
-from utils.camm_parser import parse_camm_data
-from utils.gpx_parser import parse_gpx_data
+from extractor360.utils.gpmf_parser import GPMFParser
+from extractor360.utils.srt_parser import parse_srt_data
+from extractor360.utils.camm_parser import parse_camm_data
+from extractor360.utils.gpx_parser import parse_gpx_data
 import os
 
 logger = logging.getLogger(__name__)

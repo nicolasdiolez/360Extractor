@@ -8,16 +8,16 @@ from collections import deque
 from datetime import datetime, timezone
 from PySide6.QtCore import QObject, Signal
 
-from core.geometry import GeometryProcessor
-from core.ai_model import AIService, resolve_ai_model_name, DEFAULT_AI_MODEL
-from core.motion_detector import MotionDetector
-from core.telemetry import TelemetryHandler
-from core.ai_classes import PRESETS, parse_custom_classes
-from core.settings_manager import normalize_mask_faces
-from core.version import APP_NAME, VERSION
-from utils.file_manager import FileManager
-from utils.image_utils import ImageUtils
-from utils.logger import logger
+from extractor360.core.geometry import GeometryProcessor
+from extractor360.core.ai_model import AIService, resolve_ai_model_name, DEFAULT_AI_MODEL
+from extractor360.core.motion_detector import MotionDetector
+from extractor360.core.telemetry import TelemetryHandler
+from extractor360.core.ai_classes import PRESETS, parse_custom_classes
+from extractor360.core.settings_manager import normalize_mask_faces
+from extractor360.core.version import APP_NAME, VERSION
+from extractor360.utils.file_manager import FileManager
+from extractor360.utils.image_utils import ImageUtils
+from extractor360.utils.logger import logger
 
 class ProcessingWorker(QObject):
     """

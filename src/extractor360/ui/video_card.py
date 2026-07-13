@@ -10,8 +10,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QThread, QObject
 from PySide6.QtGui import QPixmap, QImage, QPainter, QPainterPath
 
-from ui.icons import get_icon, get_pixmap
-from utils.logger import logger
+from extractor360.ui.icons import get_icon, get_pixmap
+from extractor360.utils.logger import logger
 
 
 class ThumbnailWorker(QObject):

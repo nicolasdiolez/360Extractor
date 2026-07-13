@@ -133,39 +133,35 @@ The system supports dynamic file naming patterns using context variables:
 ```text
 360Extractor/
 ├── src/
-│   ├── main.py                 # Entry point (GUI/CLI router)
-│   ├── ui/                     # GUI Layer
-│   │   ├── main_window.py      # Main window (Persistent Queue/Preview)
-│   │   ├── sidebar.py          # Navigation sidebar
-│   │   ├── video_card.py       # Job card component
-│   │   ├── preview_widget.py   # Persistent preview panel
-│   │   ├── log_panel.py        # Log viewer component
-│   │   ├── icons.py            # SVG Icon assets
-│   │   ├── styles.qss          # Modern dark theme stylesheet
-│   │   └── widgets.py          # Shared widgets
-│   ├── core/                   # Processing Core
-│   │   ├── processor.py        # Extraction Loop & Naming Logic
-│   │   ├── geometry.py         # Projection Math
-│   │   ├── telemetry.py        # GPS/IMU Manager
-│   │   ├── motion_detector.py  # Optical Flow Logic
-│   │   └── ai_model.py         # YOLO Wrapper
-│   └── utils/
-│       ├── gpmf_parser.py      # Binary GPMF Logic
-│       ├── camm_parser.py      # Binary CAMM Logic
-│       ├── srt_parser.py       # DJI Metadata Logic
-│       └── gpx_parser.py       # GPX Sidecar Parser
-│   ├── core/                   # Processing Core
-│   │   ├── processor.py        # Extraction Loop
-│   │   ├── geometry.py         # Projection Math
-│   │   ├── telemetry.py        # GPS/IMU Manager (+ GPX sidecar)
-│   │   ├── motion_detector.py  # Optical Flow Logic
-│   │   └── ai_model.py         # YOLO Wrapper
-│   └── utils/
-│       ├── gpmf_parser.py      # Binary GPMF Logic
-│       ├── camm_parser.py      # Binary CAMM Logic
-│       ├── srt_parser.py       # DJI Metadata Logic
-│       └── gpx_parser.py       # GPX Sidecar Parser
-├── docs/                       # Protocole & Handbooks
+│   ├── main.py                     # Dev launcher shim (back-compat)
+│   └── extractor360/               # Single top-level package
+│       ├── main.py                 # Entry point (GUI/CLI router)
+│       ├── __main__.py             # `python -m extractor360`
+│       ├── ui/                     # GUI Layer
+│       │   ├── main_window.py      # Main window (Persistent Queue/Preview)
+│       │   ├── sidebar.py          # Navigation sidebar
+│       │   ├── video_card.py       # Job card component
+│       │   ├── preview_widget.py   # Persistent preview panel
+│       │   ├── log_panel.py        # Log viewer component
+│       │   ├── icons.py            # SVG Icon assets
+│       │   ├── styles.qss          # Modern dark theme stylesheet
+│       │   └── widgets.py          # Shared widgets
+│       ├── core/                   # Processing Core
+│       │   ├── processor.py        # Extraction Loop & Naming Logic
+│       │   ├── geometry.py         # Projection Math
+│       │   ├── analyzer.py         # Blur analysis
+│       │   ├── telemetry.py        # GPS/IMU Manager (+ GPX sidecar)
+│       │   ├── motion_detector.py  # Optical Flow Logic
+│       │   ├── settings_manager.py # Defaults / config / CLI merge
+│       │   └── ai_model.py         # YOLO Wrapper
+│       └── utils/
+│           ├── gpmf_parser.py      # Binary GPMF Logic
+│           ├── camm_parser.py      # Binary CAMM Logic
+│           ├── srt_parser.py       # DJI Metadata Logic
+│           └── gpx_parser.py       # GPX Sidecar Parser
+├── tests/
+├── docs/                           # Protocole & Handbooks
+├── pyproject.toml
 ├── requirements.txt
 └── ARCHITECTURE.md
 ```

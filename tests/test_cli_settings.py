@@ -15,7 +15,7 @@ import unittest
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from core.settings_manager import SettingsManager, build_settings, normalize_mask_faces
+from extractor360.core.settings_manager import SettingsManager, build_settings, normalize_mask_faces
 
 SRC_DIR = os.path.join(os.path.dirname(__file__), '..', 'src')
 
@@ -46,7 +46,7 @@ def processor_setting_keys():
     """Every key read via ``settings.get('...')`` in the processor / job modules."""
     keys = set()
     pattern = re.compile(r"settings\.get\(\s*['\"]([a-zA-Z_0-9]+)['\"]")
-    for rel in ('core/processor.py', 'core/job.py'):
+    for rel in ('extractor360/core/processor.py', 'extractor360/core/job.py'):
         with open(os.path.join(SRC_DIR, rel), encoding='utf-8') as fh:
             keys.update(pattern.findall(fh.read()))
     return keys

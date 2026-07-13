@@ -31,24 +31,25 @@ gpu = ["torch", "torchvision"]
 dev = ["pytest>=7.0", "ruff>=0.5", "mypy>=1.8"]
 
 [project.scripts]
-"360extractor" = "main:main"
+"360extractor" = "extractor360.main:main"
 
 [project.urls]
 Homepage = "https://github.com/nicolasdiolez/360Extractor"
 Changelog = "https://github.com/nicolasdiolez/360Extractor/blob/main/CHANGELOG.md"
 
-# Flat "src" layout: modules live directly under src/ (core, ui, utils, main).
+# src layout with a single top-level package: everything lives under
+# src/extractor360/ so a pip install cannot collide with other packages
+# (the previous flat layout installed generic top-level names like `core`,
+# `ui` and `utils`). src/main.py is a dev-only launcher shim, not packaged.
 [tool.setuptools]
 package-dir = { "" = "src" }
-# main.py is a top-level module (the console entry point), not a package.
-py-modules = ["main"]
 
 [tool.setuptools.dynamic]
-version = { attr = "core.version.VERSION" }
+version = { attr = "extractor360.core.version.VERSION" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["core*", "ui*", "utils*"]
+include = ["extractor360*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

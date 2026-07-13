@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import torch
 from ultralytics import YOLO
-from utils.logger import logger
+from extractor360.utils.logger import logger
 
 # Segmentation model variants shipped by Ultralytics, smallest/fastest first.
 # The nano model is bundled with the app; the others are auto-downloaded by
