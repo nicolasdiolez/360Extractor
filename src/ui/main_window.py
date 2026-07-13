@@ -4,6 +4,8 @@ Redesigned UI with sidebar navigation and modern components.
 """
 import os
 import copy
+import cv2
+from PIL import Image
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QSpinBox,
@@ -11,7 +13,8 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox, QCheckBox, QSplitter, QScrollArea, QStackedWidget,
     QLineEdit, QGridLayout
 )
-from PySide6.QtCore import Qt, QFile, QTextStream, QThread, QEvent, QObject, QSize
+from PySide6.QtCore import Qt, QFile, QTextStream, QThread, QEvent, QObject, QSize, QUrl
+from PySide6.QtGui import QDesktopServices
 
 from ui.widgets import DropZone
 from ui.preview_widget import PreviewWidget
@@ -566,7 +569,28 @@ class MainWindow(QMainWindow):
         self.ai_combo.installEventFilter(self.scroll_blocker)
         ai_row.addWidget(self.ai_combo)
         ai_section.addLayout(ai_row)
-        
+
+        # Segmentation model (I3). Larger models catch partial operators (arm,
+        # pole) that nano misses, at the cost of speed. Nano is bundled; the
+        # others are auto-downloaded by Ultralytics on first use.
+        model_row = QHBoxLayout()
+        model_row.addWidget(QLabel("Model"))
+        model_row.addStretch()
+        self.ai_model_combo = QComboBox()
+        self.ai_model_combo.setFixedWidth(160)
+        for _label, _value in [
+            ("Nano (fastest)", "yolo26n-seg.pt"),
+            ("Small", "yolo26s-seg.pt"),
+            ("Medium", "yolo26m-seg.pt"),
+            ("Large", "yolo26l-seg.pt"),
+            ("XLarge (best)", "yolo26x-seg.pt"),
+        ]:
+            self.ai_model_combo.addItem(_label, _value)
+        self.ai_model_combo.currentIndexChanged.connect(self.on_setting_changed)
+        self.ai_model_combo.installEventFilter(self.scroll_blocker)
+        model_row.addWidget(self.ai_model_combo)
+        ai_section.addLayout(model_row)
+
         # Invert Masks
         self.ai_invert_toggle = ToggleSwitchWithDescription("Invert Masks", "Black=Target, White=Keep")
         self.ai_invert_toggle.setChecked(True)
@@ -639,6 +663,25 @@ class MainWindow(QMainWindow):
             self.mask_face_checks[face] = chk
             mask_faces_grid.addWidget(chk, i // 3, i % 3)
         ai_section.addLayout(mask_faces_grid)
+
+        # Nadir disc mask (I2): covers the pole/tripod at the bottom of the
+        # capture on the Down face. Needs no AI and combines with the AI mask.
+        self.nadir_toggle = ToggleSwitchWithDescription("Nadir Mask", "Disc over pole/tripod (Down face)")
+        self.nadir_toggle.toggled.connect(self.on_setting_changed)
+        ai_section.addWidget(self.nadir_toggle)
+
+        nadir_row = QHBoxLayout()
+        nadir_row.addWidget(QLabel("Nadir Radius (%)"))
+        nadir_row.addStretch()
+        self.nadir_radius_spin = QDoubleSpinBox()
+        self.nadir_radius_spin.setRange(0.0, 100.0)
+        self.nadir_radius_spin.setValue(40.0)
+        self.nadir_radius_spin.setSingleStep(5.0)
+        self.nadir_radius_spin.setFixedWidth(100)
+        self.nadir_radius_spin.valueChanged.connect(self.on_setting_changed)
+        self.nadir_radius_spin.installEventFilter(self.scroll_blocker)
+        nadir_row.addWidget(self.nadir_radius_spin)
+        ai_section.addLayout(nadir_row)
 
         content_layout.addWidget(ai_section)
         
@@ -791,7 +834,15 @@ class MainWindow(QMainWindow):
         buttons.addWidget(self.process_btn, 1)
         buttons.addWidget(self.cancel_btn)
         layout.addLayout(buttons)
-        
+
+        # Pre-launch estimate (U5): rough count/size so a 40k-file export is
+        # never a surprise. Updated on queue/settings changes.
+        self.estimate_label = QLabel("")
+        self.estimate_label.setObjectName("estimateLabel")
+        self.estimate_label.setStyleSheet("color: #71717A; font-size: 11px;")
+        self.estimate_label.setAlignment(Qt.AlignHCenter)
+        layout.addWidget(self.estimate_label)
+
         # Progress row
         progress_layout = QHBoxLayout()
         
@@ -860,8 +911,11 @@ class MainWindow(QMainWindow):
             'interpolation_mode': 'lanczos' if self.lanczos_toggle.isChecked() else 'linear',
             'feather_mask': self.ai_feather_toggle.isChecked(),
             'ai_mode': self.ai_combo.currentText(),
+            'ai_model': self.ai_model_combo.currentData(),
             'ai_invert_mask': self.ai_invert_toggle.isChecked(),
             'ai_confidence': self.ai_conf_spin.value(),
+            'nadir_mask_enabled': self.nadir_toggle.isChecked(),
+            'nadir_mask_radius': self.nadir_radius_spin.value(),
             'ai_detect_humans': self.chk_humans.isChecked(),
             'ai_detect_vehicles': self.chk_vehicles.isChecked(),
             'ai_detect_plants': self.chk_plants.isChecked(),
@@ -886,8 +940,10 @@ class MainWindow(QMainWindow):
         widgets = [
             self.format_combo, self.interval_spin, self.interval_unit,
             self.res_spin, self.fov_spin, self.cam_count_spin,
-            self.layout_combo, self.pitch_combo, self.ai_combo, self.ai_invert_toggle,
+            self.layout_combo, self.pitch_combo, self.ai_combo, self.ai_model_combo,
+            self.ai_invert_toggle,
             self.ai_conf_spin, self.chk_humans, self.chk_vehicles, self.chk_plants, self.txt_custom_classes,
+            self.nadir_toggle, self.nadir_radius_spin,
             self.blur_threshold_spin, self.sharpen_slider,
             self.motion_threshold_spin, self.naming_mode_combo,
             self.image_pattern_input, self.mask_pattern_input,
@@ -925,8 +981,13 @@ class MainWindow(QMainWindow):
             self.pitch_combo.setCurrentIndex(idx)
             
         self.ai_combo.setCurrentText(settings.get('ai_mode', 'None'))
+        model_idx = self.ai_model_combo.findData(settings.get('ai_model', 'yolo26n-seg.pt'))
+        if model_idx >= 0:
+            self.ai_model_combo.setCurrentIndex(model_idx)
         self.ai_invert_toggle.setChecked(settings.get('ai_invert_mask', True))
         self.ai_conf_spin.setValue(settings.get('ai_confidence', 0.25))
+        self.nadir_toggle.setChecked(settings.get('nadir_mask_enabled', False))
+        self.nadir_radius_spin.setValue(settings.get('nadir_mask_radius', 40.0))
         self.chk_humans.setChecked(settings.get('ai_detect_humans', True))
         self.chk_vehicles.setChecked(settings.get('ai_detect_vehicles', False))
         self.chk_plants.setChecked(settings.get('ai_detect_plants', False))
@@ -995,8 +1056,9 @@ class MainWindow(QMainWindow):
             self.default_settings = current_settings
             for key, value in current_settings.items():
                 self.settings_manager.set(key, value)
-        
+
         self.update_preview_display()
+        self.update_estimate()
 
     # =========================================================================
     # UI STATE HANDLERS
@@ -1102,13 +1164,15 @@ class MainWindow(QMainWindow):
         card.clicked.connect(lambda c=card: self.on_card_clicked(c))
         card.ctrl_clicked.connect(lambda c=card: self.on_card_ctrl_clicked(c))
         card.remove_clicked.connect(lambda c=card: self.remove_job_by_card(c))
-        
+        card.open_folder_clicked.connect(lambda c=card: self.open_output_folder(c.job))
+
         # Insert before stretch
         self.queue_layout.insertWidget(self.queue_layout.count() - 1, card)
         self._video_cards.append(card)
-        
+
         # Automatically select the newly added card
         self.on_card_clicked(card)
+        self.update_estimate()
 
 
     def on_card_clicked(self, card):
@@ -1157,6 +1221,7 @@ class MainWindow(QMainWindow):
             
             if not self.jobs:
                 self.process_btn.setEnabled(False)
+            self.update_estimate()
 
     def remove_selected_jobs(self):
         """Remove all selected jobs."""
@@ -1172,6 +1237,7 @@ class MainWindow(QMainWindow):
         self.process_btn.setEnabled(False)
         self.set_ui_from_settings(self.default_settings)
         self.update_preview_display()
+        self.update_estimate()
 
     def update_preview_display(self):
         if self._selected_cards:
@@ -1180,6 +1246,136 @@ class MainWindow(QMainWindow):
             self.preview_widget.update_preview(job.file_path, self.get_settings_from_ui())
         else:
             self.preview_widget.update_preview(None, None)
+
+    # =========================================================================
+    # ESTIMATE (U5)
+    # =========================================================================
+
+    _IMAGE_EXTS = ('.jpg', '.jpeg', '.png', '.tiff', '.tif')
+
+    def _media_meta(self, path):
+        """Return (fps, frame_count, width, height) for a media file, cached.
+
+        Reads container metadata only (no frame decoding), so it is cheap enough
+        to call while assembling the queue estimate.
+        """
+        if not hasattr(self, '_media_meta_cache'):
+            self._media_meta_cache = {}
+        if path in self._media_meta_cache:
+            return self._media_meta_cache[path]
+
+        fps, frames, w, h = 0.0, 1, 0, 0
+        try:
+            if path.lower().endswith(self._IMAGE_EXTS):
+                with Image.open(path) as im:
+                    w, h = im.size
+            else:
+                cap = cv2.VideoCapture(path)
+                if cap.isOpened():
+                    fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
+                    frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+                    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                cap.release()
+        except Exception:
+            pass
+
+        meta = (fps, max(1, frames), w, h)
+        self._media_meta_cache[path] = meta
+        return meta
+
+    def _estimate_queue(self):
+        """Estimate (frames, images, bytes) for the whole queue.
+
+        Approximate on purpose: it ignores adaptive/blur skips (so it is an
+        upper bound) and uses rough bytes-per-pixel figures per format.
+        """
+        # Rough encoded size per pixel (RGB); TIFF here is uncompressed.
+        bpp = {'jpg': 0.45, 'jpeg': 0.45, 'png': 2.0, 'tiff': 3.0, 'tif': 3.0}
+        total_frames = 0
+        total_images = 0
+        total_bytes = 0.0
+
+        for job in self.jobs:
+            s = job.settings
+            fps, frames, w, h = self._media_meta(job.file_path)
+            is_image = job.file_path.lower().endswith(self._IMAGE_EXTS)
+
+            # Extraction interval in frames.
+            interval_value = float(s.get('interval_value', 1.0))
+            if s.get('interval_unit', 'Seconds') == 'Frames':
+                interval = max(1, int(interval_value))
+            else:
+                interval = max(1, round((fps or 30.0) * interval_value))
+            n_extract = 1 if is_image else (frames + interval - 1) // interval
+
+            # Views per frame + per-view pixel count.
+            if not s.get('is_360', True):
+                n_views = 1
+                px = (w or 1920) * (h or 1080)
+            else:
+                if s.get('layout_mode', 'ring') == 'cube':
+                    n_views = 6
+                else:
+                    n_views = int(s.get('camera_count', 6))
+                active = s.get('active_cameras')
+                if active:
+                    n_views = min(n_views, len(active))
+                res = int(s.get('resolution', 2048))
+                px = res * res
+
+            imgs = n_extract * n_views
+            fmt = str(s.get('output_format', 'jpg')).lower()
+            total_frames += n_extract
+            total_images += imgs
+            total_bytes += imgs * px * bpp.get(fmt, 0.6)
+
+        return total_frames, total_images, total_bytes
+
+    @staticmethod
+    def _human_size(num_bytes):
+        size = float(num_bytes)
+        for unit in ('B', 'KB', 'MB'):
+            if size < 1024:
+                return f"{size:.0f} {unit}"
+            size /= 1024
+        return f"{size:.1f} GB"
+
+    def update_estimate(self):
+        """Refresh the pre-launch estimate label from the current queue."""
+        if not hasattr(self, 'estimate_label'):
+            return
+        if not self.jobs:
+            self.estimate_label.setText("")
+            return
+        frames, images, size = self._estimate_queue()
+        views = round(images / frames) if frames else 0
+        self.estimate_label.setText(
+            f"~{images:,} images ({frames:,} frames × {views} views), ~{self._human_size(size)}"
+        )
+
+    # =========================================================================
+    # OUTPUT FOLDER (U4)
+    # =========================================================================
+
+    def _job_output_dir(self, job):
+        """Mirror the processor's output-folder logic for a job."""
+        file_path = job.file_path
+        name_no_ext = os.path.splitext(os.path.basename(file_path))[0]
+        custom = job.output_dir
+        base = custom if (custom and os.path.isdir(custom)) else os.path.dirname(file_path)
+        return os.path.join(base, f"{name_no_ext}_processed")
+
+    def _open_folder(self, path):
+        if path and os.path.isdir(path):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+            return True
+        QMessageBox.warning(self, "Folder Not Found", f"Output folder does not exist yet:\n{path}")
+        return False
+
+    def open_output_folder(self, job):
+        """Open the output folder for a single finished job."""
+        self._open_folder(self._job_output_dir(job))
 
     # =========================================================================
     # PROCESSING
@@ -1265,17 +1461,44 @@ class MainWindow(QMainWindow):
 
         if getattr(self, '_was_cancelled', False):
             self.status_label.setText("Cancelled")
-            QMessageBox.information(self, "Cancelled", "Processing was cancelled.")
+            self._show_completion_dialog(
+                QMessageBox.Information, "Cancelled", "Processing was cancelled.", with_open=True
+            )
         elif error_count > 0:
             self.status_label.setText(f"Completed with {error_count} error(s)")
-            QMessageBox.warning(
-                self, "Completed with errors",
+            self._show_completion_dialog(
+                QMessageBox.Warning, "Completed with errors",
                 f"Batch finished, but {error_count} job(s) failed. "
-                "See the log panel for details."
+                "See the log panel for details.", with_open=True
             )
         else:
             self.status_label.setText("Complete!")
-            QMessageBox.information(self, "Success", "Batch processing completed successfully.")
+            self._show_completion_dialog(
+                QMessageBox.Information, "Success",
+                "Batch processing completed successfully.", with_open=True
+            )
+
+    def _batch_output_base(self):
+        """Folder that contains the per-video '*_processed' output folders."""
+        for job in self.jobs:
+            processed = self._job_output_dir(job)
+            if os.path.isdir(processed):
+                return os.path.dirname(processed)
+        return None
+
+    def _show_completion_dialog(self, icon, title, text, with_open=False):
+        box = QMessageBox(self)
+        box.setIcon(icon)
+        box.setWindowTitle(title)
+        box.setText(text)
+        open_btn = None
+        base = self._batch_output_base() if with_open else None
+        if base:
+            open_btn = box.addButton("Open Output Folder", QMessageBox.ActionRole)
+        box.addButton(QMessageBox.Ok)
+        box.exec()
+        if open_btn is not None and box.clickedButton() is open_btn:
+            self._open_folder(base)
 
     # =========================================================================
     # ANALYSIS

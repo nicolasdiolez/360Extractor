@@ -86,6 +86,7 @@ class VideoCard(QWidget):
     clicked = Signal()
     ctrl_clicked = Signal()  # For multi-selection with Ctrl+click
     remove_clicked = Signal()
+    open_folder_clicked = Signal()  # "Open output folder" on a finished card
     
     STATUS_COLORS = {
         "Pending": "#52525B",
@@ -143,7 +144,26 @@ class VideoCard(QWidget):
         status_layout.addWidget(self._status_dot)
         status_layout.addWidget(self._status_label)
         status_layout.addStretch()
-        
+
+        # "Open output folder" — only shown once the job is Done.
+        self._folder_btn = QPushButton(" Open")
+        self._folder_btn.setIcon(get_icon("folder", color="#22C55E", size=14))
+        self._folder_btn.setCursor(Qt.PointingHandCursor)
+        self._folder_btn.setToolTip("Open the output folder")
+        self._folder_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #22C55E;
+                border: none;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            QPushButton:hover { color: #4ADE80; }
+        """)
+        self._folder_btn.clicked.connect(self.open_folder_clicked.emit)
+        self._folder_btn.hide()
+        status_layout.addWidget(self._folder_btn)
+
         info_layout.addLayout(status_layout)
         
         # Settings summary
@@ -275,6 +295,9 @@ class VideoCard(QWidget):
             self._progress.show()
         else:
             self._progress.hide()
+
+        # The "Open folder" shortcut only makes sense once outputs exist.
+        self._folder_btn.setVisible(status == "Done")
             
     def set_progress(self, value):
         self._progress.setValue(value)
