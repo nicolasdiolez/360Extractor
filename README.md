@@ -17,6 +17,10 @@ High-performance desktop application and command-line tool for 360° and standar
 
 ## Installation
 
+> [!NOTE]
+> **Prerequisites:** Python 3.10+ and [FFmpeg](https://ffmpeg.org) (`ffmpeg`/`ffprobe` on your PATH — required for GPS/IMU telemetry extraction).
+> macOS: `brew install ffmpeg` · Windows: `winget install ffmpeg` · Linux: `sudo apt install ffmpeg`
+
 1.  **Clone the repository**
 2.  **Install dependencies:**
     - **For CPU-only or Mac (Apple Silicon):**

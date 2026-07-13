@@ -5,6 +5,51 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.1] - 2026-07-13
+
+Bugfix release from a full application audit.
+
+### Fixed
+- **CLI exit code now reflects job failures**: the CLI previously always exited
+  with code `0`, even when some (or all) jobs failed, so batch automation could
+  not detect errors. It now exits `1` and logs how many jobs failed.
+- **"Null Island" GPS samples rejected**: several devices (e.g. GoPro before
+  satellite lock) emit `(0,0)` GPS samples when they have no fix. These passed
+  range validation and could geotag output images in the Gulf of Guinea. The
+  shared sanitizer now drops the exact `(0,0)` placeholder for all telemetry
+  sources (GPMF/CAMM/SRT/GPX); legitimate equator or prime-meridian crossings
+  (lat=0 *or* lon=0 alone) are still kept.
+- **`--format` accepts `tiff`**: the GUI and the processor already supported
+  TIFF output, but the CLI rejected it.
+- **Frame interval rounding**: the seconds-based interval was truncated instead
+  of rounded (e.g. 29.97 fps × 1s → every 29 frames), causing a slow drift.
+- **Per-face masking + flat media**: combining `--ai-mask-cameras` (or the
+  face checkboxes) with flat/non-360 media silently disabled AI masking (the
+  single "flat" view never matches a face name). The face filter is now
+  ignored in flat mode with an explicit warning, and masking applies to the
+  whole frame as requested.
+- **Version single-sourced**: `pyproject.toml` was stuck at `3.1.0` while the
+  app reported `3.2.0` (same class of bug as issue #7). The version is now read
+  dynamically from `core/version.py`, so it can no longer diverge.
+- **Actionable error when FFmpeg is missing**: telemetry extraction requires
+  the system `ffmpeg`/`ffprobe` binaries; a missing install now produces a
+  clear "install FFmpeg" message instead of a generic error.
+
+### Added
+- **`--version` CLI flag.**
+- **Tests** for the GPS sample sanitizer (`tests/test_telemetry.py`).
+
+### Removed
+- Dead `get_arg()` helper in `main.py` (superseded by `build_settings()` in
+  3.1.1).
+
+### Docs
+- **README**: documented the FFmpeg prerequisite (installation commands per OS).
+- **`docs/CLI.md`**: fixed the stale `--motion-threshold` default (`0.5`, not
+  `5.0`) and its range description, documented `tiff` in `--format`, added
+  `--version`.
+- **`docs/SETTINGS.md`**: `output_format` now documents `tiff`.
+
 ## [3.2.0] - 2026-06-27
 
 ### Added

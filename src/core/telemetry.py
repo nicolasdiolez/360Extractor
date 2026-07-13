@@ -14,6 +14,11 @@ import os
 
 logger = logging.getLogger(__name__)
 
+_FFMPEG_INSTALL_HINT = (
+    "Install FFmpeg first (macOS: 'brew install ffmpeg', Windows: 'winget install ffmpeg', "
+    "Linux: 'sudo apt install ffmpeg') and make sure it is on your PATH."
+)
+
 class TelemetryHandler:
     def __init__(self, altitude_mode: str = 'absolute'):
         self.metadata = {}
@@ -28,10 +33,12 @@ class TelemetryHandler:
         """
         Validate GPS samples and return a clean, time-sorted list.
 
-        Drops samples with missing/non-numeric coordinates, NaN/Inf values, or
+        Drops samples with missing/non-numeric coordinates, NaN/Inf values,
         coordinates outside the valid ranges (lat in [-90, 90], lon in
-        [-180, 180]). Sorting by timestamp is required for the bisect-based
-        lookup in get_gps_at_time to be correct.
+        [-180, 180]), or the (0,0) "Null Island" placeholder emitted by devices
+        without a GPS fix (e.g. GoPro GPS5 before satellite lock). Sorting by
+        timestamp is required for the bisect-based lookup in get_gps_at_time
+        to be correct.
         """
         cleaned: List[Dict[str, float]] = []
         for s in samples or []:
@@ -46,6 +53,10 @@ class TelemetryHandler:
             if not all(math.isfinite(v) for v in (lat, lon, alt, ts)):
                 continue
             if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+                continue
+            # (0,0) is the "no GPS fix yet" placeholder on several devices;
+            # keeping it would geotag images at Null Island.
+            if abs(lat) < 1e-4 and abs(lon) < 1e-4:
                 continue
 
             cleaned.append({'lat': lat, 'lon': lon, 'alt': alt, 'timestamp': ts})
@@ -125,6 +136,9 @@ class TelemetryHandler:
             logger.info("No known telemetry stream found.")
             return False
             
+        except FileNotFoundError:
+            logger.error(f"ffprobe not found — telemetry extraction requires FFmpeg. {_FFMPEG_INSTALL_HINT}")
+            return False
         except subprocess.CalledProcessError as e:
             logger.error(f"FFprobe error: {e}")
             return False
@@ -155,6 +169,8 @@ class TelemetryHandler:
             else:
                 logger.warning("CAMM stream found but no GPS samples extracted.")
                 
+        except FileNotFoundError:
+            logger.error(f"ffmpeg not found — cannot extract the CAMM stream. {_FFMPEG_INSTALL_HINT}")
         except subprocess.CalledProcessError as e:
             logger.error(f"FFmpeg extraction failed for CAMM: {e}")
         except Exception as e:
@@ -181,6 +197,8 @@ class TelemetryHandler:
             self.gps_samples = self._sanitize_gps_samples(parser.parse(raw_data))
             logger.info(f"Extracted {len(self.gps_samples)} GPS samples.")
             
+        except FileNotFoundError:
+            logger.error(f"ffmpeg not found — cannot extract the GPMF stream. {_FFMPEG_INSTALL_HINT}")
         except subprocess.CalledProcessError as e:
             logger.error(f"FFmpeg extraction failed: {e}")
         except Exception as e:
@@ -210,6 +228,8 @@ class TelemetryHandler:
             else:
                 logger.warning("Subtitle stream found, but no GPS data extracted.")
                 
+        except FileNotFoundError:
+            logger.error(f"ffmpeg not found — cannot extract the SRT subtitle stream. {_FFMPEG_INSTALL_HINT}")
         except subprocess.CalledProcessError as e:
             logger.error(f"FFmpeg subtitle extraction failed: {e}")
         except Exception as e:

@@ -159,7 +159,9 @@ class ProcessingWorker(QObject):
                 if interval_unit == 'Frames':
                     interval = int(max(1, interval_value))
                 else: # Seconds
-                    interval = int(max(1, fps * interval_value))
+                    # Round instead of truncating: at 29.97 fps a 1s interval
+                    # means 30 frames, not 29 (which would drift over time).
+                    interval = max(1, round(fps * interval_value))
 
             # Geometry Settings
             out_res = job.resolution
@@ -192,7 +194,15 @@ class ProcessingWorker(QObject):
             # faces untouched. Useful when YOLO would otherwise mask people in
             # paintings/posters on the other faces. None/empty => all faces.
             mask_face_filter = normalize_mask_faces(job.settings.get('ai_mask_cameras', None))
-            if mask_face_filter:
+            if mask_face_filter and not is_360:
+                # Flat media has a single view named "flat" that face names like
+                # "Down" can never match, which would silently disable masking.
+                logger.warning(
+                    "Per-face masking scope is ignored for flat (non-360) media; "
+                    "AI masking applies to the whole frame."
+                )
+                mask_face_filter = None
+            elif mask_face_filter:
                 logger.info(f"AI masking restricted to faces: {sorted(mask_face_filter)}")
 
             # Interpolation Settings

@@ -25,9 +25,10 @@ python src/main.py --input <video_path> --output <output_dir> [options]
 | `--input`, `-i` | Path to input video/image file or directory. **(Required)** | - |
 | `--output`, `-o` | Path to output directory. | `./output` |
 | `--config` | Path to a JSON configuration file. | - |
+| `--version` | Print the application version and exit. | - |
 | `--flat` | Treat input as standard (non-360) media; disables equirectangular reprojection. | `False` |
 | `--interval` | Extraction interval in seconds. | `1.0` |
-| `--format` | Output image format (`jpg` or `png`). | `jpg` |
+| `--format` | Output image format (`jpg`, `png`, or `tiff`). | `jpg` |
 | `--camera-count` | Number of virtual cameras (2-36). | `6` |
 | `--active-cameras` | Comma-separated list of camera indices to extract (e.g., `0,2,4`). | All |
 | `--resolution` | Output image resolution (width/height). | `2048` |
@@ -38,7 +39,7 @@ python src/main.py --input <video_path> --output <output_dir> [options]
 | `--ai` | Alias for `--ai-mask` (for backward compatibility). | `False` |
 | `--ai-mask-cameras` | Restrict AI masking to these faces only, comma-separated (e.g. `Down` or `Back,Down`). Cube faces: `Front,Right,Back,Left,Up,Down`; ring/fibonacci: `View_0,View_1,…`. Empty = all faces. | All |
 | `--adaptive` | Enable intelligent keyframing (skip static scenes). | `False` |
-| `--motion-threshold` | Sensitivity for motion detection (0.0-100.0). Higher = needs more motion to extract. | `5.0` |
+| `--motion-threshold` | Motion threshold for adaptive keyframing (mean optical-flow magnitude between kept frames; useful range ≈ 0–10). Higher = needs more motion to extract. | `0.5` |
 | `--export-telemetry` | Extract GPS/IMU metadata and embed it into output images (EXIF). | `False` |
 | `--altitude-mode` | EXIF GPS altitude source for DJI clips that expose both: `absolute` (above sea level, best for RealityScan/COLMAP) or `relative` (above takeoff). | `absolute` |
 | `--naming-mode` | Naming convention: `realityscan`, `simple`, or `custom`. | `realityscan` |

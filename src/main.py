@@ -11,6 +11,7 @@ from ui.main_window import MainWindow
 from core.settings_manager import SettingsManager, build_settings
 from core.job import Job
 from core.processor import ProcessingWorker
+from core.version import APP_NAME, VERSION
 from utils.logger import logger
 
 # Try importing tqdm for progress bar
@@ -22,11 +23,12 @@ except ImportError:
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Application360 Video Extractor")
+    parser.add_argument("--version", action="version", version=f"{APP_NAME} {VERSION}")
     parser.add_argument("--config", type=str, help="Path to JSON configuration file")
     parser.add_argument("--input", "-i", type=str, help="Path to input video file or directory (CLI mode)")
     parser.add_argument("--output", "-o", type=str, help="Path to output directory (CLI mode)")
     parser.add_argument("--interval", type=float, help="Extraction interval in seconds (default: 1.0)")
-    parser.add_argument("--format", type=str, choices=['jpg', 'png'], help="Output image format (default: jpg)")
+    parser.add_argument("--format", type=str, choices=['jpg', 'png', 'tiff'], help="Output image format (default: jpg)")
     parser.add_argument("--ai", action="store_true", help="Enable AI masking (Legacy alias for --ai-mask)")
     parser.add_argument("--ai-mask", action="store_true", help="Enable AI masking (Generate Mask)")
     parser.add_argument("--ai-skip", action="store_true", help="Enable AI frame skipping (Skip Frame)")
@@ -77,20 +79,6 @@ def run_cli(args):
     if args.config:
         config = load_config(args.config)
         logger.info(f"Loaded configuration from {args.config}")
-
-    # Helper to get value from args (priority) or config or default
-    def get_arg(arg_name, config_name, default=None):
-        val = getattr(args, arg_name)
-        if val is not None: # Explicitly set in CLI
-            # Handle boolean flags specifically if needed, but argparse defaults store_true to False
-            # If the user didn't set --ai, it's False. We only want to override if True? 
-            # Actually, standard behavior is CLI overrides config. 
-            # But for flags that default to False, we check if they are True.
-            if arg_name == 'ai' and val is False:
-                 # Check config
-                 return config.get(config_name, default)
-            return val
-        return config.get(config_name, default)
 
     # Determine Input
     input_path = args.input or config.get('input')
@@ -211,6 +199,11 @@ def run_cli(args):
     except Exception as e:
         if TQDM_AVAILABLE: pbar.close()
         logger.error(f"An unexpected error occurred: {e}")
+        sys.exit(1)
+
+    # Propagate job failures to the shell so batch automation can detect them.
+    if worker.error_count > 0:
+        logger.error(f"{worker.error_count} of {len(jobs)} job(s) failed.")
         sys.exit(1)
 
 def main():

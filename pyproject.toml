@@ -4,7 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "360-extractor-pro"
-version = "3.1.0"
+# Version is single-sourced from src/core/version.py (see [tool.setuptools.dynamic]).
+dynamic = ["version"]
 description = "Desktop and CLI tool to preprocess 360 and standard video/images into rectilinear datasets for photogrammetry and Gaussian Splatting, with AI operator removal."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -41,6 +42,9 @@ Changelog = "https://github.com/nicolasdiolez/360Extractor/blob/main/CHANGELOG.m
 package-dir = { "" = "src" }
 # main.py is a top-level module (the console entry point), not a package.
 py-modules = ["main"]
+
+[tool.setuptools.dynamic]
+version = { attr = "core.version.VERSION" }
 
 [tool.setuptools.packages.find]
 where = ["src"]

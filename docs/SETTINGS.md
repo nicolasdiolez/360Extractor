@@ -106,8 +106,8 @@ the JSON config, and the CLI; the config file accepts exactly these names.
 | `ai_detect_plants` | `false` | Include the plant classes. |
 | `ai_custom_classes` | `""` | Comma-separated extra class names. |
 | `ai_mask_cameras` | *(all)* | Restrict masking to these faces only, e.g. `["Down"]` or `["Back","Down"]`. Cube faces: `Front,Right,Back,Left,Up,Down`; ring/fibonacci: `View_0,View_1,…`. Empty/omitted = mask every face. |
-| `quality` | `95` | JPEG quality (1–100); ignored for PNG. |
-| `output_format` | `"jpg"` | `jpg` or `png`. |
+| `quality` | `95` | JPEG quality (1–100); ignored for PNG/TIFF. |
+| `output_format` | `"jpg"` | `jpg`, `png`, or `tiff`. |
 | `custom_output_dir` | `""` | Overrides the default per-video output folder. |
 | `interval_value` | `1.0` | Sampling interval (paired with `interval_unit`). |
 | `interval_unit` | `"Seconds"` | `Seconds` or `Frames`. |
