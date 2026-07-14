@@ -803,6 +803,13 @@ class MainWindow(QMainWindow):
         self.exif_intrinsics_toggle.toggled.connect(self.on_setting_changed)
         exp_section.addWidget(self.exif_intrinsics_toggle)
 
+        # COLMAP priors export (exact intrinsics + rig rotations + script)
+        self.colmap_toggle = ToggleSwitchWithDescription(
+            "COLMAP Priors", "Write colmap/ folder: exact intrinsics, rig rotations, script"
+        )
+        self.colmap_toggle.toggled.connect(self.on_setting_changed)
+        exp_section.addWidget(self.colmap_toggle)
+
         content_layout.addWidget(exp_section)
         content_layout.addStretch()
         
@@ -918,6 +925,7 @@ class MainWindow(QMainWindow):
             'export_telemetry': self.telemetry_toggle.isChecked(),
             'altitude_mode': self.altitude_combo.currentData(),
             'exif_intrinsics': self.exif_intrinsics_toggle.isChecked(),
+            'export_colmap': self.colmap_toggle.isChecked(),
             'interpolation_mode': 'lanczos' if self.lanczos_toggle.isChecked() else 'linear',
             'feather_mask': self.ai_feather_toggle.isChecked(),
             'ai_mode': self.ai_combo.currentText(),
@@ -958,7 +966,7 @@ class MainWindow(QMainWindow):
             self.motion_threshold_spin, self.naming_mode_combo,
             self.image_pattern_input, self.mask_pattern_input,
             self.lanczos_toggle, self.ai_feather_toggle, self.input_360_toggle,
-            self.altitude_combo, self.exif_intrinsics_toggle
+            self.altitude_combo, self.exif_intrinsics_toggle, self.colmap_toggle
         ]
         widgets += list(self.mask_face_checks.values())
         for w in widgets:
@@ -1023,6 +1031,7 @@ class MainWindow(QMainWindow):
         
         self.telemetry_toggle.setChecked(settings.get('export_telemetry', False))
         self.exif_intrinsics_toggle.setChecked(settings.get('exif_intrinsics', True))
+        self.colmap_toggle.setChecked(settings.get('export_colmap', False))
 
         alt_mode = settings.get('altitude_mode', 'absolute')
         idx = self.altitude_combo.findData(alt_mode)

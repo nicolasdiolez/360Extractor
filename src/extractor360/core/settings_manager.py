@@ -39,6 +39,7 @@ class SettingsManager:
         "export_telemetry": False,
         "altitude_mode": "absolute",
         "exif_intrinsics": True,
+        "export_colmap": False,
         "interpolation_mode": "linear",
         "feather_mask": False,
         "naming_mode": "realityscan",
@@ -173,6 +174,10 @@ def build_settings(args, config, active_cameras=None, output_path=""):
     # direction) is on by default; the flag opts out.
     if getattr(args, 'no_exif_intrinsics', False):
         settings['exif_intrinsics'] = False
+
+    # COLMAP priors folder (exact intrinsics + rig rotations + script).
+    if getattr(args, 'export_colmap', False):
+        settings['export_colmap'] = True
 
     # --interval is expressed in seconds.
     if args.interval is not None:

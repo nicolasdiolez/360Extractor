@@ -44,6 +44,7 @@ def parse_arguments():
     parser.add_argument("--motion-threshold", type=float, help="Motion threshold for adaptive interval (default: 0.5)")
     parser.add_argument("--export-telemetry", action="store_true", help="Export GPS/IMU metadata (if available)")
     parser.add_argument("--no-exif-intrinsics", action="store_true", help="Do not embed calibration EXIF (focal from FOV, Make/Model, capture time, view direction) into output images")
+    parser.add_argument("--export-colmap", action="store_true", help="Write a colmap/ folder with the exact camera intrinsics, rig rotations and a turnkey reconstruction script (360 input only)")
     parser.add_argument("--altitude-mode", type=str, choices=['absolute', 'relative'], help="EXIF altitude source for DJI clips: 'absolute' (above sea level, default) or 'relative' (above takeoff)")
     
     # AI Targets

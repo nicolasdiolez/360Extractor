@@ -121,6 +121,7 @@ the JSON config, and the CLI; the config file accepts exactly these names.
 | `export_telemetry` | `false` | Extract GPS/IMU and embed GPS in EXIF. |
 | `altitude_mode` | `"absolute"` | `absolute` or `relative` (DJI clips with both altitudes). |
 | `exif_intrinsics` | `true` | Embed calibration EXIF on every image: focal length derived from the FOV (`FocalLength` + `FocalLengthIn35mmFilm`), a stable `Make`/`Model` per rig so tools group calibration, per-frame `DateTimeOriginal`, and — with telemetry — the absolute view direction (`GPSImgDirection` = GPS travel heading + view yaw). Disable with `--no-exif-intrinsics`. |
+| `export_colmap` | `false` | Write a `colmap/` priors folder next to the images: exact `cameras.txt` (shared PINHOLE), `rig_rotations.json` (exact cam-from-rig quaternions per view), turnkey `reconstruct.sh` (COLMAP with intrinsics fixed during bundle adjustment) and a README. 360 input only. (CLI: `--export-colmap`.) |
 | `interpolation_mode` | `"linear"` | Reprojection interpolation: `linear` or `lanczos`. |
 | `feather_mask` | `false` | Soften mask edges instead of a hard binary mask. |
 | `naming_mode` | `"realityscan"` | `realityscan`, `simple`, or `custom`. |

@@ -48,6 +48,7 @@ python src/main.py --input <video_path> --output <output_dir> [options]
 | `--export-telemetry` | Extract GPS/IMU metadata and embed it into output images (EXIF). | `False` |
 | `--altitude-mode` | EXIF GPS altitude source for DJI clips that expose both: `absolute` (above sea level, best for RealityScan/COLMAP) or `relative` (above takeoff). | `absolute` |
 | `--no-exif-intrinsics` | Do not embed calibration EXIF (focal from FOV, `Make`/`Model`, capture time, view direction). Embedded by default — RealityScan/Metashape/COLMAP use it to bootstrap and group camera calibration. | off (EXIF embedded) |
+| `--export-colmap` | Write a `colmap/` folder in the output: exact `cameras.txt` (PINHOLE), `rig_rotations.json` (exact cam-from-rig quaternions), and a turnkey `reconstruct.sh` that runs COLMAP with the intrinsics fixed. 360 input only. | `False` |
 | `--naming-mode` | Naming convention: `realityscan`, `simple`, or `custom`. | `realityscan` |
 | `--image-pattern` | Custom image filename pattern (e.g., `{filename}_{frame}`). | - |
 | `--mask-pattern` | Custom mask filename pattern (e.g., `{image_name}_mask`). | - |

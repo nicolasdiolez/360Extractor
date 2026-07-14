@@ -7,7 +7,7 @@ import concurrent.futures
 from collections import deque
 from datetime import datetime, timedelta, timezone
 
-from extractor360.core import exif_writer
+from extractor360.core import colmap_export, exif_writer
 from extractor360.core.events import Event
 from extractor360.core.geometry import GeometryProcessor
 from extractor360.core.motion_detector import MotionDetector
@@ -661,6 +661,19 @@ class ProcessingWorker:
 
         if skipped_blur_count > 0:
             logger.info(f"Total blurry views skipped for {filename}: {skipped_blur_count}")
+
+        # COLMAP priors (I1-N2): exact shared intrinsics + exact cam-from-rig
+        # rotations + a turnkey reconstruction script.
+        if job.settings.get('export_colmap', False):
+            if is_360:
+                colmap_export.write_colmap_export(
+                    output_dir, views, active_view_names, fov, out_res
+                )
+            else:
+                logger.warning(
+                    "COLMAP export skipped: flat (non-360) media has no virtual rig "
+                    "with known intrinsics."
+                )
 
         # Per-job manifest: reproducibility + support ("why only N images?").
         duration_seconds = (total_frames_video / fps) if fps else 0.0
