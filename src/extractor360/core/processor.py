@@ -5,33 +5,41 @@ import json
 import time
 import concurrent.futures
 from collections import deque
-from datetime import datetime, timezone
-from PySide6.QtCore import QObject, Signal
+from datetime import datetime, timedelta, timezone
 
-from core.geometry import GeometryProcessor
-from core.ai_model import AIService, resolve_ai_model_name, DEFAULT_AI_MODEL
-from core.motion_detector import MotionDetector
-from core.telemetry import TelemetryHandler
-from core.ai_classes import PRESETS, parse_custom_classes
-from core.settings_manager import normalize_mask_faces
-from core.version import APP_NAME, VERSION
-from utils.file_manager import FileManager
-from utils.image_utils import ImageUtils
-from utils.logger import logger
+from extractor360.core import colmap_export, exif_writer
+from extractor360.core.events import Event
+from extractor360.core.geometry import GeometryProcessor
+from extractor360.core.motion_detector import MotionDetector
+from extractor360.core.telemetry import TelemetryHandler
+from extractor360.core.ai_classes import (
+    PRESETS, parse_custom_classes, resolve_ai_model_name, DEFAULT_AI_MODEL,
+)
+from extractor360.core.settings_manager import normalize_mask_faces
+from extractor360.core.version import APP_NAME, VERSION
+from extractor360.utils.file_manager import FileManager
+from extractor360.utils.image_utils import ImageUtils
+from extractor360.utils.logger import logger
 
-class ProcessingWorker(QObject):
+class ProcessingWorker:
     """
-    Worker class to handle video processing in a separate thread.
+    Qt-free worker that processes a list of jobs.
+
+    Progress is reported through plain callback events (see
+    ``extractor360.core.events``): the CLI connects functions directly, the GUI
+    bridges them to Qt signals via ``extractor360.ui.workers.ProcessingBridge``.
+    Run it on whatever thread suits the caller (the GUI uses a plain
+    ``threading.Thread``; the CLI calls ``run()`` synchronously).
     """
-    progress_updated = Signal(int, str) # value (0-100), message
-    job_started = Signal(int)
-    job_finished = Signal(int)
-    job_error = Signal(int, str) # job index, error message
-    finished = Signal()
-    error_occurred = Signal(str)
 
     def __init__(self, jobs):
-        super().__init__()
+        self.progress_updated = Event()  # (value 0-100, message)
+        self.job_started = Event()       # (job index)
+        self.job_finished = Event()      # (job index)
+        self.job_error = Event()         # (job index, error message)
+        self.finished = Event()          # ()
+        self.error_occurred = Event()    # (error message)
+
         self.jobs = jobs
         self.is_running = True
         self.error_count = 0
@@ -56,6 +64,9 @@ class ProcessingWorker(QObject):
         if self.ai_service is not None and self._ai_model_name == model_name:
             return self.ai_service
         self.progress_updated.emit(0, f"Loading AI model ({model_name})…")
+        # Heavy import (torch/ultralytics) done lazily so the core stays
+        # importable — and AI-less jobs runnable — without the AI stack.
+        from extractor360.core.ai_model import AIService
         self.ai_service = AIService(model_name)
         self._ai_model_name = model_name
         return self.ai_service
@@ -289,10 +300,31 @@ class ProcessingWorker(QObject):
             # Telemetry Setup
             telemetry_handler = None
             current_gps = None
+            current_heading = None
             if job.export_telemetry:
                 telemetry_handler = TelemetryHandler(altitude_mode=job.altitude_mode)
                 logger.info(f"Extracting telemetry for {filename}...")
                 telemetry_handler.extract_metadata(file_path)
+
+            # EXIF enrichment (I1): the virtual cameras have exactly known
+            # intrinsics, so write them (focal from FOV + a stable Make/Model
+            # per rig) plus per-frame capture time on every image —
+            # photogrammetry tools group and bootstrap calibration from these.
+            exif_enabled = job.settings.get('exif_intrinsics', True)
+            camera_model_label = f"Virtual Pinhole {fov}deg" if is_360 else None
+
+            # Approximate capture start: the file mtime is ~the end of the
+            # recording, so subtract the clip duration. Per-frame times then
+            # keep the true spacing, which is what tools use for ordering.
+            capture_start = None
+            try:
+                mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
+                if is_image or fps <= 0:
+                    capture_start = mtime
+                else:
+                    capture_start = mtime - timedelta(seconds=total_frames_video / fps)
+            except OSError:
+                capture_start = None
 
             # Generate views and reprojection maps (only for 360 input).
             maps = {}
@@ -326,6 +358,9 @@ class ProcessingWorker(QObject):
                 self.progress_updated.emit(0, f"Processing {filename} (flat / non-360)...")
 
             active_view_names = set(maps.keys()) if is_360 else {"flat"}
+            # Yaw of each view, used to turn the GPS heading (direction of
+            # travel) into an absolute per-view direction (GPSImgDirection).
+            view_yaws = {name: yaw for name, yaw, _p, _r in views}
 
             # Nadir mask only makes sense on a downward-looking "Down" face.
             if nadir_mask_enabled and not any(n.lower() == 'down' for n in active_view_names):
@@ -368,10 +403,16 @@ class ProcessingWorker(QObject):
 
                 # Reached only on extraction points (or the single image frame).
                 if frame_idx % interval == 0:
-                    # Update GPS for current time
+                    frame_time = frame_idx / fps if fps > 0 else 0.0
+
+                    # Update GPS fix and travel heading for the current time
                     if telemetry_handler:
-                        current_time = frame_idx / fps if fps > 0 else 0
-                        current_gps = telemetry_handler.get_gps_at_time(current_time)
+                        current_gps = telemetry_handler.get_gps_at_time(frame_time)
+                        current_heading = telemetry_handler.get_heading_at_time(frame_time)
+
+                    frame_dt = None
+                    if capture_start is not None:
+                        frame_dt = capture_start + timedelta(seconds=frame_time)
 
                     # Progress calculation (per job 0-100%)
                     current_job_progress = int((frame_idx / total_frames_video) * 100)
@@ -531,11 +572,11 @@ class ProcessingWorker(QObject):
                     img_pattern = job.settings.get('image_pattern', '{filename}_frame{frame}_{camera}')
                     mask_pattern = job.settings.get('mask_pattern', '{filename}_frame{frame}_{camera}_mask')
 
-                    def io_save_task(save_path, final_img, params, gps, handler, mask_path, mask_img):
-                        if gps and handler:
-                            # Single write: encode in memory and embed the GPS EXIF
-                            # straight into the bytes (no write-then-reload-then-rewrite).
-                            handler.save_image_with_gps(save_path, final_img, params, *gps)
+                    def io_save_task(save_path, final_img, params, exif_bytes, mask_path, mask_img):
+                        if exif_bytes is not None:
+                            # Single write: encode in memory and embed the EXIF
+                            # straight into the bytes (no write-reload-rewrite).
+                            exif_writer.save_image_with_exif(save_path, final_img, params, exif_bytes)
                         else:
                             FileManager.save_image(save_path, final_img, params)
                         if mask_img is not None and isinstance(mask_img, np.ndarray):
@@ -577,6 +618,22 @@ class ProcessingWorker(QObject):
                         full_save_path = os.path.join(output_dir, save_name)
                         full_mask_path = os.path.join(output_dir, mask_name)
 
+                        # Per-view EXIF: intrinsics + capture time (when
+                        # enrichment is on) and GPS fix + absolute direction
+                        # (heading of travel + this view's yaw) when available.
+                        exif_bytes = None
+                        if exif_enabled or current_gps is not None:
+                            view_heading = None
+                            if current_heading is not None:
+                                view_heading = (current_heading + view_yaws.get(name, 0.0)) % 360.0
+                            exif_bytes = exif_writer.build_exif_bytes(
+                                fov_deg=fov if (exif_enabled and is_360) else None,
+                                capture_dt=frame_dt if exif_enabled else None,
+                                gps=current_gps,
+                                heading_deg=view_heading,
+                                camera_model=camera_model_label if exif_enabled else None,
+                            )
+
                         # Submit to thread pool (with safety check for shutdown)
                         if not self.is_running:
                             break
@@ -584,7 +641,7 @@ class ProcessingWorker(QObject):
                         try:
                             futures.append(self.io_pool.submit(
                                 io_save_task, full_save_path, final_img, save_params,
-                                current_gps, telemetry_handler, full_mask_path, mask_or_skip
+                                exif_bytes, full_mask_path, mask_or_skip
                             ))
                             images_written += 1
                         except RuntimeError:
@@ -604,6 +661,19 @@ class ProcessingWorker(QObject):
 
         if skipped_blur_count > 0:
             logger.info(f"Total blurry views skipped for {filename}: {skipped_blur_count}")
+
+        # COLMAP priors (I1-N2): exact shared intrinsics + exact cam-from-rig
+        # rotations + a turnkey reconstruction script.
+        if job.settings.get('export_colmap', False):
+            if is_360:
+                colmap_export.write_colmap_export(
+                    output_dir, views, active_view_names, fov, out_res
+                )
+            else:
+                logger.warning(
+                    "COLMAP export skipped: flat (non-360) media has no virtual rig "
+                    "with known intrinsics."
+                )
 
         # Per-job manifest: reproducibility + support ("why only N images?").
         duration_seconds = (total_frames_video / fps) if fps else 0.0

@@ -6,7 +6,7 @@ import sys
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from utils.gpmf_parser import GPMFParser
+from extractor360.utils.gpmf_parser import GPMFParser
 
 class TestGPMFParser(unittest.TestCase):
     def pack_klv(self, key: str, type_char: str, structure_size: int, count: int, data_bytes: bytes) -> bytes:

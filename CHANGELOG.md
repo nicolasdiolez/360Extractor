@@ -5,6 +5,45 @@ All notable changes to 360 Extractor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — v4.0 foundation
+
+### Changed
+- **BREAKING (imports only): single-package layout.** The flat top-level
+  packages `core`/`ui`/`utils` and the `main` module moved into one
+  `extractor360` package, so a pip install can no longer collide with other
+  packages (prerequisite for PyPI). All documented invocations still work:
+  `python3 src/main.py` (launcher shim), the `360extractor` entry point, and
+  the new `python -m extractor360`.
+- **Qt-free processing core.** `ProcessingWorker` now reports progress through
+  plain callback events; the GUI bridges them to Qt signals
+  (`extractor360.ui.workers.ProcessingBridge`) and runs the worker on a plain
+  Python thread. The CLI no longer creates a `QCoreApplication`, never imports
+  Qt, and only imports the AI stack (torch/ultralytics) when an AI mode is
+  enabled — CLI-only server installs can use `opencv-python-headless` and skip
+  display libraries entirely.
+- **Distribution renamed to `360-extractor`** (was `360-extractor-pro`): the
+  app has always called itself "360 Extractor"; the pip distribution name now
+  matches, before any PyPI publication makes it permanent. The `360extractor`
+  console entry point is unchanged.
+
+### Added
+- **Calibration EXIF on every image** (`exif_intrinsics`, default on;
+  `--no-exif-intrinsics` to opt out): focal length derived from the FOV
+  (`FocalLength` + `FocalLengthIn35mmFilm`, e.g. FOV 90° → 18 mm), a stable
+  `Make`/`Model` per rig so photogrammetry tools group calibration across all
+  views, `Software`, per-frame `DateTimeOriginal` (+ms), and — when telemetry
+  is enabled and the rig is moving — `GPSImgDirection` (GPS travel heading +
+  view yaw, true-north referenced).
+- **COLMAP priors export** (`export_colmap` / `--export-colmap` / GUI toggle):
+  writes a `colmap/` folder with the exact shared PINHOLE `cameras.txt`, exact
+  per-view cam-from-rig quaternions (`rig_rotations.json`), a turnkey
+  `reconstruct.sh` running COLMAP with the intrinsics fixed during bundle
+  adjustment, and a README (incl. GLOMAP note and COLMAP mask-naming tip).
+- **Core e2e tests in CI**: the extraction pipeline (cube + nadir + manifest,
+  flat passthrough) now runs in CI on a synthetic 360 video — previously the
+  processor could not even be imported there — plus a guard asserting the
+  core imports without PySide6/torch.
+
 ## [3.3.0] - 2026-07-13
 
 Performance & comfort release (audit sprint "v3.3"). Faster extraction, a

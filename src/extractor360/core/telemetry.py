@@ -4,14 +4,14 @@ import logging
 import bisect
 import math
 from typing import Optional, Tuple, List, Dict
-import cv2
 import numpy as np
 import piexif
 from PIL import Image
-from utils.gpmf_parser import GPMFParser
-from utils.srt_parser import parse_srt_data
-from utils.camm_parser import parse_camm_data
-from utils.gpx_parser import parse_gpx_data
+from extractor360.core import exif_writer
+from extractor360.utils.gpmf_parser import GPMFParser
+from extractor360.utils.srt_parser import parse_srt_data
+from extractor360.utils.camm_parser import parse_camm_data
+from extractor360.utils.gpx_parser import parse_gpx_data
 import os
 
 logger = logging.getLogger(__name__)
@@ -292,69 +292,53 @@ class TelemetryHandler:
         return (lat, lon, alt)
 
     @staticmethod
+    def _bearing_deg(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """Initial bearing from point 1 to point 2, degrees from true north."""
+        phi1, phi2 = math.radians(lat1), math.radians(lat2)
+        dlon = math.radians(lon2 - lon1)
+        x = math.sin(dlon) * math.cos(phi2)
+        y = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(dlon)
+        return math.degrees(math.atan2(x, y)) % 360.0
+
+    def get_heading_at_time(self, timestamp: float, window: float = 0.5,
+                            min_distance_m: float = 0.5) -> Optional[float]:
+        """Direction of travel (degrees from true north) at a video timestamp.
+
+        Derived from the GPS track just before/after ``timestamp``. Returns
+        ``None`` when there is no GPS or the rig is (nearly) stationary within
+        the window — a bearing computed from GPS noise would be misleading.
+        """
+        if not self.has_gps or len(self.gps_samples) < 2:
+            return None
+        p1 = self.get_gps_at_time(max(0.0, timestamp - window))
+        p2 = self.get_gps_at_time(timestamp + window)
+        if p1 is None or p2 is None:
+            return None
+        lat1, lon1, _ = p1
+        lat2, lon2, _ = p2
+        # Local flat-earth distance approximation, fine at this scale.
+        mid = math.radians((lat1 + lat2) / 2.0)
+        dist_m = math.hypot((lat2 - lat1) * 111320.0,
+                            (lon2 - lon1) * 111320.0 * math.cos(mid))
+        if dist_m < min_distance_m:
+            return None
+        return self._bearing_deg(lat1, lon1, lat2, lon2)
+
+    @staticmethod
     def build_gps_exif_bytes(lat: float, lon: float, alt: float = 0.0) -> bytes:
-        """Build EXIF bytes carrying a GPS fix, ready for piexif.insert / Pillow."""
-
-        def to_rational(number):
-            return (int(number * 1000000), 1000000)
-
-        def to_deg_min_sec(value):
-            abs_value = abs(value)
-            deg = int(abs_value)
-            min_val = (abs_value - deg) * 60
-            sec = (min_val - int(min_val)) * 60
-            return (to_rational(deg), to_rational(int(min_val)), to_rational(sec))
-
-        # GPSAltitude is an UNSIGNED rational; sign is carried by GPSAltitudeRef
-        # (0 = above sea level, 1 = below). Use abs() so negative altitudes
-        # (e.g. below-sea-level abs_alt) don't produce an invalid rational.
-        gps_ifd = {
-            piexif.GPSIFD.GPSLatitudeRef: b'N' if lat >= 0 else b'S',
-            piexif.GPSIFD.GPSLatitude: to_deg_min_sec(lat),
-            piexif.GPSIFD.GPSLongitudeRef: b'E' if lon >= 0 else b'W',
-            piexif.GPSIFD.GPSLongitude: to_deg_min_sec(lon),
-            piexif.GPSIFD.GPSAltitudeRef: 0 if alt >= 0 else 1,
-            piexif.GPSIFD.GPSAltitude: to_rational(abs(alt)),
-        }
-        return piexif.dump({"0th": {}, "Exif": {}, "GPS": gps_ifd, "1st": {}, "thumbnail": None})
+        """Build EXIF bytes carrying a GPS fix. Delegates to the EXIF writer."""
+        return exif_writer.build_exif_bytes(gps=(lat, lon, alt))
 
     def save_image_with_gps(self, image_path: str, image: "np.ndarray", params, lat: float,
                             lon: float, alt: float = 0.0) -> bool:
         """Write ``image`` once with GPS EXIF embedded (no write-reload-rewrite).
 
-        - JPEG: encode with ``cv2.imencode`` (honoring ``params``, e.g. quality)
-          and insert the EXIF straight into the encoded bytes — no second JPEG
-          pass, so no recompression.
-        - PNG/TIFF: build the image with Pillow directly from the array and save
-          once with EXIF. Pillow re-encodes anyway (as the old code did), and
-          going straight from the array avoids a fragile cv2->Pillow TIFF
-          round-trip that could silently drop the GPS IFD.
-
-        Falls back to a plain write (no geotag) if anything goes wrong.
+        Thin wrapper over :mod:`extractor360.core.exif_writer`, kept for
+        callers that only care about the geotag; the processor builds richer
+        EXIF (intrinsics, capture time, view direction) itself.
         """
-        ext = os.path.splitext(image_path)[1].lower()
-        try:
-            exif_bytes = self.build_gps_exif_bytes(lat, lon, alt)
-
-            if ext in ('.jpg', '.jpeg'):
-                ok, buf = cv2.imencode(ext, image, params or [])
-                if not ok:
-                    raise ValueError(f"cv2.imencode failed for {ext}")
-                # piexif writes the EXIF-tagged JPEG straight to disk.
-                piexif.insert(exif_bytes, buf.tobytes(), image_path)
-            else:
-                # PNG/TIFF are lossless, so encoding from the array preserves pixels.
-                rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) if image.ndim == 3 else image
-                Image.fromarray(rgb).save(image_path, exif=exif_bytes)
-            return True
-        except Exception as e:
-            logger.error(f"Error writing {image_path} with GPS EXIF: {type(e).__name__} - {e}")
-            # Best-effort fallback: at least persist the image without geotag.
-            try:
-                cv2.imwrite(image_path, image, params or [])
-            except Exception:
-                pass
-            return False
+        exif_bytes = self.build_gps_exif_bytes(lat, lon, alt)
+        return exif_writer.save_image_with_exif(image_path, image, params, exif_bytes)
 
     def embed_exif(self, image_path: str, lat: float, lon: float, alt: float = 0.0) -> bool:
         """

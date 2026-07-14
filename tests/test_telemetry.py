@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image
 from PIL.ExifTags import IFD
 
-from core.telemetry import TelemetryHandler
+from extractor360.core.telemetry import TelemetryHandler
 
 
 def _sample(lat, lon, alt=0.0, ts=0.0):

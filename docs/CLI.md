@@ -6,6 +6,8 @@ This document provides detailed information about using 360 Extractor in headles
 
 Run the application in headless mode by providing the `--input` argument or a configuration file.
 
+The CLI is fully headless: it never loads Qt, and the AI stack (torch/ultralytics) is only imported when an AI mode is actually enabled. On servers you can install `opencv-python-headless` instead of `opencv-python` to avoid needing system OpenGL libraries.
+
 > **Note on Flags:** Boolean flags (like `--ai-mask`, `--ai-skip`, `--adaptive`, `--export-telemetry`) are toggles. Including them enables the feature; they do not take a value (e.g., use `--ai-mask`, not `--ai-mask true`).
 
 ## Visual Progress
@@ -45,6 +47,8 @@ python src/main.py --input <video_path> --output <output_dir> [options]
 | `--motion-threshold` | Motion threshold for adaptive keyframing (mean optical-flow magnitude between kept frames; useful range ≈ 0–10). Higher = needs more motion to extract. | `0.5` |
 | `--export-telemetry` | Extract GPS/IMU metadata and embed it into output images (EXIF). | `False` |
 | `--altitude-mode` | EXIF GPS altitude source for DJI clips that expose both: `absolute` (above sea level, best for RealityScan/COLMAP) or `relative` (above takeoff). | `absolute` |
+| `--no-exif-intrinsics` | Do not embed calibration EXIF (focal from FOV, `Make`/`Model`, capture time, view direction). Embedded by default — RealityScan/Metashape/COLMAP use it to bootstrap and group camera calibration. | off (EXIF embedded) |
+| `--export-colmap` | Write a `colmap/` folder in the output: exact `cameras.txt` (PINHOLE), `rig_rotations.json` (exact cam-from-rig quaternions), and a turnkey `reconstruct.sh` that runs COLMAP with the intrinsics fixed. 360 input only. | `False` |
 | `--naming-mode` | Naming convention: `realityscan`, `simple`, or `custom`. | `realityscan` |
 | `--image-pattern` | Custom image filename pattern (e.g., `{filename}_{frame}`). | - |
 | `--mask-pattern` | Custom mask filename pattern (e.g., `{image_name}_mask`). | - |

@@ -3,9 +3,9 @@ from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QSizePolicy, QFrame,
 from PySide6.QtCore import Qt, QRunnable, QThreadPool, QObject, Signal, Slot, QTimer
 from PySide6.QtGui import QImage, QPixmap
 
-from core.geometry import GeometryProcessor
-from utils.image_utils import ImageUtils
-from ui.icons import get_pixmap
+from extractor360.core.geometry import GeometryProcessor
+from extractor360.utils.image_utils import ImageUtils
+from extractor360.ui.icons import get_pixmap
 
 class WorkerSignals(QObject):
     """

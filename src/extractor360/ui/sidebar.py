@@ -4,8 +4,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, QSize
 
-from core.version import VERSION
-from ui.icons import get_icon
+from extractor360.core.version import VERSION
+from extractor360.ui.icons import get_icon
 
 class SidebarButton(QPushButton):
     """A styled sidebar navigation button with premium hover effects."""

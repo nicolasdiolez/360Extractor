@@ -1,7 +1,6 @@
 import cv2
-from PySide6.QtCore import QObject, Signal
-from core.geometry import GeometryProcessor
-from utils.image_utils import ImageUtils
+from extractor360.core.geometry import GeometryProcessor
+from extractor360.utils.image_utils import ImageUtils
 
 class BlurAnalyzer:
     @staticmethod
@@ -92,18 +91,5 @@ class BlurAnalyzer:
             'details': details
         }
 
-class BlurAnalysisWorker(QObject):
-    finished = Signal(dict)
-    error = Signal(str)
-
-    def __init__(self, video_path, settings):
-        super().__init__()
-        self.video_path = video_path
-        self.settings = settings
-
-    def run(self):
-        try:
-            result = BlurAnalyzer.analyze_sample(self.video_path, self.settings)
-            self.finished.emit(result)
-        except Exception as e:
-            self.error.emit(str(e))
+# The Qt worker wrapper (BlurAnalysisWorker) lives in extractor360.ui.workers:
+# the analysis itself is pure and must stay importable without Qt.

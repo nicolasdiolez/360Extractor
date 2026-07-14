@@ -12,8 +12,8 @@ import sys
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from utils.srt_parser import parse_srt_data
-from utils.camm_parser import parse_camm_data
+from extractor360.utils.srt_parser import parse_srt_data
+from extractor360.utils.camm_parser import parse_camm_data
 
 
 class TestSRTParser(unittest.TestCase):
