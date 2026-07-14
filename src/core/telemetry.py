@@ -4,6 +4,8 @@ import logging
 import bisect
 import math
 from typing import Optional, Tuple, List, Dict
+import cv2
+import numpy as np
 import piexif
 from PIL import Image
 from utils.gpmf_parser import GPMFParser
@@ -13,6 +15,11 @@ from utils.gpx_parser import parse_gpx_data
 import os
 
 logger = logging.getLogger(__name__)
+
+_FFMPEG_INSTALL_HINT = (
+    "Install FFmpeg first (macOS: 'brew install ffmpeg', Windows: 'winget install ffmpeg', "
+    "Linux: 'sudo apt install ffmpeg') and make sure it is on your PATH."
+)
 
 class TelemetryHandler:
     def __init__(self, altitude_mode: str = 'absolute'):
@@ -28,10 +35,12 @@ class TelemetryHandler:
         """
         Validate GPS samples and return a clean, time-sorted list.
 
-        Drops samples with missing/non-numeric coordinates, NaN/Inf values, or
+        Drops samples with missing/non-numeric coordinates, NaN/Inf values,
         coordinates outside the valid ranges (lat in [-90, 90], lon in
-        [-180, 180]). Sorting by timestamp is required for the bisect-based
-        lookup in get_gps_at_time to be correct.
+        [-180, 180]), or the (0,0) "Null Island" placeholder emitted by devices
+        without a GPS fix (e.g. GoPro GPS5 before satellite lock). Sorting by
+        timestamp is required for the bisect-based lookup in get_gps_at_time
+        to be correct.
         """
         cleaned: List[Dict[str, float]] = []
         for s in samples or []:
@@ -46,6 +55,10 @@ class TelemetryHandler:
             if not all(math.isfinite(v) for v in (lat, lon, alt, ts)):
                 continue
             if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+                continue
+            # (0,0) is the "no GPS fix yet" placeholder on several devices;
+            # keeping it would geotag images at Null Island.
+            if abs(lat) < 1e-4 and abs(lon) < 1e-4:
                 continue
 
             cleaned.append({'lat': lat, 'lon': lon, 'alt': alt, 'timestamp': ts})
@@ -125,6 +138,9 @@ class TelemetryHandler:
             logger.info("No known telemetry stream found.")
             return False
             
+        except FileNotFoundError:
+            logger.error(f"ffprobe not found — telemetry extraction requires FFmpeg. {_FFMPEG_INSTALL_HINT}")
+            return False
         except subprocess.CalledProcessError as e:
             logger.error(f"FFprobe error: {e}")
             return False
@@ -155,6 +171,8 @@ class TelemetryHandler:
             else:
                 logger.warning("CAMM stream found but no GPS samples extracted.")
                 
+        except FileNotFoundError:
+            logger.error(f"ffmpeg not found — cannot extract the CAMM stream. {_FFMPEG_INSTALL_HINT}")
         except subprocess.CalledProcessError as e:
             logger.error(f"FFmpeg extraction failed for CAMM: {e}")
         except Exception as e:
@@ -181,6 +199,8 @@ class TelemetryHandler:
             self.gps_samples = self._sanitize_gps_samples(parser.parse(raw_data))
             logger.info(f"Extracted {len(self.gps_samples)} GPS samples.")
             
+        except FileNotFoundError:
+            logger.error(f"ffmpeg not found — cannot extract the GPMF stream. {_FFMPEG_INSTALL_HINT}")
         except subprocess.CalledProcessError as e:
             logger.error(f"FFmpeg extraction failed: {e}")
         except Exception as e:
@@ -210,6 +230,8 @@ class TelemetryHandler:
             else:
                 logger.warning("Subtitle stream found, but no GPS data extracted.")
                 
+        except FileNotFoundError:
+            logger.error(f"ffmpeg not found — cannot extract the SRT subtitle stream. {_FFMPEG_INSTALL_HINT}")
         except subprocess.CalledProcessError as e:
             logger.error(f"FFmpeg subtitle extraction failed: {e}")
         except Exception as e:
@@ -269,49 +291,80 @@ class TelemetryHandler:
         
         return (lat, lon, alt)
 
+    @staticmethod
+    def build_gps_exif_bytes(lat: float, lon: float, alt: float = 0.0) -> bytes:
+        """Build EXIF bytes carrying a GPS fix, ready for piexif.insert / Pillow."""
+
+        def to_rational(number):
+            return (int(number * 1000000), 1000000)
+
+        def to_deg_min_sec(value):
+            abs_value = abs(value)
+            deg = int(abs_value)
+            min_val = (abs_value - deg) * 60
+            sec = (min_val - int(min_val)) * 60
+            return (to_rational(deg), to_rational(int(min_val)), to_rational(sec))
+
+        # GPSAltitude is an UNSIGNED rational; sign is carried by GPSAltitudeRef
+        # (0 = above sea level, 1 = below). Use abs() so negative altitudes
+        # (e.g. below-sea-level abs_alt) don't produce an invalid rational.
+        gps_ifd = {
+            piexif.GPSIFD.GPSLatitudeRef: b'N' if lat >= 0 else b'S',
+            piexif.GPSIFD.GPSLatitude: to_deg_min_sec(lat),
+            piexif.GPSIFD.GPSLongitudeRef: b'E' if lon >= 0 else b'W',
+            piexif.GPSIFD.GPSLongitude: to_deg_min_sec(lon),
+            piexif.GPSIFD.GPSAltitudeRef: 0 if alt >= 0 else 1,
+            piexif.GPSIFD.GPSAltitude: to_rational(abs(alt)),
+        }
+        return piexif.dump({"0th": {}, "Exif": {}, "GPS": gps_ifd, "1st": {}, "thumbnail": None})
+
+    def save_image_with_gps(self, image_path: str, image: "np.ndarray", params, lat: float,
+                            lon: float, alt: float = 0.0) -> bool:
+        """Write ``image`` once with GPS EXIF embedded (no write-reload-rewrite).
+
+        - JPEG: encode with ``cv2.imencode`` (honoring ``params``, e.g. quality)
+          and insert the EXIF straight into the encoded bytes — no second JPEG
+          pass, so no recompression.
+        - PNG/TIFF: build the image with Pillow directly from the array and save
+          once with EXIF. Pillow re-encodes anyway (as the old code did), and
+          going straight from the array avoids a fragile cv2->Pillow TIFF
+          round-trip that could silently drop the GPS IFD.
+
+        Falls back to a plain write (no geotag) if anything goes wrong.
+        """
+        ext = os.path.splitext(image_path)[1].lower()
+        try:
+            exif_bytes = self.build_gps_exif_bytes(lat, lon, alt)
+
+            if ext in ('.jpg', '.jpeg'):
+                ok, buf = cv2.imencode(ext, image, params or [])
+                if not ok:
+                    raise ValueError(f"cv2.imencode failed for {ext}")
+                # piexif writes the EXIF-tagged JPEG straight to disk.
+                piexif.insert(exif_bytes, buf.tobytes(), image_path)
+            else:
+                # PNG/TIFF are lossless, so encoding from the array preserves pixels.
+                rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) if image.ndim == 3 else image
+                Image.fromarray(rgb).save(image_path, exif=exif_bytes)
+            return True
+        except Exception as e:
+            logger.error(f"Error writing {image_path} with GPS EXIF: {type(e).__name__} - {e}")
+            # Best-effort fallback: at least persist the image without geotag.
+            try:
+                cv2.imwrite(image_path, image, params or [])
+            except Exception:
+                pass
+            return False
+
     def embed_exif(self, image_path: str, lat: float, lon: float, alt: float = 0.0) -> bool:
         """
-        Embeds GPS coordinates into the image EXIF data using piexif.
+        Embeds GPS coordinates into an existing image file using piexif.
+
+        Kept for callers that already have a file on disk; the processor now uses
+        the in-memory :meth:`save_image_with_gps` to avoid the extra round-trip.
         """
         try:
-            # Load existing EXIF or create new
-            try:
-                exif_dict = piexif.load(image_path)
-            except Exception:
-                exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
-
-            # Helper to convert to rational
-            def to_rational(number):
-                return (int(number * 1000000), 1000000)
-
-            def to_deg_min_sec(value):
-                abs_value = abs(value)
-                deg = int(abs_value)
-                min_val = (abs_value - deg) * 60
-                sec = (min_val - int(min_val)) * 60
-                return (to_rational(deg), to_rational(int(min_val)), to_rational(sec))
-
-            lat_deg = to_deg_min_sec(lat)
-            lon_deg = to_deg_min_sec(lon)
-
-            # GPSAltitude is an UNSIGNED rational; sign is carried by GPSAltitudeRef
-            # (0 = above sea level, 1 = below). Use abs() so negative altitudes
-            # (e.g. below-sea-level abs_alt) don't produce an invalid rational.
-            alt_ref = 0 if alt >= 0 else 1
-            alt_rational = to_rational(abs(alt))
-
-            gps_ifd = {
-                piexif.GPSIFD.GPSLatitudeRef: b'N' if lat >= 0 else b'S',
-                piexif.GPSIFD.GPSLatitude: lat_deg,
-                piexif.GPSIFD.GPSLongitudeRef: b'E' if lon >= 0 else b'W',
-                piexif.GPSIFD.GPSLongitude: lon_deg,
-                piexif.GPSIFD.GPSAltitudeRef: alt_ref,
-                piexif.GPSIFD.GPSAltitude: alt_rational
-            }
-            
-            exif_dict['GPS'] = gps_ifd
-            exif_bytes = piexif.dump(exif_dict)
-            
+            exif_bytes = self.build_gps_exif_bytes(lat, lon, alt)
             ext = os.path.splitext(image_path)[1].lower()
             if ext in ['.jpg', '.jpeg']:
                 piexif.insert(exif_bytes, image_path)
@@ -322,7 +375,7 @@ class TelemetryHandler:
                     img.save(image_path, exif=exif_bytes)
 
             return True
-            
+
         except Exception as e:
             logger.error(f"Error embedding EXIF in {image_path}: {type(e).__name__} - {e}")
             return False

@@ -25,9 +25,10 @@ python src/main.py --input <video_path> --output <output_dir> [options]
 | `--input`, `-i` | Path to input video/image file or directory. **(Required)** | - |
 | `--output`, `-o` | Path to output directory. | `./output` |
 | `--config` | Path to a JSON configuration file. | - |
+| `--version` | Print the application version and exit. | - |
 | `--flat` | Treat input as standard (non-360) media; disables equirectangular reprojection. | `False` |
 | `--interval` | Extraction interval in seconds. | `1.0` |
-| `--format` | Output image format (`jpg` or `png`). | `jpg` |
+| `--format` | Output image format (`jpg`, `png`, or `tiff`). | `jpg` |
 | `--camera-count` | Number of virtual cameras (2-36). | `6` |
 | `--active-cameras` | Comma-separated list of camera indices to extract (e.g., `0,2,4`). | All |
 | `--resolution` | Output image resolution (width/height). | `2048` |
@@ -36,9 +37,12 @@ python src/main.py --input <video_path> --output <output_dir> [options]
 | `--ai-mask` | Enable AI masking (Generate Mask) for operator removal. | `False` |
 | `--ai-skip` | Enable AI frame skipping (discard frames with persons). | `False` |
 | `--ai` | Alias for `--ai-mask` (for backward compatibility). | `False` |
+| `--ai-model` | Segmentation model: size letter (`n`/`s`/`m`/`l`/`x`), a model name, or a path to a custom `.pt`. Larger models catch partial operators (arm, pole) at the cost of speed; non-nano weights are auto-downloaded on first use. | `yolo26n-seg.pt` |
 | `--ai-mask-cameras` | Restrict AI masking to these faces only, comma-separated (e.g. `Down` or `Back,Down`). Cube faces: `Front,Right,Back,Left,Up,Down`; ring/fibonacci: `View_0,View_1,…`. Empty = all faces. | All |
+| `--nadir-mask` | Add a disc mask over the pole/tripod on the `Down` face (Cube layout). No AI needed; combines with the AI mask when both are on. | `False` |
+| `--nadir-radius` | Nadir mask radius as a percentage of the `Down` face. | `40` |
 | `--adaptive` | Enable intelligent keyframing (skip static scenes). | `False` |
-| `--motion-threshold` | Sensitivity for motion detection (0.0-100.0). Higher = needs more motion to extract. | `5.0` |
+| `--motion-threshold` | Motion threshold for adaptive keyframing (mean optical-flow magnitude between kept frames; useful range ≈ 0–10). Higher = needs more motion to extract. | `0.5` |
 | `--export-telemetry` | Extract GPS/IMU metadata and embed it into output images (EXIF). | `False` |
 | `--altitude-mode` | EXIF GPS altitude source for DJI clips that expose both: `absolute` (above sea level, best for RealityScan/COLMAP) or `relative` (above takeoff). | `absolute` |
 | `--naming-mode` | Naming convention: `realityscan`, `simple`, or `custom`. | `realityscan` |

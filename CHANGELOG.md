@@ -5,6 +5,109 @@ All notable changes to 360 Extractor Pro will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-07-13
+
+Performance & comfort release (audit sprint "v3.3"). Faster extraction, a
+smoother UI, and two new masking/quality-of-life features.
+
+### Added
+- **Nadir disc mask (no AI)**: mask the pole/tripod at the bottom of a capture
+  with a configurable disc on the `Down` face (Cube layout). Works standalone
+  and combines with the AI mask when both are enabled. GUI toggle + radius in
+  the AI section; CLI `--nadir-mask` / `--nadir-radius`.
+- **Selectable segmentation model**: choose the YOLO size (`n`/`s`/`m`/`l`/`x`)
+  or a custom `.pt` — larger models catch partial operators (arm, pole) that
+  nano misses. GUI dropdown; CLI `--ai-model`. Non-nano weights are
+  auto-downloaded on first use.
+- **Per-job `manifest.json`**: each output folder now gets a manifest recording
+  the settings used and how many frames/views were extracted or skipped (blur,
+  motion, AI) plus timing — for reproducibility and support ("why only N
+  images?").
+- **"Open output folder"**: a button on each finished queue card and in the
+  batch-completion dialog opens the results in the file browser.
+- **Pre-launch estimate**: the action bar shows an approximate count and disk
+  size (e.g. "~840 images (140 frames × 6 views), ~2.1 GB") so large exports are
+  never a surprise.
+- **Tests**: EXIF write round-trip for JPEG/PNG/TIFF (incl. negative altitude
+  and lossless-pixel checks), plus CLI coverage for the new flags.
+
+### Changed
+- **Faster frame decoding**: skipped frames now use `cap.grab()` (decode only)
+  instead of `cap.read()` (decode + color-convert + copy) — a large speed-up at
+  long extraction intervals on high-resolution video.
+- **Faster reprojection**: reprojection maps are converted to fixed-point
+  (`CV_16SC2`) once, which makes `cv2.remap` markedly faster with no visible
+  quality change (verified bit-identical for linear/lanczos).
+- **Single-write EXIF**: geotagged images are now written once — the JPEG EXIF
+  is inserted into the in-memory encoded bytes (no recompression), and PNG/TIFF
+  are written straight from the array — instead of the previous
+  write-then-reload-then-rewrite round-trip.
+- **AI model loads in the worker thread**: clicking "Start Processing" no longer
+  freezes the UI while YOLO loads (or downloads on first run); a "Loading AI
+  model…" status is shown instead.
+- **Preview debounce**: dragging a spinbox now coalesces into a single preview
+  render after a short pause, and a generation guard prevents a stale preview
+  from overwriting a newer one.
+
+### Fixed
+- **Blur analysis respects layout and flat media**: "Analyze Selected Video"
+  now uses the job's actual layout (Cube/Fibonacci frame very differently from
+  Ring) and skips reprojection for flat/non-360 media, so the recommended
+  threshold is meaningful. Its default resolution was aligned with the export
+  default (2048) so the score scale matches what is written.
+
+## [3.2.1] - 2026-07-13
+
+Bugfix release from a full application audit.
+
+### Fixed
+- **CLI exit code now reflects job failures**: the CLI previously always exited
+  with code `0`, even when some (or all) jobs failed, so batch automation could
+  not detect errors. It now exits `1` and logs how many jobs failed.
+- **"Null Island" GPS samples rejected**: several devices (e.g. GoPro before
+  satellite lock) emit `(0,0)` GPS samples when they have no fix. These passed
+  range validation and could geotag output images in the Gulf of Guinea. The
+  shared sanitizer now drops the exact `(0,0)` placeholder for all telemetry
+  sources (GPMF/CAMM/SRT/GPX); legitimate equator or prime-meridian crossings
+  (lat=0 *or* lon=0 alone) are still kept.
+- **`--format` accepts `tiff`**: the GUI and the processor already supported
+  TIFF output, but the CLI rejected it.
+- **Frame interval rounding**: the seconds-based interval was truncated instead
+  of rounded (e.g. 29.97 fps × 1s → every 29 frames), causing a slow drift.
+- **Per-face masking + flat media**: combining `--ai-mask-cameras` (or the
+  face checkboxes) with flat/non-360 media silently disabled AI masking (the
+  single "flat" view never matches a face name). The face filter is now
+  ignored in flat mode with an explicit warning, and masking applies to the
+  whole frame as requested.
+- **Version single-sourced**: `pyproject.toml` was stuck at `3.1.0` while the
+  app reported `3.2.0` (same class of bug as issue #7). The version is now read
+  dynamically from `core/version.py`, so it can no longer diverge.
+- **Actionable error when FFmpeg is missing**: telemetry extraction requires
+  the system `ffmpeg`/`ffprobe` binaries; a missing install now produces a
+  clear "install FFmpeg" message instead of a generic error.
+
+### Added
+- **`--version` CLI flag.**
+- **Tests** for the GPS sample sanitizer (`tests/test_telemetry.py`).
+
+### Removed
+- Dead `get_arg()` helper in `main.py` (superseded by `build_settings()` in
+  3.1.1).
+
+### Docs
+- **README**: documented the FFmpeg prerequisite (installation commands per OS).
+- **`docs/CLI.md`**: fixed the stale `--motion-threshold` default (`0.5`, not
+  `5.0`) and its range description, documented `tiff` in `--format`, added
+  `--version`.
+- **`docs/SETTINGS.md`**: `output_format` now documents `tiff`.
+
+### CI
+- CI now also runs on pushes to `dev` (previously only `main` and pull
+  requests), so work-in-progress on the development branch is validated
+  before a PR exists.
+- The test job installs `piexif`/`Pillow` so `core.telemetry` is importable
+  by the new telemetry tests.
+
 ## [3.2.0] - 2026-06-27
 
 ### Added

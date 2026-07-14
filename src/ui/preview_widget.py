@@ -1,6 +1,6 @@
 import cv2
 from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QSizePolicy, QFrame, QHBoxLayout
-from PySide6.QtCore import Qt, QRunnable, QThreadPool, QObject, Signal, Slot
+from PySide6.QtCore import Qt, QRunnable, QThreadPool, QObject, Signal, Slot, QTimer
 from PySide6.QtGui import QImage, QPixmap
 
 from core.geometry import GeometryProcessor
@@ -232,10 +232,22 @@ class PreviewWidget(QWidget):
         
         self.threadpool = QThreadPool()
         self.cached_image = None
-        
+
+        # Debounce: a fast drag on a spinbox fires update_preview() on every
+        # tick; coalesce them so we only launch one worker after the user pauses.
+        self._debounce = QTimer(self)
+        self._debounce.setSingleShot(True)
+        self._debounce.setInterval(150)
+        self._debounce.timeout.connect(self._run_pending)
+        self._pending = None
+        # Generation guard: workers run async and can finish out of order, so a
+        # stale result could overwrite a newer one. Each launch bumps the
+        # generation; a result is only displayed if it is still the latest.
+        self._generation = 0
+
         # Initial State
         self.set_empty(True)
-        
+
     def set_empty(self, is_empty):
         if is_empty:
             self.container.hide()
@@ -249,27 +261,47 @@ class PreviewWidget(QWidget):
             
     def update_preview(self, video_path, settings):
         """
-        Starts a background worker to update the preview image.
+        Schedules a (debounced) background worker to update the preview image.
         """
         if not video_path:
+            self._debounce.stop()
+            self._pending = None
+            # Bump the generation so any in-flight worker result is discarded.
+            self._generation += 1
             self.set_empty(True)
             self.cached_image = None
             return
-            
+
         self.set_empty(False)
         self.label.setText("Loading perspective preview...")
         self.label.setStyleSheet("color: #52525B; font-size: 12px;")
-        
+
+        self._pending = (video_path, settings)
+        self._debounce.start()  # restart the 150 ms timer
+
+    def _run_pending(self):
+        if self._pending is None:
+            return
+        video_path, settings = self._pending
+        self._pending = None
+
+        self._generation += 1
+        gen = self._generation
+
         worker = PreviewWorker(video_path, settings)
-        worker.signals.result.connect(self.display_image)
-        worker.signals.blur_score.connect(self.display_blur_score)
-        worker.signals.error.connect(self.display_error)
+        worker.signals.result.connect(lambda img, g=gen: self.display_image(img, g))
+        worker.signals.blur_score.connect(lambda s, g=gen: self.display_blur_score(s, g))
+        worker.signals.error.connect(lambda e, g=gen: self.display_error(e, g))
         self.threadpool.start(worker)
-        
-    def display_blur_score(self, score):
+
+    def display_blur_score(self, score, generation=None):
+        if generation is not None and generation != self._generation:
+            return  # stale worker
         self.score_label.setText(f"Blur Score: {score:.1f}")
 
-    def display_image(self, image):
+    def display_image(self, image, generation=None):
+        if generation is not None and generation != self._generation:
+            return  # stale worker; a newer preview has superseded this one
         self.cached_image = image
         self.label.setText("")
         self._update_label_pixmap()
@@ -291,7 +323,9 @@ class PreviewWidget(QWidget):
             )
             self.label.setPixmap(scaled_pixmap)
 
-    def display_error(self, error):
+    def display_error(self, error, generation=None):
+        if generation is not None and generation != self._generation:
+            return  # stale worker
         self.label.setText(f"Preview Error:\n{error}")
         self.label.setStyleSheet("color: #EF4444; font-size: 11px;")
         self.label.setPixmap(QPixmap())

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main", "claude/**"]
+    branches: ["main", "dev", "claude/**"]
   pull_request:
     branches: ["main"]
 
@@ -46,9 +46,10 @@ jobs:
         # Lightweight subset: enough to import the tested modules without the
         # heavy GPU stack (torch/ultralytics) or the Qt/GUI layer.
         # opencv-python-headless avoids needing system OpenGL libraries.
+        # piexif/Pillow are needed to import core.telemetry (EXIF writer).
         run: |
           python -m pip install --upgrade pip
-          python -m pip install numpy "opencv-python-headless>=4.8.0" defusedxml pytest
+          python -m pip install numpy "opencv-python-headless>=4.8.0" defusedxml pytest piexif Pillow
 
       - name: Run tests
         run: pytest tests/ -v

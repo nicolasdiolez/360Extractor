@@ -40,31 +40,48 @@ class BlurAnalyzer:
         
         if not ret or frame is None:
             raise IOError("Could not read frame from video.")
-            
-        # Extract settings
-        out_res = settings.get('resolution', 1024)
+
+        # Extract settings. Default resolution matches the export default (2048)
+        # so the recommended threshold reflects what will actually be written —
+        # the Laplacian blur score scales with resolution.
+        out_res = settings.get('resolution', 2048)
         fov = settings.get('fov', 90)
         camera_count = settings.get('camera_count', 6)
         pitch_offset = settings.get('pitch_offset', 0)
-        
-        # Generate views
-        views = GeometryProcessor.generate_views(camera_count, pitch_offset=pitch_offset)
-        
+        layout_mode = settings.get('layout_mode', 'ring')
+        if layout_mode == 'adaptive':  # legacy alias
+            layout_mode = 'ring'
+        is_360 = settings.get('is_360', True)
+
         scores = []
         details = []
-        
+
         src_h, src_w = frame.shape[:2]
-        
-        for name, y, p, r in views:
-            map_x, map_y = GeometryProcessor.create_rectilinear_map(
-                src_h, src_w, out_res, out_res, fov, y, p, r
-            )
-            
-            rect_img = cv2.remap(frame, map_x, map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_WRAP)
-            score = ImageUtils.calculate_blur_score(rect_img)
+
+        if not is_360:
+            # Flat / non-360 media is exported as-is: score the frame directly
+            # instead of remapping a non-equirectangular image (which would give
+            # a meaningless threshold).
+            score = ImageUtils.calculate_blur_score(frame)
             scores.append(score)
-            details.append((name, score))
-            
+            details.append(("flat", score))
+        else:
+            # Use the same layout as the export so the recommended threshold
+            # matches the views that will actually be produced (Cube/Fibonacci
+            # frame very differently from Ring).
+            views = GeometryProcessor.generate_views(
+                camera_count, pitch_offset=pitch_offset, layout_mode=layout_mode
+            )
+            for name, y, p, r in views:
+                map_x, map_y = GeometryProcessor.create_rectilinear_map(
+                    src_h, src_w, out_res, out_res, fov, y, p, r
+                )
+
+                rect_img = cv2.remap(frame, map_x, map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_WRAP)
+                score = ImageUtils.calculate_blur_score(rect_img)
+                scores.append(score)
+                details.append((name, score))
+
         if not scores:
             return {'average': 0, 'min': 0, 'max': 0, 'details': []}
             
