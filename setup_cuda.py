@@ -68,7 +68,7 @@ def run_command(command, description):
         return False
 
 def setup_gpu():
-    print_step("360 Extractor Pro - PyTorch CUDA Setup Helper")
+    print_step("360 Extractor - PyTorch CUDA Setup Helper")
     
     # 1. OS Check
     is_win = sys.platform.startswith('win')
