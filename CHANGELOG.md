@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Qt, and only imports the AI stack (torch/ultralytics) when an AI mode is
   enabled — CLI-only server installs can use `opencv-python-headless` and skip
   display libraries entirely.
+- **Distribution renamed to `360-extractor`** (was `360-extractor-pro`): the
+  app has always called itself "360 Extractor"; the pip distribution name now
+  matches, before any PyPI publication makes it permanent. The `360extractor`
+  console entry point is unchanged.
 
 ### Added
 - **Calibration EXIF on every image** (`exif_intrinsics`, default on;

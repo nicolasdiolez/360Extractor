@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "360-extractor-pro"
+name = "360-extractor"
 # Version is single-sourced from src/core/version.py (see [tool.setuptools.dynamic]).
 dynamic = ["version"]
 description = "Desktop and CLI tool to preprocess 360 and standard video/images into rectilinear datasets for photogrammetry and Gaussian Splatting, with AI operator removal."

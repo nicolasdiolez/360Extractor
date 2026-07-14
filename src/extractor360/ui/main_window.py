@@ -1,5 +1,5 @@
 """
-360 Extractor Pro - Modern Main Window
+360 Extractor - Modern Main Window
 Redesigned UI with sidebar navigation and modern components.
 """
 import os

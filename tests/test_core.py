@@ -1,5 +1,5 @@
 """
-Unit tests for 360 Extractor Pro
+Unit tests for 360 Extractor
 Tests for core functionality: geometry, parsers, and utilities.
 """
 import unittest
