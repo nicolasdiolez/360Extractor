@@ -1,0 +1,129 @@
+name: Release
+
+# Cutting a release is: bump version.py, add the CHANGELOG section, push a
+# vX.Y.Z tag. Everything below is automatic — except the final "Publish"
+# click: the release is created as a DRAFT so the binaries can be smoke-tested
+# before the world sees them.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # required to create the Release and upload assets
+
+jobs:
+  guard:
+    name: Release consistency guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Refuses the release if version.py, pyproject, the CHANGELOG entry and
+      # the tag disagree. Runs before the (long) builds so a mistake fails fast.
+      - name: Check version / CHANGELOG / tag consistency
+        run: python scripts/check_release.py --tag "${GITHUB_REF_NAME}"
+
+      - name: Extract release notes from CHANGELOG
+        run: python scripts/release_notes.py "${GITHUB_REF_NAME}" -o release_notes.md
+
+      - name: Show release notes
+        run: cat release_notes.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release_notes.md
+
+  build:
+    name: Build ${{ matrix.label }}
+    needs: guard
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS runners are Apple Silicon; the app targets Apple Silicon first.
+          - os: macos-14
+            label: macOS (Apple Silicon)
+            asset: 360-Extractor-macos-arm64.zip
+          - os: windows-latest
+            label: Windows (x64)
+            asset: 360-Extractor-windows-x64.zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Installs the app's real dependencies (PySide6, OpenCV, ultralytics ->
+      # torch, ...) so the bundle is fully featured, AI masking included.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+          python -m pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: pyinstaller 360Extractor.spec --noconfirm
+
+      # ditto (not zip) preserves the .app bundle structure, symlinks and
+      # permissions. xattr -cr first: stray extended attributes make PyInstaller's
+      # ad-hoc signature fail, and an arm64 app must carry one to run at all.
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          xattr -cr "dist/360 Extractor.app"
+          codesign --force --deep --sign - "dist/360 Extractor.app"
+          ditto -c -k --keepParent "dist/360 Extractor.app" "${{ matrix.asset }}"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path "dist/360 Extractor/*" -DestinationPath "${{ matrix.asset }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  release:
+    name: Draft GitHub Release
+    needs: [guard, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f
+
+      # Created as a draft on purpose: download the binaries, check they launch,
+      # then hit Publish. Idempotent, so re-running the workflow on the same tag
+      # refreshes the notes and replaces the assets instead of failing.
+      - name: Create or update draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES=artifacts/release-notes/release_notes.md
+          TITLE="360 Extractor ${GITHUB_REF_NAME}"
+
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "Release ${GITHUB_REF_NAME} already exists — updating it."
+            gh release edit "${GITHUB_REF_NAME}" --title "$TITLE" --notes-file "$NOTES"
+            gh release upload "${GITHUB_REF_NAME}" artifacts/*/*.zip --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              --draft \
+              --title "$TITLE" \
+              --notes-file "$NOTES" \
+              artifacts/*/*.zip
+          fi

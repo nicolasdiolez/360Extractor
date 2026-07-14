@@ -43,6 +43,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flat passthrough) now runs in CI on a synthetic 360 video — previously the
   processor could not even be imported there — plus a guard asserting the
   core imports without PySide6/torch.
+- **Downloadable apps.** Tagging a release now builds the desktop app for
+  macOS (Apple Silicon) and Windows (x64) with a versioned PyInstaller spec and
+  attaches both to a draft GitHub Release, with the notes taken straight from
+  this changelog. No Python install needed to run the tool any more. The macOS
+  app is unsigned: right-click → Open on first launch (documented in the README).
+- **Release consistency guard** (`scripts/check_release.py`, run in CI and
+  before every release build): refuses a release unless `version.py`,
+  `pyproject.toml`, the newest versioned CHANGELOG entry and the tag all agree.
+  Three releases in a row had shipped with one of them out of sync.
+- **Cross-platform CI**: the test suite now runs on Ubuntu, macOS *and* Windows
+  — it is a cross-platform desktop tool, but only Linux was ever exercised.
+- **Contributor onboarding**: `CONTRIBUTING.md`, issue templates (the bug one
+  asks for the `manifest.json`, which usually explains the problem by itself),
+  README badges, a GUI screenshot, and "Typical workflows" for the three common
+  pipelines (GoPro Max → RealityScan, Insta360 → Postshot, DJI → COLMAP).
 
 ## [3.3.0] - 2026-07-13
 
