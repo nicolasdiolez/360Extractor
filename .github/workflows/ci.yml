@@ -32,9 +32,19 @@ jobs:
       - name: Mypy (informational)
         run: mypy src || true
 
+      # Cheap guard against the recurring release-metadata drift (version.py vs
+      # pyproject vs CHANGELOG). No tag here — that part is checked in release.yml.
+      - name: Release consistency (version.py <-> pyproject <-> CHANGELOG)
+        run: python scripts/check_release.py
+
   test:
-    name: Tests (pytest)
-    runs-on: ubuntu-latest
+    # This is a cross-platform desktop tool; only Linux was ever tested.
+    name: Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
