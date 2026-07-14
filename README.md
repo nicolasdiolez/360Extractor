@@ -1,8 +1,8 @@
-# 360 Extractor Pro
+# 360 Extractor
 
 High-performance desktop application and command-line tool for 360° and standard video/image preprocessing. This tool generates optimized datasets for Gaussian Splatting and photogrammetry (COLMAP, RealityScan) by converting equirectangular media into rectilinear pinhole views and removing operators using AI.
 
-> **v3.2.0** - Added **per-face AI masking**: restrict operator removal to specific cubemap faces (e.g. mask only `Down`/`Back`) so people in paintings/posters on the other faces are left untouched. See the [CHANGELOG](CHANGELOG.md) for details and prior releases.
+> See the [CHANGELOG](CHANGELOG.md) for what's new in each release.
 
 ## Key Features
 

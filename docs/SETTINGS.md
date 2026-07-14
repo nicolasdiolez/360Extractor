@@ -1,6 +1,6 @@
 # Settings and Configuration Guide
 
-This guide explains the various settings available in the 360 Extractor Pro GUI and how to use JSON configuration files for batch processing and CLI mode.
+This guide explains the various settings available in the 360 Extractor GUI and how to use JSON configuration files for batch processing and CLI mode.
 
 ## Core Settings
 

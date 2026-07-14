@@ -1,6 +1,6 @@
 # CLI Mode Documentation
 
-This document provides detailed information about using the 360 Extractor Pro in headless mode. This is ideal for automation or server environments.
+This document provides detailed information about using 360 Extractor in headless mode. This is ideal for automation or server environments.
 
 ## Overview
 
