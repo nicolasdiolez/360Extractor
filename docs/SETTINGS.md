@@ -120,6 +120,7 @@ the JSON config, and the CLI; the config file accepts exactly these names.
 | `adaptive_threshold` | `0.5` | Motion threshold (mean optical-flow magnitude) for adaptive keyframing. |
 | `export_telemetry` | `false` | Extract GPS/IMU and embed GPS in EXIF. |
 | `altitude_mode` | `"absolute"` | `absolute` or `relative` (DJI clips with both altitudes). |
+| `exif_intrinsics` | `true` | Embed calibration EXIF on every image: focal length derived from the FOV (`FocalLength` + `FocalLengthIn35mmFilm`), a stable `Make`/`Model` per rig so tools group calibration, per-frame `DateTimeOriginal`, and — with telemetry — the absolute view direction (`GPSImgDirection` = GPS travel heading + view yaw). Disable with `--no-exif-intrinsics`. |
 | `interpolation_mode` | `"linear"` | Reprojection interpolation: `linear` or `lanczos`. |
 | `feather_mask` | `false` | Soften mask edges instead of a hard binary mask. |
 | `naming_mode` | `"realityscan"` | `realityscan`, `simple`, or `custom`. |

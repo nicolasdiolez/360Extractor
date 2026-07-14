@@ -47,6 +47,7 @@ python src/main.py --input <video_path> --output <output_dir> [options]
 | `--motion-threshold` | Motion threshold for adaptive keyframing (mean optical-flow magnitude between kept frames; useful range ≈ 0–10). Higher = needs more motion to extract. | `0.5` |
 | `--export-telemetry` | Extract GPS/IMU metadata and embed it into output images (EXIF). | `False` |
 | `--altitude-mode` | EXIF GPS altitude source for DJI clips that expose both: `absolute` (above sea level, best for RealityScan/COLMAP) or `relative` (above takeoff). | `absolute` |
+| `--no-exif-intrinsics` | Do not embed calibration EXIF (focal from FOV, `Make`/`Model`, capture time, view direction). Embedded by default — RealityScan/Metashape/COLMAP use it to bootstrap and group camera calibration. | off (EXIF embedded) |
 | `--naming-mode` | Naming convention: `realityscan`, `simple`, or `custom`. | `realityscan` |
 | `--image-pattern` | Custom image filename pattern (e.g., `{filename}_{frame}`). | - |
 | `--mask-pattern` | Custom mask filename pattern (e.g., `{image_name}_mask`). | - |
