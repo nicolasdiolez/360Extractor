@@ -160,55 +160,64 @@ class StudioMockupWindow(QMainWindow):
         # Theme A: Graphite & Warm Amber (#F59E0B / #D97706)
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #151518;
-                color: #F4F4F6;
+                background-color: #141417;
+                color: #E6E6EA;
             }
             QWidget {
                 font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
                 font-size: 11px;
                 color: #9898A4;
+                background-color: transparent;
+            }
+            /* Scroll Areas and Viewports (Fix light gray bleed) */
+            QScrollArea, QScrollArea > QWidget, QScrollArea > QWidget > QWidget {
+                background-color: transparent;
+                border: none;
+            }
+            QScrollArea::viewport {
+                background-color: transparent;
             }
             QFrame#topNav {
-                background-color: #1A1A1F;
-                border-bottom: 1px solid #2B2B35;
+                background-color: #19191E;
+                border-bottom: 1px solid #282833;
                 padding: 0px 14px;
             }
             QFrame#leftSidebar {
-                background-color: #17171C;
-                border-right: 1px solid #282832;
+                background-color: #16161A;
+                border-right: 1px solid #262630;
             }
             QFrame#centerArea {
-                background-color: #101013;
+                background-color: #0F0F12;
             }
             QFrame#rightInspector {
-                background-color: #17171C;
-                border-left: 1px solid #282832;
+                background-color: #16161A;
+                border-left: 1px solid #262630;
             }
             QFrame#viewportContainer {
                 background-color: #000000;
-                border: 1px solid #2A2A35;
+                border: 1px solid #262632;
                 border-radius: 6px;
             }
             QFrame#hudBar {
-                background-color: #1A1A1F;
-                border-top: 1px solid #2B2B35;
+                background-color: #19191E;
+                border-top: 1px solid #282833;
                 padding: 8px 18px;
             }
             QFrame#inspectorCard {
-                background-color: #1F1F26;
-                border: 1px solid #2C2C38;
+                background-color: #1D1D24;
+                border: 1px solid #292934;
                 border-radius: 6px;
                 padding: 10px 12px;
             }
             QLabel#sectionHeader {
-                color: #F4F4F6;
+                color: #E2E2E8;
                 font-weight: 600;
                 font-size: 11px;
                 text-transform: uppercase;
                 letter-spacing: 0.8px;
             }
             QLabel#cardTitle {
-                color: #FAFAFA;
+                color: #E8E8EE;
                 font-weight: 600;
                 font-size: 12px;
             }
@@ -223,8 +232,8 @@ class StudioMockupWindow(QMainWindow):
                 font-size: 11px;
             }
             QPushButton#segmentBtn:hover {
-                color: #FFFFFF;
-                background-color: rgba(255, 255, 255, 0.06);
+                color: #E8E8EE;
+                background-color: rgba(255, 255, 255, 0.05);
             }
             QPushButton#segmentBtn[active="true"] {
                 background-color: rgba(245, 158, 11, 0.15);
@@ -236,7 +245,7 @@ class StudioMockupWindow(QMainWindow):
             QPushButton#disclosureBtn {
                 background-color: transparent;
                 border: none;
-                color: #787885;
+                color: #727280;
                 font-weight: 600;
                 font-size: 10px;
                 text-align: left;
@@ -251,7 +260,7 @@ class StudioMockupWindow(QMainWindow):
             /* Buttons */
             QPushButton#primaryActionBtn {
                 background-color: #D97706;
-                color: #FFFFFF;
+                color: #FAF9F6;
                 font-weight: 600;
                 font-size: 12px;
                 border-radius: 5px;
@@ -263,35 +272,35 @@ class StudioMockupWindow(QMainWindow):
             }
             QPushButton#secondaryActionBtn {
                 background-color: transparent;
-                border: 1px solid #363645;
+                border: 1px solid #323240;
                 border-radius: 5px;
-                color: #D4D4D8;
+                color: #C8C8D0;
                 padding: 7px 16px;
                 font-size: 11px;
             }
             QPushButton#secondaryActionBtn:hover {
-                background-color: #242430;
-                color: #FFFFFF;
+                background-color: #22222B;
+                color: #E8E8EE;
             }
             QPushButton#toolBtn {
                 background-color: #17171C;
-                border: 1px solid #30303E;
+                border: 1px solid #2D2D3A;
                 border-radius: 4px;
-                color: #D4D4D8;
+                color: #C8C8D0;
                 padding: 3px 8px;
                 font-size: 11px;
             }
             QPushButton#toolBtn:hover {
                 border-color: #F59E0B;
-                color: #FFFFFF;
+                color: #E8E8EE;
             }
             /* Inputs */
             QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit {
-                background-color: #151518;
-                border: 1px solid #30303E;
+                background-color: #151519;
+                border: 1px solid #2C2C38;
                 border-radius: 4px;
                 padding: 4px 6px;
-                color: #FAFAFA;
+                color: #E6E6EA;
                 font-size: 11px;
             }
             QComboBox:focus, QSpinBox:focus, QLineEdit:focus {
@@ -299,7 +308,7 @@ class StudioMockupWindow(QMainWindow):
             }
             QSlider::groove:horizontal {
                 height: 3px;
-                background: #323240;
+                background: #2E2E3C;
                 border-radius: 1.5px;
             }
             QSlider::sub-page:horizontal {
@@ -307,7 +316,7 @@ class StudioMockupWindow(QMainWindow):
                 border-radius: 1.5px;
             }
             QSlider::handle:horizontal {
-                background: #FFFFFF;
+                background: #D8D8E0;
                 border: 1px solid #F59E0B;
                 width: 10px;
                 margin-top: -3.5px;
@@ -315,7 +324,7 @@ class StudioMockupWindow(QMainWindow):
                 border-radius: 5px;
             }
             QCheckBox {
-                color: #D4D4D8;
+                color: #C8C8D0;
                 spacing: 6px;
                 font-size: 11px;
             }
@@ -323,7 +332,7 @@ class StudioMockupWindow(QMainWindow):
                 width: 13px;
                 height: 13px;
                 border-radius: 3px;
-                border: 1px solid #3A3A4A;
+                border: 1px solid #363646;
                 background-color: #17171C;
             }
             QCheckBox::indicator:checked {
@@ -336,7 +345,7 @@ class StudioMockupWindow(QMainWindow):
                 width: 4px;
             }
             QScrollBar::handle:vertical {
-                background: #323242;
+                background: #2E2E3E;
                 border-radius: 2px;
             }
         """)
@@ -481,9 +490,11 @@ class StudioMockupWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll.setStyleSheet("QScrollArea, QScrollArea > QWidget { border: none; background-color: transparent; }")
 
         cards_container = QWidget()
+        cards_container.setObjectName("cardsContainer")
+        cards_container.setStyleSheet("background-color: transparent;")
         cards_layout = QVBoxLayout(cards_container)
         cards_layout.setContentsMargins(0, 0, 0, 0)
         cards_layout.setSpacing(6)
@@ -686,9 +697,11 @@ class StudioMockupWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll.setStyleSheet("QScrollArea, QScrollArea > QWidget { border: none; background-color: transparent; }")
 
         container = QWidget()
+        container.setObjectName("inspectorContainer")
+        container.setStyleSheet("background-color: transparent;")
         c_layout = QVBoxLayout(container)
         c_layout.setContentsMargins(0, 0, 4, 0)
         c_layout.setSpacing(8)
