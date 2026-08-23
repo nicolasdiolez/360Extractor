@@ -30,6 +30,7 @@ from extractor360.core.processor import ProcessingWorker
 from extractor360.core.settings_manager import SettingsManager
 from extractor360.core.version import APP_NAME
 from extractor360.ui.collapsible_section import CollapsibleDrawer
+from extractor360.ui.icons import get_app_icon
 from extractor360.ui.log_panel import LogPanel
 from extractor360.ui.preview_widget import PreviewWidget
 from extractor360.ui.video_card import VideoCard
@@ -52,6 +53,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} Studio")
+        self.setWindowIcon(get_app_icon())
         self.setMinimumSize(1280, 820)
         self.resize(1520, 920)
 

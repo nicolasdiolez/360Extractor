@@ -220,8 +220,10 @@ def main():
         # GUI Mode — import Qt lazily so headless/CLI environments never load it.
         from PySide6.QtWidgets import QApplication
         from extractor360.ui.main_window import MainWindow
+        from extractor360.ui.icons import get_app_icon
 
         app = QApplication(sys.argv)
+        app.setWindowIcon(get_app_icon())
 
         # Initialize settings
         SettingsManager()
