@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
-"""360 Extractor - Refined Minimalist Pro UI/UX Mockup.
+"""360 Extractor Studio - Complete Settings Mockup with 3 Color Themes.
 
-Professional, clean, subdued desktop aesthetic (inspired by macOS Pro tools, Lightroom, Linear).
-- Calm neutral dark palette (#121214, #1A1A1E, #26262B) without neon/AI clichés.
-- High typographic clarity, breathing room, no visual clutter or emojis.
-- Clean segmented controls, elegant viewport, minimal timeline, refined inspector.
+Features:
+- 100% of all settings from the original application cleanly organized in 4 collapsible cards.
+- Real-time Theme Switcher with 3 distinct professional palettes:
+    1. Theme A: "Graphite & Warm Amber" (Cinema / DaVinci Resolve / Blender)
+    2. Theme B: "Titanium & Monochrome" (Photography / Capture One / Leica)
+    3. Theme C: "Ardoise & Sauge" (Geospatial / Photogrammetry / RealityCapture)
+- Interactive camera face selector (Front, Right, Back, Left, Up, Down), real-time mask overlay.
+- Timeline scrubber with timecode and frame counter.
 
 Usage:
-    python scripts/mockup_studio_ui.py -o docs/images/mockup-studio-gui.png
+    # Interactive mode (with real-time theme buttons):
     python scripts/mockup_studio_ui.py --interactive
+
+    # Render all 3 theme screenshots:
+    python scripts/mockup_studio_ui.py --all-themes
 """
 from __future__ import annotations
 
@@ -18,203 +25,362 @@ import sys
 import tempfile
 from pathlib import Path
 
+# Ensure offscreen is NOT set before importing Qt if interactive
+if "--interactive" in sys.argv:
+    os.environ.pop("QT_QPA_PLATFORM", None)
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 from PySide6.QtCore import Qt, QTimer  # noqa: E402
 from PySide6.QtGui import QImage, QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QApplication, QCheckBox, QComboBox, QFrame,
-    QGridLayout, QHBoxLayout, QLabel, QMainWindow,
-    QPushButton, QScrollArea, QSlider,
-    QSplitter, QVBoxLayout, QWidget
+    QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFrame,
+    QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
+    QPushButton, QScrollArea, QSlider, QSpinBox,
+    QSplitter, QTabWidget, QVBoxLayout, QWidget
 )
 
 from extractor360.core.geometry import GeometryProcessor  # noqa: E402
-from make_screenshot import make_demo_equirect  # noqa: E402
+
+
+def make_demo_equirect(path: Path, width: int = 2048, height: int = 1024) -> np.ndarray:
+    """Create rich synthetic 360 equirectangular scene."""
+    img = np.zeros((height, width, 3), dtype=np.uint8)
+    horizon = height // 2
+
+    # Sky dusk gradient
+    for y in range(horizon):
+        t = y / horizon
+        b = int(120 * (1 - t) + 200 * t)
+        g = int(60 * (1 - t) + 160 * t)
+        r = int(30 * (1 - t) + 80 * t)
+        img[y, :] = (b, g, r)
+
+    # Ground slate
+    for y in range(horizon, height):
+        t = (y - horizon) / (height - horizon)
+        b = int(45 + 30 * t)
+        g = int(45 + 35 * t)
+        r = int(45 + 30 * t)
+        img[y, :] = (b, g, r)
+
+    # Perspective grid lines
+    for x in range(0, width, width // 64):
+        cv2.line(img, (x, horizon), (x, height), (75, 85, 80), 1)
+    for i in range(1, 16):
+        y = horizon + int((height - horizon) * (i / 16) ** 2)
+        cv2.line(img, (0, y), (width, y), (75, 85, 80), 1)
+
+    # Architectural pillars
+    palette = [
+        (220, 110, 80), (90, 190, 240), (120, 210, 140),
+        (210, 140, 200), (80, 220, 220), (200, 100, 120),
+    ]
+    for i, colour in enumerate(palette):
+        cx = int((i + 0.5) * width / len(palette))
+        w = width // 50
+        h_val = height // 5
+        cv2.rectangle(img, (cx - w, horizon - h_val), (cx + w, horizon), colour, -1)
+        cv2.rectangle(img, (cx - w, horizon - h_val), (cx + w, horizon), (20, 20, 25), 2)
+
+    cv2.line(img, (0, horizon), (width, horizon), (230, 200, 150), 2)
+
+    # Nadir Tripod at bottom
+    nadir_cx = width // 2
+    nadir_cy = int(height * 0.9)
+    cv2.circle(img, (nadir_cx, nadir_cy), 70, (25, 25, 30), -1)
+    cv2.line(img, (nadir_cx, nadir_cy), (nadir_cx - 180, height), (40, 40, 45), 6)
+    cv2.line(img, (nadir_cx, nadir_cy), (nadir_cx + 180, height), (40, 40, 45), 6)
+    cv2.line(img, (nadir_cx, nadir_cy), (nadir_cx, height), (40, 40, 45), 6)
+    cv2.circle(img, (nadir_cx, nadir_cy), 25, (15, 15, 20), -1)
+
+    cv2.imwrite(str(path), img)
+    return img
+
+
+THEMES = {
+    "amber": {
+        "name": "Graphite & Warm Amber (Resolve/Blender)",
+        "bg_win": "#16161A",
+        "bg_nav": "#1B1B20",
+        "bg_side": "#18181D",
+        "bg_center": "#101014",
+        "bg_card": "#212127",
+        "border": "#2E2E38",
+        "border_subtle": "#252530",
+        "text_main": "#F4F4F6",
+        "text_muted": "#94949E",
+        "accent": "#F59E0B",           # Warm Amber
+        "accent_hover": "#D97706",
+        "accent_bg": "rgba(245, 158, 11, 0.15)",
+        "accent_text": "#FBBF24",
+        "btn_primary_bg": "#D97706",
+        "btn_primary_text": "#FFFFFF",
+        "overlay_tint": (20, 80, 200),  # Warm amber-reddish mask
+        "overlay_hud": (245, 158, 11),
+    },
+    "titanium": {
+        "name": "Titanium & Monochrome (Capture One/Leica)",
+        "bg_win": "#18181B",
+        "bg_nav": "#1F1F23",
+        "bg_side": "#1B1B1E",
+        "bg_center": "#121214",
+        "bg_card": "#242429",
+        "border": "#363640",
+        "border_subtle": "#2A2A33",
+        "text_main": "#FFFFFF",
+        "text_muted": "#A1A1AA",
+        "accent": "#E4E4E7",           # Titanium White / Chrome
+        "accent_hover": "#FFFFFF",
+        "accent_bg": "rgba(255, 255, 255, 0.12)",
+        "accent_text": "#FFFFFF",
+        "btn_primary_bg": "#E4E4E7",
+        "btn_primary_text": "#121214",
+        "overlay_tint": (40, 40, 180),  # Classic brick red mask
+        "overlay_hud": (228, 228, 231),
+    },
+    "sage": {
+        "name": "Ardoise & Sauge (Geospatial/RealityCapture)",
+        "bg_win": "#131716",
+        "bg_nav": "#181D1B",
+        "bg_side": "#151A18",
+        "bg_center": "#0D1110",
+        "bg_card": "#1E2421",
+        "border": "#2B3530",
+        "border_subtle": "#222B27",
+        "text_main": "#ECFDF5",
+        "text_muted": "#8FA399",
+        "accent": "#10B981",           # Emerald / Sage
+        "accent_hover": "#059669",
+        "accent_bg": "rgba(16, 185, 129, 0.15)",
+        "accent_text": "#34D399",
+        "btn_primary_bg": "#059669",
+        "btn_primary_text": "#FFFFFF",
+        "overlay_tint": (30, 40, 190),  # Soft red mask
+        "overlay_hud": (52, 211, 153),
+    }
+}
 
 
 class StudioMockupWindow(QMainWindow):
-    def __init__(self, demo_image_path: Path):
+    def __init__(self, demo_image_path: Path, current_theme_key: str = "amber"):
         super().__init__()
-        self.setWindowTitle("360 Extractor")
-        self.resize(1480, 920)
+        self.setWindowTitle("360 Extractor Studio — Complete Settings & Multi-Theme Preview")
+        self.resize(1560, 960)
         self.demo_image_path = demo_image_path
         self.equirect_bgr = cv2.imread(str(demo_image_path))
         if self.equirect_bgr is None:
             self.equirect_bgr = make_demo_equirect(demo_image_path)
 
+        self.current_theme_key = current_theme_key
         self.current_face = "Down"
         self.fov = 90
+        self.pitch_offset = 0
         self.nadir_radius = 35.0
         self.show_ai_mask = True
         self.show_nadir_disc = True
-        self.current_preset = "Postshot (Gaussian Splatting)"
 
-        self._setup_stylesheet()
         self._build_ui()
+        self._apply_theme(self.current_theme_key)
         self._update_viewport_render()
 
-    def _setup_stylesheet(self):
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #111113;
-                color: #EDEDED;
-            }
-            QWidget {
+    def _apply_theme(self, theme_key: str):
+        self.current_theme_key = theme_key
+        t = THEMES[theme_key]
+
+        # Update Theme switcher buttons state
+        if hasattr(self, "theme_buttons"):
+            for k, btn in self.theme_buttons.items():
+                btn.setProperty("active", (k == theme_key))
+                btn.setStyle(btn.style())
+
+        self.setStyleSheet(f"""
+            QMainWindow {{
+                background-color: {t['bg_win']};
+                color: {t['text_main']};
+            }}
+            QWidget {{
                 font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-                font-size: 12px;
-                color: #8E8E93;
-            }
-            QFrame#topNav {
-                background-color: #161619;
-                border-bottom: 1px solid #232328;
-                padding: 0px 16px;
-            }
-            QFrame#leftSidebar {
-                background-color: #141417;
-                border-right: 1px solid #222227;
-            }
-            QFrame#centerArea {
-                background-color: #0E0E10;
-            }
-            QFrame#rightInspector {
-                background-color: #141417;
-                border-left: 1px solid #222227;
-            }
-            QFrame#viewportContainer {
+                font-size: 11px;
+                color: {t['text_muted']};
+            }}
+            QFrame#topNav {{
+                background-color: {t['bg_nav']};
+                border-bottom: 1px solid {t['border']};
+                padding: 0px 14px;
+            }}
+            QFrame#leftSidebar {{
+                background-color: {t['bg_side']};
+                border-right: 1px solid {t['border']};
+            }}
+            QFrame#centerArea {{
+                background-color: {t['bg_center']};
+            }}
+            QFrame#rightInspector {{
+                background-color: {t['bg_side']};
+                border-left: 1px solid {t['border']};
+            }}
+            QFrame#viewportContainer {{
                 background-color: #000000;
-                border: 1px solid #222228;
-                border-radius: 8px;
-            }
-            QFrame#hudBar {
-                background-color: #161619;
-                border-top: 1px solid #232328;
-                padding: 8px 20px;
-            }
-            QFrame#inspectorCard {
-                background-color: #18181C;
-                border: 1px solid #24242A;
-                border-radius: 8px;
-                padding: 12px;
-            }
-            QLabel#sectionHeader {
-                color: #A1A1A6;
+                border: 1px solid {t['border']};
+                border-radius: 6px;
+            }}
+            QFrame#hudBar {{
+                background-color: {t['bg_nav']};
+                border-top: 1px solid {t['border']};
+                padding: 6px 16px;
+            }}
+            QFrame#inspectorCard {{
+                background-color: {t['bg_card']};
+                border: 1px solid {t['border_subtle']};
+                border-radius: 6px;
+                padding: 10px;
+            }}
+            QLabel#sectionHeader {{
+                color: {t['text_main']};
                 font-weight: 600;
                 font-size: 11px;
                 text-transform: uppercase;
-                letter-spacing: 0.8px;
-            }
-            QLabel#cardTitle {
-                color: #FAFAFA;
+                letter-spacing: 0.6px;
+            }}
+            QLabel#cardTitle {{
+                color: {t['text_main']};
                 font-weight: 600;
-                font-size: 12px;
-            }
-            /* Segmented Control Buttons */
-            QPushButton#segmentBtn {
-                background-color: transparent;
-                border: none;
-                border-radius: 5px;
-                color: #8E8E93;
-                padding: 5px 12px;
+                font-size: 11px;
+            }}
+            /* Segmented & Theme Buttons */
+            QPushButton#themeBtn {{
+                background-color: {t['bg_card']};
+                border: 1px solid {t['border_subtle']};
+                border-radius: 4px;
+                color: {t['text_muted']};
+                padding: 4px 10px;
                 font-weight: 500;
                 font-size: 11px;
-            }
-            QPushButton#segmentBtn:hover {
-                color: #FFFFFF;
-                background-color: #222228;
-            }
-            QPushButton#segmentBtn[active="true"] {
-                background-color: #2C2C34;
-                color: #FFFFFF;
+            }}
+            QPushButton#themeBtn:hover {{
+                color: {t['text_main']};
+                border-color: {t['border']};
+            }}
+            QPushButton#themeBtn[active="true"] {{
+                background-color: {t['accent_bg']};
+                border: 1px solid {t['accent']};
+                color: {t['accent_text']};
                 font-weight: 600;
-            }
-            /* Primary Pro Action Button */
-            QPushButton#primaryActionBtn {
-                background-color: #0A84FF;
-                color: #FFFFFF;
-                font-weight: 600;
-                font-size: 12px;
-                border-radius: 6px;
-                padding: 8px 18px;
-                border: none;
-            }
-            QPushButton#primaryActionBtn:hover {
-                background-color: #0071E3;
-            }
-            QPushButton#primaryActionBtn:pressed {
-                background-color: #0058B0;
-            }
-            QPushButton#secondaryActionBtn {
+            }}
+            QPushButton#segmentBtn {{
                 background-color: transparent;
-                border: 1px solid #2C2C34;
-                border-radius: 6px;
-                color: #C7C7CC;
-                padding: 7px 16px;
+                border: none;
+                border-radius: 4px;
+                color: {t['text_muted']};
+                padding: 4px 10px;
                 font-weight: 500;
-                font-size: 12px;
-            }
-            QPushButton#secondaryActionBtn:hover {
-                background-color: #202026;
-                color: #FFFFFF;
-            }
-            QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit {
-                background-color: #1B1B20;
-                border: 1px solid #292932;
-                border-radius: 5px;
-                padding: 5px 8px;
-                color: #FAFAFA;
                 font-size: 11px;
-            }
-            QComboBox:focus, QSpinBox:focus, QLineEdit:focus {
-                border-color: #0A84FF;
-            }
-            QSlider::groove:horizontal {
+            }}
+            QPushButton#segmentBtn:hover {{
+                color: {t['text_main']};
+                background-color: rgba(255, 255, 255, 0.05);
+            }}
+            QPushButton#segmentBtn[active="true"] {{
+                background-color: {t['accent_bg']};
+                color: {t['accent_text']};
+                font-weight: 600;
+                border: 1px solid {t['accent']};
+            }}
+            /* Primary & Secondary Buttons */
+            QPushButton#primaryActionBtn {{
+                background-color: {t['btn_primary_bg']};
+                color: {t['btn_primary_text']};
+                font-weight: 600;
+                font-size: 12px;
+                border-radius: 5px;
+                padding: 7px 18px;
+                border: none;
+            }}
+            QPushButton#primaryActionBtn:hover {{
+                opacity: 0.9;
+            }}
+            QPushButton#secondaryActionBtn {{
+                background-color: transparent;
+                border: 1px solid {t['border']};
+                border-radius: 5px;
+                color: {t['text_main']};
+                padding: 6px 14px;
+                font-size: 11px;
+            }}
+            QPushButton#secondaryActionBtn:hover {{
+                background-color: {t['bg_card']};
+            }}
+            QPushButton#toolBtn {{
+                background-color: {t['bg_win']};
+                border: 1px solid {t['border']};
+                border-radius: 4px;
+                color: {t['text_main']};
+                padding: 3px 8px;
+                font-size: 10px;
+            }}
+            QPushButton#toolBtn:hover {{
+                border-color: {t['accent']};
+            }}
+            /* Inputs */
+            QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit {{
+                background-color: {t['bg_win']};
+                border: 1px solid {t['border']};
+                border-radius: 4px;
+                padding: 4px 6px;
+                color: {t['text_main']};
+                font-size: 11px;
+            }}
+            QComboBox:focus, QSpinBox:focus, QLineEdit:focus {{
+                border-color: {t['accent']};
+            }}
+            QSlider::groove:horizontal {{
                 height: 3px;
-                background: #2A2A33;
+                background: {t['border']};
                 border-radius: 1.5px;
-            }
-            QSlider::sub-page:horizontal {
-                background: #0A84FF;
+            }}
+            QSlider::sub-page:horizontal {{
+                background: {t['accent']};
                 border-radius: 1.5px;
-            }
-            QSlider::handle:horizontal {
-                background: #FFFFFF;
-                border: 1px solid #0A84FF;
-                width: 12px;
-                margin-top: -4.5px;
-                margin-bottom: -4.5px;
-                border-radius: 6px;
-            }
-            QCheckBox {
-                color: #D1D1D6;
-                spacing: 6px;
+            }}
+            QSlider::handle:horizontal {{
+                background: {t['text_main']};
+                border: 1px solid {t['accent']};
+                width: 10px;
+                margin-top: -3.5px;
+                margin-bottom: -3.5px;
+                border-radius: 5px;
+            }}
+            QCheckBox {{
+                color: {t['text_main']};
+                spacing: 5px;
                 font-size: 11px;
-            }
-            QCheckBox::indicator {
-                width: 14px;
-                height: 14px;
+            }}
+            QCheckBox::indicator {{
+                width: 13px;
+                height: 13px;
                 border-radius: 3px;
-                border: 1px solid #3A3A46;
-                background-color: #19191E;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #0A84FF;
-                border-color: #0A84FF;
-            }
-            QScrollBar:vertical {
+                border: 1px solid {t['border']};
+                background-color: {t['bg_win']};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {t['accent']};
+                border-color: {t['accent']};
+            }}
+            QScrollBar:vertical {{
                 border: none;
                 background: transparent;
-                width: 5px;
-            }
-            QScrollBar::handle:vertical {
-                background: #2C2C35;
-                border-radius: 2.5px;
-            }
+                width: 4px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {t['border']};
+                border-radius: 2px;
+            }}
         """)
+        self._update_viewport_render()
 
     def _build_ui(self):
         main_widget = QWidget()
@@ -223,24 +389,23 @@ class StudioMockupWindow(QMainWindow):
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
-        # 1. Top Navbar (Clean Pro Branding & Workflow Selector)
+        # 1. Top Navbar: Title + Theme Selector + Preset Target
         top_nav = self._create_top_nav()
         root_layout.addWidget(top_nav)
 
         # 2. Main 3-Column Splitter
         content_splitter = QSplitter(Qt.Horizontal)
         content_splitter.setHandleWidth(1)
-        content_splitter.setStyleSheet("QSplitter::handle { background: #1C1C22; }")
 
-        # Left Column: Media Queue (260px)
+        # Left Column: Media Queue (250px)
         left_col = self._create_left_queue()
         content_splitter.addWidget(left_col)
 
-        # Center Column: Viewport & Scrubber (Flex)
+        # Center Column: Viewport & Timeline (Flex)
         center_col = self._create_center_viewport()
         content_splitter.addWidget(center_col)
 
-        # Right Column: Inspector (340px)
+        # Right Column: Full Complete Inspector (380px)
         right_col = self._create_right_inspector()
         content_splitter.addWidget(right_col)
 
@@ -258,23 +423,22 @@ class StudioMockupWindow(QMainWindow):
         nav.setObjectName("topNav")
         nav.setFixedHeight(46)
         layout = QHBoxLayout(nav)
-        layout.setContentsMargins(16, 0, 16, 0)
-        layout.setSpacing(16)
+        layout.setContentsMargins(14, 0, 14, 0)
+        layout.setSpacing(12)
 
-        # Title
+        # App Title
         title_label = QLabel("360 Extractor")
-        title_label.setStyleSheet("color: #FFFFFF; font-weight: 600; font-size: 13px; letter-spacing: -0.2px;")
+        title_label.setStyleSheet("font-weight: 700; font-size: 13px; letter-spacing: -0.2px;")
         layout.addWidget(title_label)
 
         v_sep = QFrame()
         v_sep.setFrameShape(QFrame.VLine)
-        v_sep.setStyleSheet("color: #24242A;")
-        v_sep.setFixedHeight(18)
+        v_sep.setFixedHeight(16)
         layout.addWidget(v_sep)
 
-        # Workflow Target Selector
-        wf_lbl = QLabel("Target Pipeline:")
-        wf_lbl.setStyleSheet("color: #71717A; font-size: 11px;")
+        # Workflow Presets
+        wf_lbl = QLabel("Preset:")
+        wf_lbl.setStyleSheet("font-size: 11px;")
         layout.addWidget(wf_lbl)
 
         self.preset_combo = QComboBox()
@@ -284,14 +448,34 @@ class StudioMockupWindow(QMainWindow):
             "COLMAP Calibrated Rig",
             "Custom Workflow"
         ])
-        self.preset_combo.setFixedWidth(240)
+        self.preset_combo.setFixedWidth(210)
         layout.addWidget(self.preset_combo)
+
+        layout.addSpacing(16)
+
+        # Live Theme Switcher
+        theme_lbl = QLabel("Color Theme:")
+        theme_lbl.setStyleSheet("font-size: 11px; font-weight: 600;")
+        layout.addWidget(theme_lbl)
+
+        self.theme_buttons = {}
+        theme_options = [
+            ("amber", "A. Graphite & Ambre"),
+            ("titanium", "B. Titanium Monochrome"),
+            ("sage", "C. Ardoise & Sauge"),
+        ]
+        for key, label in theme_options:
+            btn = QPushButton(label)
+            btn.setObjectName("themeBtn")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(lambda _, k=key: self._apply_theme(k))
+            self.theme_buttons[key] = btn
+            layout.addWidget(btn)
 
         layout.addStretch()
 
-        # Discreet System Status
-        sys_status = QLabel("Apple Metal (MPS) • GPU Active")
-        sys_status.setStyleSheet("color: #71717A; font-size: 11px;")
+        sys_status = QLabel("Apple Metal (MPS) GPU Active")
+        sys_status.setStyleSheet("font-size: 11px;")
         layout.addWidget(sys_status)
 
         return nav
@@ -299,31 +483,20 @@ class StudioMockupWindow(QMainWindow):
     def _create_left_queue(self) -> QWidget:
         col = QFrame()
         col.setObjectName("leftSidebar")
-        col.setFixedWidth(260)
+        col.setFixedWidth(250)
         layout = QVBoxLayout(col)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
 
         # Queue Header
         hdr_layout = QHBoxLayout()
-        hdr_title = QLabel("Queue")
+        hdr_title = QLabel("Queue (3 files)")
         hdr_title.setObjectName("sectionHeader")
         hdr_layout.addWidget(hdr_title)
-
-        count_badge = QLabel("3 files")
-        count_badge.setStyleSheet("color: #636366; font-size: 11px;")
-        hdr_layout.addWidget(count_badge)
         hdr_layout.addStretch()
 
         add_btn = QPushButton("+ Add Media")
-        add_btn.setStyleSheet("""
-            background-color: #1E1E24;
-            border: 1px solid #2B2B33;
-            border-radius: 4px;
-            color: #D1D1D6;
-            padding: 3px 8px;
-            font-size: 11px;
-        """)
+        add_btn.setObjectName("toolBtn")
         hdr_layout.addWidget(add_btn)
         layout.addLayout(hdr_layout)
 
@@ -331,21 +504,21 @@ class StudioMockupWindow(QMainWindow):
         drop_card = QFrame()
         drop_card.setStyleSheet("""
             background-color: transparent;
-            border: 1px dashed #282830;
-            border-radius: 6px;
-            padding: 10px 8px;
+            border: 1px dashed rgba(255, 255, 255, 0.15);
+            border-radius: 5px;
+            padding: 8px;
         """)
         drop_layout = QVBoxLayout(drop_card)
         drop_layout.setAlignment(Qt.AlignCenter)
         drop_layout.setSpacing(2)
 
         txt_lbl = QLabel("Drop 360° videos or folders")
-        txt_lbl.setStyleSheet("color: #8E8E93; font-size: 11px;")
+        txt_lbl.setStyleSheet("font-size: 11px; font-weight: 500;")
         txt_lbl.setAlignment(Qt.AlignCenter)
         drop_layout.addWidget(txt_lbl)
 
         sub_lbl = QLabel("GoPro Max, Insta360, Kandao, DJI")
-        sub_lbl.setStyleSheet("color: #55555C; font-size: 10px;")
+        sub_lbl.setStyleSheet("font-size: 10px;")
         sub_lbl.setAlignment(Qt.AlignCenter)
         drop_layout.addWidget(sub_lbl)
         layout.addWidget(drop_card)
@@ -359,16 +532,30 @@ class StudioMockupWindow(QMainWindow):
         cards_container = QWidget()
         cards_layout = QVBoxLayout(cards_container)
         cards_layout.setContentsMargins(0, 0, 0, 0)
-        cards_layout.setSpacing(6)
+        cards_layout.setSpacing(5)
 
         items_data = [
-            ("GS_PARK_WALK_8K.mp4", "8K • 01:45 • GPS/IMU", True),
-            ("GOPRO_MAX_INTERIOR.mp4", "5.6K • 03:12 • GPMF", False),
-            ("DRONE_ROOF_SURVEY.mp4", "4K Flat • 00:58 • SRT", False),
+            ("GS_PARK_WALK_8K.mp4", "8K 360 • 01:45 • GPS 18Hz/IMU", True),
+            ("GOPRO_MAX_INTERIOR.mp4", "5.6K 360 • 03:12 • GPMF Telemetry", False),
+            ("DRONE_ROOF_SURVEY.mp4", "4K Flat • 00:58 • SRT Subtitles", False),
         ]
 
         for name, meta, selected in items_data:
-            card = self._create_queue_item(name, meta, selected)
+            card = QFrame()
+            card.setObjectName("inspectorCard")
+            if selected:
+                card.setStyleSheet("border: 1px solid rgba(255, 255, 255, 0.4);")
+            c_lay = QVBoxLayout(card)
+            c_lay.setContentsMargins(6, 6, 6, 6)
+            c_lay.setSpacing(2)
+
+            t_lbl = QLabel(name)
+            t_lbl.setStyleSheet("font-weight: 600; font-size: 11px;")
+            c_lay.addWidget(t_lbl)
+
+            m_lbl = QLabel(meta)
+            m_lbl.setStyleSheet("font-size: 10px;")
+            c_lay.addWidget(m_lbl)
             cards_layout.addWidget(card)
 
         cards_layout.addStretch()
@@ -377,56 +564,20 @@ class StudioMockupWindow(QMainWindow):
 
         return col
 
-    def _create_queue_item(self, name: str, meta: str, selected: bool) -> QWidget:
-        card = QFrame()
-        card_border = "#0A84FF" if selected else "#222228"
-        card_bg = "#1B1B22" if selected else "#151518"
-
-        card.setStyleSheet(f"""
-            QFrame {{
-                background-color: {card_bg};
-                border: 1px solid {card_border};
-                border-radius: 6px;
-                padding: 8px;
-            }}
-            QFrame:hover {{
-                border-color: #3A3A48;
-            }}
-        """)
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(6, 6, 6, 6)
-        layout.setSpacing(3)
-
-        title = QLabel(name)
-        title.setStyleSheet("color: #FFFFFF; font-weight: 500; font-size: 11px;")
-        layout.addWidget(title)
-
-        meta_lbl = QLabel(meta)
-        meta_lbl.setStyleSheet("color: #71717A; font-size: 10px;")
-        layout.addWidget(meta_lbl)
-
-        return card
-
     def _create_center_viewport(self) -> QWidget:
         col = QFrame()
         col.setObjectName("centerArea")
         layout = QVBoxLayout(col)
-        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(8)
 
-        # Viewport Header Toolbar
+        # Toolbar with Segmented Face Selector & Overlay Checks
         tb_layout = QHBoxLayout()
         tb_layout.setContentsMargins(0, 0, 0, 0)
-        tb_layout.setSpacing(10)
+        tb_layout.setSpacing(8)
 
-        # Segmented Face Control (Pill container)
         seg_container = QFrame()
-        seg_container.setStyleSheet("""
-            background-color: #17171B;
-            border: 1px solid #24242C;
-            border-radius: 6px;
-            padding: 2px;
-        """)
+        seg_container.setStyleSheet("background-color: rgba(255, 255, 255, 0.04); border-radius: 5px; padding: 2px;")
         seg_layout = QHBoxLayout(seg_container)
         seg_layout.setContentsMargins(2, 2, 2, 2)
         seg_layout.setSpacing(2)
@@ -444,10 +595,9 @@ class StudioMockupWindow(QMainWindow):
             seg_layout.addWidget(btn)
 
         tb_layout.addWidget(seg_container)
-        tb_layout.addSpacing(12)
+        tb_layout.addSpacing(10)
 
-        # Discreet Overlays Toggles
-        self.chk_ai_mask = QCheckBox("Operator Mask Overlay")
+        self.chk_ai_mask = QCheckBox("Mask Overlay")
         self.chk_ai_mask.setChecked(self.show_ai_mask)
         self.chk_ai_mask.stateChanged.connect(self._toggle_ai_mask)
         tb_layout.addWidget(self.chk_ai_mask)
@@ -458,7 +608,6 @@ class StudioMockupWindow(QMainWindow):
         tb_layout.addWidget(self.chk_nadir)
 
         tb_layout.addStretch()
-
         layout.addLayout(tb_layout)
 
         # Viewport Area
@@ -474,31 +623,21 @@ class StudioMockupWindow(QMainWindow):
 
         layout.addWidget(self.viewport_frame, 1)
 
-        # Minimal Timeline Scrubber
+        # Timeline Scrubber
         tl_bar = QFrame()
-        tl_bar.setStyleSheet("""
-            background-color: #141418;
-            border: 1px solid #202026;
-            border-radius: 6px;
-            padding: 4px 10px;
-        """)
+        tl_bar.setObjectName("inspectorCard")
+        tl_bar.setFixedHeight(38)
         tl_layout = QHBoxLayout(tl_bar)
-        tl_layout.setContentsMargins(6, 2, 6, 2)
-        tl_layout.setSpacing(10)
+        tl_layout.setContentsMargins(8, 2, 8, 2)
+        tl_layout.setSpacing(8)
 
         play_btn = QPushButton("▶")
-        play_btn.setFixedSize(24, 24)
-        play_btn.setStyleSheet("""
-            background-color: #202028;
-            border: 1px solid #2D2D38;
-            border-radius: 12px;
-            color: #EDEDED;
-            font-size: 10px;
-        """)
+        play_btn.setFixedSize(22, 22)
+        play_btn.setObjectName("toolBtn")
         tl_layout.addWidget(play_btn)
 
         timecode = QLabel("00:14.2 / 01:45.0")
-        timecode.setStyleSheet("color: #A1A1A6; font-family: monospace; font-size: 11px;")
+        timecode.setStyleSheet("font-family: monospace; font-size: 10px;")
         tl_layout.addWidget(timecode)
 
         scrubber = QSlider(Qt.Horizontal)
@@ -507,7 +646,7 @@ class StudioMockupWindow(QMainWindow):
         tl_layout.addWidget(scrubber, 1)
 
         frame_lbl = QLabel("Frame 426")
-        frame_lbl.setStyleSheet("color: #71717A; font-family: monospace; font-size: 11px;")
+        frame_lbl.setStyleSheet("font-family: monospace; font-size: 10px;")
         tl_layout.addWidget(frame_lbl)
 
         layout.addWidget(tl_bar)
@@ -533,10 +672,10 @@ class StudioMockupWindow(QMainWindow):
         dest_res = 800
 
         angles = {
-            "Front": (0.0, 0.0, 0.0),
-            "Right": (90.0, 0.0, 0.0),
-            "Back": (180.0, 0.0, 0.0),
-            "Left": (270.0, 0.0, 0.0),
+            "Front": (0.0, float(self.pitch_offset), 0.0),
+            "Right": (90.0, float(self.pitch_offset), 0.0),
+            "Back": (180.0, float(self.pitch_offset), 0.0),
+            "Left": (270.0, float(self.pitch_offset), 0.0),
             "Up": (0.0, 90.0, 0.0),
             "Down": (0.0, -90.0, 0.0),
         }
@@ -547,7 +686,9 @@ class StudioMockupWindow(QMainWindow):
         )
         rect_img = cv2.remap(self.equirect_bgr, map_x, map_y, cv2.INTER_LINEAR)
 
-        # Subtle, professional overlays on Down face
+        t = THEMES[self.current_theme_key]
+
+        # Subtle overlays on Down face
         if self.current_face == "Down":
             overlay = rect_img.copy()
             center_x, center_y = dest_res // 2, dest_res // 2
@@ -556,19 +697,19 @@ class StudioMockupWindow(QMainWindow):
             if self.show_nadir_disc:
                 radius_px = int((self.nadir_radius / 100.0) * (dest_res / 2.0))
                 cv2.circle(overlay, (center_x, center_y), radius_px, (15, 15, 18), -1)
-                cv2.circle(overlay, (center_x, center_y), radius_px, (90, 90, 100), 1)
+                cv2.circle(overlay, (center_x, center_y), radius_px, t["overlay_hud"], 1)
 
-            # AI Operator Mask (Subdued subtle tint)
+            # AI Operator Mask
             if self.show_ai_mask:
                 op_x1, op_y1 = center_x - 110, center_y + 50
                 op_x2, op_y2 = center_x + 110, dest_res - 30
-                cv2.ellipse(overlay, ((op_x1 + op_x2) // 2, (op_y1 + op_y2) // 2), (120, 160), 0, 0, 360, (20, 30, 180), -1)
+                cv2.ellipse(overlay, ((op_x1 + op_x2) // 2, (op_y1 + op_y2) // 2), (120, 160), 0, 0, 360, t["overlay_tint"], -1)
 
             cv2.addWeighted(overlay, 0.40, rect_img, 0.60, 0, rect_img)
 
-        # Clean typographic overlay
+        # Typographic overlay
         cv2.putText(rect_img, f"{self.current_face.upper()} VIEW", (24, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (230, 230, 235), 1, cv2.LINE_AA)
-        cv2.putText(rect_img, f"FOV {self.fov} deg  |  PINHOLE CALIBRATED", (24, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (140, 140, 150), 1, cv2.LINE_AA)
+        cv2.putText(rect_img, f"FOV {self.fov} deg | PINHOLE CALIBRATED", (24, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (150, 150, 160), 1, cv2.LINE_AA)
 
         # Convert to QPixmap
         rgb = cv2.cvtColor(rect_img, cv2.COLOR_BGR2RGB)
@@ -580,13 +721,12 @@ class StudioMockupWindow(QMainWindow):
     def _create_right_inspector(self) -> QWidget:
         col = QFrame()
         col.setObjectName("rightInspector")
-        col.setFixedWidth(340)
+        col.setFixedWidth(380)
         layout = QVBoxLayout(col)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
 
-        # Header
-        hdr = QLabel("Settings")
+        hdr = QLabel("All Processing Settings")
         hdr.setObjectName("sectionHeader")
         layout.addWidget(hdr)
 
@@ -598,47 +738,59 @@ class StudioMockupWindow(QMainWindow):
         container = QWidget()
         c_layout = QVBoxLayout(container)
         c_layout.setContentsMargins(0, 0, 4, 0)
-        c_layout.setSpacing(10)
+        c_layout.setSpacing(8)
 
-        # Section 1: Projection
-        c_layout.addWidget(self._create_projection_card())
+        # Section 1: Camera & Optics (Complete)
+        c_layout.addWidget(self._create_camera_optics_card())
 
-        # Section 2: Masking
-        c_layout.addWidget(self._create_masking_card())
+        # Section 2: Quality & Motion Filters (Complete)
+        c_layout.addWidget(self._create_quality_filters_card())
 
-        # Section 3: Output & Priors
-        c_layout.addWidget(self._create_output_card())
+        # Section 3: AI Masking & Nadir (Complete)
+        c_layout.addWidget(self._create_ai_masking_card())
+
+        # Section 4: Export & Formats (Complete)
+        c_layout.addWidget(self._create_export_calibration_card())
 
         c_layout.addStretch()
         scroll.setWidget(container)
         layout.addWidget(scroll, 1)
         return col
 
-    def _create_projection_card(self) -> QWidget:
+    def _create_camera_optics_card(self) -> QWidget:
         card = QFrame()
         card.setObjectName("inspectorCard")
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(8)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
 
-        title = QLabel("Camera & Projection")
+        title = QLabel("1. Camera & Projection Geometry")
         title.setObjectName("cardTitle")
         layout.addWidget(title)
 
         grid = QGridLayout()
-        grid.setSpacing(6)
+        grid.setSpacing(5)
 
-        grid.addWidget(QLabel("Layout:"), 0, 0)
+        # 360 Input toggle
+        grid.addWidget(QLabel("Media Type:"), 0, 0)
+        media_type = QComboBox()
+        media_type.addItems(["360° Equirectangular", "Standard Flat Media (Passthrough)"])
+        grid.addWidget(media_type, 0, 1)
+
+        # Layout Mode
+        grid.addWidget(QLabel("Layout Mode:"), 1, 0)
         layout_cb = QComboBox()
-        layout_cb.addItems(["Cube Map (6 Views)", "Ring (Horizon)", "Fibonacci Sphere"])
-        grid.addWidget(layout_cb, 0, 1)
+        layout_cb.addItems(["Cube Map (6 Views - Recommended)", "Ring (Horizon 360°)", "Fibonacci Sphere (Dense)"])
+        grid.addWidget(layout_cb, 1, 1)
 
-        grid.addWidget(QLabel("Resolution:"), 1, 0)
+        # Resolution
+        grid.addWidget(QLabel("Resolution:"), 2, 0)
         res_cb = QComboBox()
-        res_cb.addItems(["2048 x 2048", "3072 x 3072", "4096 x 4096"])
-        grid.addWidget(res_cb, 1, 1)
+        res_cb.addItems(["2048 x 2048 (Optimized)", "3072 x 3072", "4096 x 4096 (8K)"])
+        grid.addWidget(res_cb, 2, 1)
 
-        grid.addWidget(QLabel("FOV:"), 2, 0)
+        # FOV Slider
+        grid.addWidget(QLabel("FOV (Field of View):"), 3, 0)
         fov_layout = QHBoxLayout()
         fov_slider = QSlider(Qt.Horizontal)
         fov_slider.setRange(60, 120)
@@ -647,94 +799,233 @@ class StudioMockupWindow(QMainWindow):
         fov_slider.valueChanged.connect(lambda v: (fov_lbl.setText(f"{v}°"), setattr(self, 'fov', v), self._update_viewport_render()))
         fov_layout.addWidget(fov_slider)
         fov_layout.addWidget(fov_lbl)
-        grid.addLayout(fov_layout, 2, 1)
+        grid.addLayout(fov_layout, 3, 1)
+
+        # Pitch Offset
+        grid.addWidget(QLabel("Pitch Tilt Offset:"), 4, 0)
+        pitch_cb = QComboBox()
+        pitch_cb.addItems(["0° (Horizon Level)", "-20° (High / Perch Mode)", "+20° (Low Mode)"])
+        grid.addWidget(pitch_cb, 4, 1)
 
         layout.addLayout(grid)
 
-        imu_chk = QCheckBox("Auto-level horizon (IMU)")
+        # Checkboxes
+        imu_chk = QCheckBox("Auto-Horizon Leveling (IMU Gyro Fusion)")
         imu_chk.setChecked(True)
         layout.addWidget(imu_chk)
 
+        lanczos_chk = QCheckBox("Lanczos-4 High-Sharpness Interpolation")
+        layout.addWidget(lanczos_chk)
+
         return card
 
-    def _create_masking_card(self) -> QWidget:
+    def _create_quality_filters_card(self) -> QWidget:
         card = QFrame()
         card.setObjectName("inspectorCard")
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(8)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
 
-        title = QLabel("Operator & Nadir Masking")
+        title = QLabel("2. Quality & Motion Filters")
+        title.setObjectName("cardTitle")
+        layout.addWidget(title)
+
+        # Blur Filter Row with Analyze Button
+        blur_row = QHBoxLayout()
+        chk_blur = QCheckBox("Blur Rejection")
+        chk_blur.setChecked(True)
+        blur_row.addWidget(chk_blur)
+
+        blur_row.addWidget(QLabel("Min:"))
+        blur_spin = QDoubleSpinBox()
+        blur_spin.setRange(0.0, 1000.0)
+        blur_spin.setValue(100.0)
+        blur_spin.setFixedWidth(70)
+        blur_row.addWidget(blur_spin)
+
+        btn_analyze = QPushButton("🔍 Analyze")
+        btn_analyze.setObjectName("toolBtn")
+        blur_row.addWidget(btn_analyze)
+        layout.addLayout(blur_row)
+
+        chk_smart_blur = QCheckBox("Smart Adaptive Blur (Auto Threshold)")
+        chk_smart_blur.setChecked(True)
+        layout.addWidget(chk_smart_blur)
+
+        # Sharpening
+        sharp_row = QHBoxLayout()
+        chk_sharp = QCheckBox("Sharpening Recovery")
+        sharp_row.addWidget(chk_sharp)
+        sharp_slider = QSlider(Qt.Horizontal)
+        sharp_slider.setRange(0, 100)
+        sharp_slider.setValue(50)
+        sharp_row.addWidget(sharp_slider)
+        sharp_row.addWidget(QLabel("0.5"))
+        layout.addLayout(sharp_row)
+
+        # Adaptive Keyframing (Optical Flow)
+        flow_row = QHBoxLayout()
+        chk_flow = QCheckBox("Adaptive Motion (Optical Flow)")
+        flow_row.addWidget(chk_flow)
+        flow_spin = QDoubleSpinBox()
+        flow_spin.setRange(0.1, 10.0)
+        flow_spin.setValue(0.5)
+        flow_spin.setFixedWidth(60)
+        flow_row.addWidget(flow_spin)
+        layout.addLayout(flow_row)
+
+        return card
+
+    def _create_ai_masking_card(self) -> QWidget:
+        card = QFrame()
+        card.setObjectName("inspectorCard")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        title = QLabel("3. AI Operator & Nadir Removal")
         title.setObjectName("cardTitle")
         layout.addWidget(title)
 
         grid = QGridLayout()
-        grid.setSpacing(6)
+        grid.setSpacing(5)
 
-        grid.addWidget(QLabel("Model:"), 0, 0)
+        # AI Mode
+        grid.addWidget(QLabel("Mode:"), 0, 0)
+        ai_mode_cb = QComboBox()
+        ai_mode_cb.addItems(["Generate Binary / Soft Mask", "Skip Entire Frame", "None (Disabled)"])
+        grid.addWidget(ai_mode_cb, 0, 1)
+
+        # Model
+        grid.addWidget(QLabel("Model:"), 1, 0)
         model_cb = QComboBox()
-        model_cb.addItems(["YOLO26-M Seg", "YOLO26-N Seg", "Custom Weights"])
-        grid.addWidget(model_cb, 0, 1)
+        model_cb.addItems(["YOLO26-M Seg (High Precision)", "YOLO26-N Seg (Fast Nano)", "Custom Weights (.pt)"])
+        grid.addWidget(model_cb, 1, 1)
 
-        grid.addWidget(QLabel("Scope:"), 1, 0)
+        # Scope
+        grid.addWidget(QLabel("Scope:"), 2, 0)
         scope_cb = QComboBox()
-        scope_cb.addItems(["Down face only", "All cameras"])
-        grid.addWidget(scope_cb, 1, 1)
+        scope_cb.addItems(["Down Face Only (Preserve Scene)", "All Cameras", "Custom Face Selection"])
+        grid.addWidget(scope_cb, 2, 1)
 
-        grid.addWidget(QLabel("Nadir Size:"), 2, 0)
-        rad_layout = QHBoxLayout()
+        # Confidence
+        grid.addWidget(QLabel("Confidence:"), 3, 0)
+        conf_row = QHBoxLayout()
+        conf_slider = QSlider(Qt.Horizontal)
+        conf_slider.setRange(5, 95)
+        conf_slider.setValue(25)
+        conf_lbl = QLabel("25%")
+        conf_slider.valueChanged.connect(lambda v: conf_lbl.setText(f"{v}%"))
+        conf_row.addWidget(conf_slider)
+        conf_row.addWidget(conf_lbl)
+        grid.addLayout(conf_row, 3, 1)
+
+        # Nadir Radius
+        grid.addWidget(QLabel("Nadir Disc:"), 4, 0)
+        rad_row = QHBoxLayout()
         rad_slider = QSlider(Qt.Horizontal)
         rad_slider.setRange(0, 100)
         rad_slider.setValue(int(self.nadir_radius))
         rad_lbl = QLabel(f"{int(self.nadir_radius)}%")
         rad_slider.valueChanged.connect(lambda v: (rad_lbl.setText(f"{v}%"), setattr(self, 'nadir_radius', float(v)), self._update_viewport_render()))
-        rad_layout.addWidget(rad_slider)
-        rad_layout.addWidget(rad_lbl)
-        grid.addLayout(rad_layout, 2, 1)
+        rad_row.addWidget(rad_slider)
+        rad_row.addWidget(rad_lbl)
+        grid.addLayout(rad_row, 4, 1)
 
         layout.addLayout(grid)
 
-        chk_soft = QCheckBox("Soft mask (alpha blend for 3DGS)")
+        # Target classes
+        class_row = QHBoxLayout()
+        class_row.addWidget(QLabel("Targets:"))
+        chk_human = QCheckBox("Humans")
+        chk_human.setChecked(True)
+        chk_veh = QCheckBox("Vehicles")
+        chk_plant = QCheckBox("Plants")
+        class_row.addWidget(chk_human)
+        class_row.addWidget(chk_veh)
+        class_row.addWidget(chk_plant)
+        class_row.addStretch()
+        layout.addLayout(class_row)
+
+        # Custom class text
+        cust_row = QHBoxLayout()
+        cust_row.addWidget(QLabel("Custom:"))
+        txt_cust = QLineEdit()
+        txt_cust.setPlaceholderText("e.g. backpack, tripod, dog")
+        cust_row.addWidget(txt_cust)
+        layout.addLayout(cust_row)
+
+        # Mask refinement toggles
+        chk_soft = QCheckBox("Soft Alpha Mask (Native Softness for 3DGS)")
         chk_soft.setChecked(True)
         layout.addWidget(chk_soft)
 
+        chk_inv = QCheckBox("Invert Mask (Photogrammetry: Black=Subject, White=BG)")
+        chk_inv.setChecked(True)
+        layout.addWidget(chk_inv)
+
+        chk_sky = QCheckBox("Sky Mask (Outdoor Gaussian Floater Reduction)")
+        layout.addWidget(chk_sky)
+
         return card
 
-    def _create_output_card(self) -> QWidget:
+    def _create_export_calibration_card(self) -> QWidget:
         card = QFrame()
         card.setObjectName("inspectorCard")
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(8)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
 
-        title = QLabel("Output & Calibration")
+        title = QLabel("4. Output, Calibration & Metadata")
         title.setObjectName("cardTitle")
         layout.addWidget(title)
 
         grid = QGridLayout()
-        grid.setSpacing(6)
+        grid.setSpacing(5)
 
-        grid.addWidget(QLabel("Format:"), 0, 0)
+        # Format
+        grid.addWidget(QLabel("Image Format:"), 0, 0)
         fmt_cb = QComboBox()
-        fmt_cb.addItems(["JPG (Quality 95%)", "PNG (Lossless)", "TIFF"])
+        fmt_cb.addItems(["JPG (Quality 95%)", "PNG (Lossless 8-bit)", "TIFF (16-bit)"])
         grid.addWidget(fmt_cb, 0, 1)
 
+        # Interval
         grid.addWidget(QLabel("Interval:"), 1, 0)
-        int_cb = QComboBox()
-        int_cb.addItems(["Every 1.0 s", "Every 0.5 s", "Adaptive (Flow)"])
-        grid.addWidget(int_cb, 1, 1)
+        int_row = QHBoxLayout()
+        int_spin = QDoubleSpinBox()
+        int_spin.setRange(0.1, 100.0)
+        int_spin.setValue(1.0)
+        int_spin.setFixedWidth(60)
+        int_unit = QComboBox()
+        int_unit.addItems(["Seconds", "Frames"])
+        int_row.addWidget(int_spin)
+        int_row.addWidget(int_unit)
+        grid.addLayout(int_row, 1, 1)
+
+        # Naming Pattern
+        grid.addWidget(QLabel("Naming Mode:"), 2, 0)
+        name_cb = QComboBox()
+        name_cb.addItems(["RealityScan Standard (.mask.png)", "Simple Sequential", "Custom Pattern"])
+        grid.addWidget(name_cb, 2, 1)
+
+        # Altitude Mode
+        grid.addWidget(QLabel("GPS Altitude:"), 3, 0)
+        alt_cb = QComboBox()
+        alt_cb.addItems(["Absolute (ASL - Above Sea Level)", "Relative (AGL - Above Ground)"])
+        grid.addWidget(alt_cb, 3, 1)
 
         layout.addLayout(grid)
 
-        chk_colmap = QCheckBox("Export COLMAP rig calibration")
+        # Export Toggles
+        chk_colmap = QCheckBox("Export COLMAP Rig (cameras.txt + rig_rotations.json)")
         chk_colmap.setChecked(True)
         layout.addWidget(chk_colmap)
 
-        chk_transforms = QCheckBox("Export transforms.json (Postshot)")
+        chk_transforms = QCheckBox("Export transforms.json (Postshot / Nerfstudio)")
         chk_transforms.setChecked(True)
         layout.addWidget(chk_transforms)
 
-        chk_exif = QCheckBox("Embed optical EXIF & GPS heading")
+        chk_exif = QCheckBox("Embed Optical EXIF (FocalLength, Make/Model, GPS heading)")
         chk_exif.setChecked(True)
         layout.addWidget(chk_exif)
 
@@ -743,13 +1034,13 @@ class StudioMockupWindow(QMainWindow):
     def _create_hud_bar(self) -> QWidget:
         hud = QFrame()
         hud.setObjectName("hudBar")
-        hud.setFixedHeight(56)
+        hud.setFixedHeight(54)
         layout = QHBoxLayout(hud)
-        layout.setContentsMargins(18, 0, 18, 0)
-        layout.setSpacing(16)
+        layout.setContentsMargins(16, 0, 16, 0)
+        layout.setSpacing(14)
 
-        est_text = QLabel("1,440 images  •  ~2.8 GB  •  Estimated time: 1m 15s")
-        est_text.setStyleSheet("color: #8E8E93; font-size: 11px;")
+        est_text = QLabel("1,440 pinhole images (240 frames × 6 views) • ~2.8 GB • Est. time: ~1m 15s")
+        est_text.setStyleSheet("font-weight: 500; font-size: 11px;")
         layout.addWidget(est_text)
 
         layout.addStretch()
@@ -775,19 +1066,22 @@ def pump(app: QApplication, ms: int) -> None:
     loop.exec()
 
 
+def render_and_save(window: StudioMockupWindow, app: QApplication, theme_key: str, out_path: Path):
+    window._apply_theme(theme_key)
+    pump(app, 400)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    window.grab().save(str(out_path))
+    print(f"Saved: {out_path} ({out_path.stat().st_size / 1024:.0f} KB)")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument(
-        "-o", "--output",
-        default=str(REPO_ROOT / "docs" / "images" / "mockup-studio-gui.png"),
-        help="Where to write the mockup PNG",
-    )
+    parser.add_argument("-o", "--output", default=str(REPO_ROOT / "docs" / "images" / "mockup-studio-gui.png"))
     parser.add_argument("--interactive", action="store_true", help="Launch interactive GUI window")
+    parser.add_argument("--all-themes", action="store_true", help="Render screenshots for all 3 themes")
     args = parser.parse_args(argv)
 
-    if args.interactive:
-        os.environ.pop("QT_QPA_PLATFORM", None)
-    else:
+    if not args.interactive:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
     app = QApplication.instance() or QApplication(sys.argv)
@@ -798,22 +1092,20 @@ def main(argv: list[str] | None = None) -> int:
 
         window = StudioMockupWindow(demo)
         window.show()
-        window.raise_()
-        window.activateWindow()
 
         if args.interactive:
-            print("Interactive 360 Extractor window is open.")
+            print("Interactive 360 Extractor Studio is open with real-time Theme & Settings switcher.")
             return app.exec()
 
-        pump(app, 1500)
+        if args.all_themes:
+            render_and_save(window, app, "amber", REPO_ROOT / "docs" / "images" / "mockup-theme-a-amber.png")
+            render_and_save(window, app, "titanium", REPO_ROOT / "docs" / "images" / "mockup-theme-b-titanium.png")
+            render_and_save(window, app, "sage", REPO_ROOT / "docs" / "images" / "mockup-theme-c-sage.png")
+            # Also write default output
+            render_and_save(window, app, "amber", Path(args.output))
+        else:
+            render_and_save(window, app, "amber", Path(args.output))
 
-        output_path = Path(args.output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        if not window.grab().save(str(output_path)):
-            print(f"error: could not write {output_path}", file=sys.stderr)
-            return 1
-
-        print(f"Wrote pro studio mockup screenshot: {output_path} ({output_path.stat().st_size / 1024:.0f} KB)")
     return 0
 
 
