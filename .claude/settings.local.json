@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh issue *)",
+      "Bash(gh release *)",
+      "Bash(gh repo *)",
+      "Bash(xargs -I{} du -k \"{}\")",
+      "Bash(python3 -m pytest tests/ -q)",
+      "Bash(ruff check *)",
+      "Bash(python3 -c \"import sys; print\\(sys.version\\)\")",
+      "Bash(python3 src/main.py --version)",
+      "Bash(python3 -m pip wheel --no-deps --no-build-isolation -w \"/private/tmp/claude-501/-Users-Nicolas-Documents-Applications-IA-Application360/e036f3dc-bb86-4e60-9358-41103ab6de46/scratchpad/wheeltest\" .)",
+      "Bash(mkdir -p /private/tmp/claude-501/-Users-Nicolas-Documents-Applications-IA-Application360/e036f3dc-bb86-4e60-9358-41103ab6de46/scratchpad/e2e)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 src/main.py --input /private/tmp/claude-501/-Users-Nicolas-Documents-Applications-IA-Application360/e036f3dc-bb86-4e60-9358-41103ab6de46/scratchpad/e2e/test.jpg --output /private/tmp/claude-501/-Users-Nicolas-Documents-Applications-IA-Application360/e036f3dc-bb86-4e60-9358-41103ab6de46/scratchpad/e2e/out --flat --format tiff)",
+      "Bash(echo \"exit_on_failure=$?\")"
+    ]
+  }
+}

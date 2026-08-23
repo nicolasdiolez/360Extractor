@@ -7,8 +7,13 @@
 High-performance desktop application and command-line tool for 360° and standard video/image preprocessing. This tool generates optimized datasets for Gaussian Splatting and photogrammetry (COLMAP, RealityScan) by converting equirectangular media into rectilinear pinhole views and removing operators using AI.
 
 > See the [CHANGELOG](CHANGELOG.md) for what's new in each release.
-
 ![The 360 Extractor GUI: job queue, live perspective preview and camera settings](docs/images/screenshot-gui.png)
+
+## Overview & Reprojection Pipeline
+
+360 Extractor provides an end-to-end processing pipeline for turning raw 360° video (GoPro Max, Insta360, Kandao) or standard media into clean pinhole view datasets ready for COLMAP, Postshot, and RealityScan:
+
+![360 Extractor Reprojection & AI Masking Pipeline Showcase](docs/images/showcase-pipeline.png)
 
 ## Download
 
@@ -70,6 +75,9 @@ python3 src/main.py
 
 ### CLI Mode
 Process videos via command line for automation:
+
+![360 Extractor CLI Automation Showcase](docs/images/screenshot-cli.png)
+
 ```bash
 python3 src/main.py --input <video_path> --output <output_dir> --interval 1.0
 ```

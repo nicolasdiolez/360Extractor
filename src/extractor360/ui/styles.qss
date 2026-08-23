@@ -197,6 +197,11 @@ QWidget#queueSection {
     border-right: 1px solid #121214;
 }
 
+QScrollArea, QScrollArea > QWidget > QWidget, QWidget#queueContainer {
+    background-color: transparent;
+    border: none;
+}
+
 /* Right Panel Bottom (Actions/Logs) */
 QWidget#actionBar {
     background-color: rgba(9, 9, 11, 0.8);
