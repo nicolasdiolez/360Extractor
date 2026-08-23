@@ -785,7 +785,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--interactive", action="store_true", help="Launch interactive GUI window")
     args = parser.parse_args(argv)
 
-    if not args.interactive:
+    if args.interactive:
+        os.environ.pop("QT_QPA_PLATFORM", None)
+    else:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
     app = QApplication.instance() or QApplication(sys.argv)
@@ -796,9 +798,11 @@ def main(argv: list[str] | None = None) -> int:
 
         window = StudioMockupWindow(demo)
         window.show()
+        window.raise_()
+        window.activateWindow()
 
         if args.interactive:
-            print("Running interactive 360 Extractor Pro mockup...")
+            print("Interactive 360 Extractor window is open.")
             return app.exec()
 
         pump(app, 1500)
