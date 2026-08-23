@@ -263,13 +263,13 @@ def main(argv: list[str] | None = None) -> int:
         equirect_img = make_demo_equirect(demo)
 
         window = MainWindow()
-        window.resize(1500, 940)
+        window.resize(1540, 940)
         window.show()
 
-        window.add_job(str(demo))
-
-        window.sidebar.setActivePage("settings")
-        window.sidebar.page_changed.emit("settings")
+        window.add_videos_from_paths([str(demo)])
+        if window._video_cards:
+            window.select_card(window._video_cards[0])
+            window.preview_widget.set_face("Down")
 
         pump(app, 1800)
 
