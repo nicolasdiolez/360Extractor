@@ -5,6 +5,8 @@ name: Release
 # click: the release is created as a DRAFT so the binaries can be smoke-tested
 # before the world sees them.
 on:
+  # Qualify the packaging on a branch before allocating an immutable tag.
+  workflow_dispatch:
   push:
     tags: ["v*"]
 
@@ -30,10 +32,17 @@ jobs:
       # Refuses the release if version.py, pyproject, the CHANGELOG entry and
       # the tag disagree. Runs before the (long) builds so a mistake fails fast.
       - name: Check version / CHANGELOG / tag consistency
-        run: python scripts/check_release.py --tag "${GITHUB_REF_NAME}"
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            python scripts/check_release.py --tag "${GITHUB_REF_NAME}"
+          else
+            python scripts/check_release.py
+          fi
 
       - name: Extract release notes from CHANGELOG
-        run: python scripts/release_notes.py "${GITHUB_REF_NAME}" -o release_notes.md
+        run: |
+          VERSION=$(python -c 'import runpy; print(runpy.run_path("src/extractor360/core/version.py")["VERSION"])')
+          python scripts/release_notes.py "v${VERSION}" -o release_notes.md
 
       - name: Show release notes
         run: cat release_notes.md
@@ -70,8 +79,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install . -c constraints/security-minimums.txt
-          python -m pip install pyinstaller
+          python -m pip install . -r packaging/requirements-build.txt -c constraints/security-minimums.txt
 
       - name: Test the release environment
         env:
@@ -87,6 +95,11 @@ jobs:
 
       - name: Build with PyInstaller
         run: pyinstaller 360Extractor.spec --noconfirm
+
+      - name: Smoke-test the frozen application
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python scripts/smoke_frozen.py --dist dist
 
       # ditto (not zip) preserves the .app bundle structure, symlinks and
       # permissions. xattr -cr first: stray extended attributes make PyInstaller's
@@ -110,6 +123,7 @@ jobs:
 
   release:
     name: Draft GitHub Release
+    if: github.ref_type == 'tag'
     needs: [guard, build]
     runs-on: ubuntu-latest
     steps:

@@ -5,7 +5,7 @@
 
 Desktop and command-line preprocessing for stitched 360° panoramas and standard videos/images. Generate rectilinear views, filter blur and motion, and export segmentation masks and optional GPS metadata for reconstruction workflows.
 
-**360 Extractor Studio — [v4.0.0 Preview](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.0).** This public prerelease introduces the new interface and reliability corrections for user feedback. It does not replace the latest stable release. Download the attached assets and read their installation notes and validation limits on the release page; start with a short clip and a separate output folder. Full camera/GPU/reconstruction qualification remains open in the [implementation follow-up](docs/implementation-2026-09-07/PROGRESSION.md).
+**360 Extractor Studio — [v4.0.1 Preview](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.1).** This public prerelease introduces the new interface and reliability corrections for user feedback. It does not replace the latest stable release. Download the attached assets and read their installation notes and validation limits on the release page; start with a short clip and a separate output folder. Full camera/GPU/reconstruction qualification remains open in the [implementation follow-up](docs/implementation-2026-09-07/PROGRESSION.md).
 
 Windows lifecycle tests have reproduced an intermittent native crash (`0xC0000005`), including during the first extraction. Other diagnostic and stress runs passed; the cause remains unknown. Report any recurrence through the [bug report form](https://github.com/nicolasdiolez/360Extractor/issues/new?template=bug_report.yml), with your settings and available logs.
 
@@ -28,10 +28,10 @@ Input 360 media must already be stitched. Accepting `.insv` does not imply nativ
 
 ## Install from source
 
-Clone the repository and select the `v4.0.0` tag to test the published preview. `main` may contain subsequent changes. Run the commands below from the selected checkout’s root.
+Clone the repository and select the `v4.0.1` tag to test the published preview. `main` may contain subsequent changes. Run the commands below from the selected checkout’s root.
 
 ```sh
-git clone --branch v4.0.0 https://github.com/nicolasdiolez/360Extractor.git
+git clone --branch v4.0.1 https://github.com/nicolasdiolez/360Extractor.git
 cd 360Extractor
 ```
 

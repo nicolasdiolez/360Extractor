@@ -1,10 +1,28 @@
 # Changelog
 
-Versioned entries describe their historical releases. The current guides describe the correction branch. Version 4.0.0 is the prepared Studio release. Its dated section records the release candidate; availability is determined by the GitHub release, not this heading alone.
+Versioned entries describe their historical candidates/releases. Version 4.0.1 prepares the Studio feedback preview after a frozen-launcher failure in the unpublished 4.0.0 draft. Availability and qualification are described on the corresponding GitHub release.
 
 ## [Unreleased]
 
-No changes recorded after the 4.0.0 candidate.
+No changes recorded after the 4.0.1 candidate.
+
+## [4.0.1] - 2026-09-07
+
+Feedback preview containing the Studio changes described in 4.0.0 below.
+
+### Fixed
+
+- Exclude the obsolete pkg_resources namespace from the frozen bundle and pin the build tools while retaining setuptools 84.0.0 and the dependency security floors. The original 4.0.0 macOS draft binary failed in PyInstaller's legacy runtime hook before application startup with a missing NullProvider attribute; that draft was not published.
+- Provide null console streams in windowed executables so CLI dependencies can operate on Windows without an attached console.
+
+### Added
+
+- Run the actual frozen executable after every macOS/Windows build: launcher, short flat extraction, completed manifest, native image dimensions and exact PNG pixels. Source tests alone had not detected the startup failure.
+
+### Known limitations
+
+- An intermittent Windows Studio native crash (0xC0000005) was reproduced during the first extraction in post-merge CI, while other stress runs passed on the same code. Its cause is unknown and this packaging correction does not claim to fix it. Windows remains experimental in this preview.
+- The real-camera, GPU, clean-machine, segmentation and reconstruction qualification limits listed for 4.0.0 remain applicable.
 
 ## [4.0.0] - 2026-09-07
 

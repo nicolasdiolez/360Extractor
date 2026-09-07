@@ -52,13 +52,13 @@ python scripts/check_release.py
 
 For offscreen Qt tests, prefix pytest with `QT_QPA_PLATFORM=offscreen` on macOS/Linux; in PowerShell set `$env:QT_QPA_PLATFORM="offscreen"` first. Tests isolate application preferences and library configuration. AI contract tests can skip when the AI dependencies are missing, so a lightweight run is not full AI validation.
 
-CI runs core tests on Ubuntu/macOS/Windows and Qt tests on macOS/Windows. Ruff and the four critical type checks are blocking; whole-project mypy remains informational. The release workflow additionally tests its full installed environment and checks dependency advisories before building. A green CI result does not qualify physical cameras, GPU inference or the distributed binary.
+CI runs core tests on Ubuntu/macOS/Windows and Qt tests on macOS/Windows. Ruff and the four critical type checks are blocking; whole-project mypy remains informational. The release workflow additionally tests its full installed environment, checks dependency advisories and exercises the frozen executable after building. The build-tool profile is pinned in `packaging/requirements-build.txt`. A green CI result does not qualify physical cameras, GPU inference or the distributed binary.
 
 Use a focused branch and a pull request against the intended integration branch. The established development flow targets `dev`; a direct promotion to `main` must be an explicit maintainer decision. Use Conventional Commit prefixes such as `fix:`, `feat:`, `docs:` and `test:`. Add meaningful regression coverage for behavior changes and update [CHANGELOG.md](CHANGELOG.md).
 
 ## Preparing and publishing a release
 
-Version **4.0.0**, dated **2026-09-07** in the changelog, is published as a [prerelease for user feedback](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.0). Its release notes describe the tested artifacts and remaining qualification limits, including a reproduced intermittent Windows native crash. It does not replace the latest stable release. Follow the sequence below for subsequent versions.
+Version **4.0.1**, dated **2026-09-07** in the changelog, is published as a [prerelease for user feedback](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.1). Its release notes describe the tested artifacts and remaining qualification limits, including a reproduced intermittent Windows native crash. It does not replace the latest stable release. Follow the sequence below for subsequent versions.
 
 1. Run the [acceptance protocol](docs/CLI_TESTING_PROTOCOL.md) on representative real media. Record the exact commit, environment, results and unresolved limits. Resolve blocking failures and require CI on the final candidate.
 2. Merge the accepted candidate through review into the release branch (`main` for a public release). Do not merge unrelated local changes or reuse an existing published version.

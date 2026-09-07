@@ -70,7 +70,10 @@ a = Analysis(  # noqa: F821
     hooksconfig={},
     runtime_hooks=[],
     # Other Qt bindings would clash with PySide6; tkinter is unused.
-    excludes=["tkinter", "PyQt5", "PyQt6", "PySide2"],
+    # setuptools >=82 no longer provides pkg_resources. An empty residual
+    # namespace can still be collected and trigger PyInstaller's legacy hook,
+    # which crashes before main(). Preserve the normal ImportError fallback.
+    excludes=["tkinter", "PyQt5", "PyQt6", "PySide2", "pkg_resources"],
     noarchive=False,
     optimize=0,
 )
