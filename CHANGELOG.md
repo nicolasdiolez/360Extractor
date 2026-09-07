@@ -35,7 +35,7 @@ No changes recorded after the 4.0.0 candidate.
 - COLMAP calibration and rig exports: cameras.txt, rig_rotations.json, rig_config.json, reconstruct.py, a shell wrapper and instructions. The runner stages per-camera images/separate masks, applies rig_configurator before sequential matching and fixes calibration during mapping. Real reconstruction qualification is pending.
 - Explicit trust for custom .pt models and a stable weight cache with application-specific Ultralytics settings.
 - Security constraints and a hashed macOS arm64/Python 3.13 dependency resolution, qualified in a separate environment. Existing user environments are not automatically upgraded.
-- Core CI on Ubuntu/macOS/Windows, dedicated Qt jobs on macOS/Windows, blocking critical-interface typing and version/changelog checks.
+- Core CI on Ubuntu/macOS/Windows, dedicated Qt jobs on macOS/Windows, blocking critical-interface typing and version/changelog checks. A Tests (pytest) aggregate preserves the status required by main and only passes when every core/Studio matrix job succeeds.
 - A release workflow that validates/tests dependencies, builds macOS/Windows apps and creates a draft release. It refuses to overwrite already published assets. Downloaded binaries still require clean-machine qualification before publication.
 - Consolidated CLI/settings/contributor guides, acceptance protocol and current roadmap, with older audits identified as historical evidence.
 
