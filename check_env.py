@@ -1,94 +1,58 @@
-# -*- coding: utf-8 -*-
+"""Check the selected interpreter and the dependencies of an execution mode."""
+import argparse
+import importlib
+import importlib.metadata
+import platform
+import shutil
 import sys
+from pathlib import Path
 
-def check_imports():
-    print("Verifying environment for 360 Extractor...")
-    print("-" * 40)
-    
-    missing_packages = []
-    
-    # Check opencv-python
-    try:
-        import cv2
-        print(f"✅ opencv-python (cv2) found: {cv2.__version__}")
-    except ImportError:
-        missing_packages.append("opencv-python")
-        print("❌ opencv-python (cv2) NOT found")
-    except Exception as e:
-        missing_packages.append(f"opencv-python (Error: {e})")
-        print(f"❌ opencv-python (cv2) error: {e}")
 
-    # Check numpy
-    try:
-        import numpy
-        print(f"✅ numpy found: {numpy.__version__}")
-    except ImportError:
-        missing_packages.append("numpy")
-        print("❌ numpy NOT found")
-    except Exception as e:
-        missing_packages.append(f"numpy (Error: {e})")
-        print(f"❌ numpy error: {e}")
+def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--mode',choices=['core','gui','ai','all'],default='all')
+    parser.add_argument('--telemetry',action='store_true',help='Require FFmpeg and ffprobe')
+    parser.add_argument('--ai-probe',action='store_true',help='Run one CPU inference with the default model')
+    args=parser.parse_args()
+    print(f'Python: {sys.executable}\nVersion: {platform.python_version()}\nPlatform: {platform.platform()}')
+    dependencies={'numpy':'numpy','cv2':'opencv-python','defusedxml':'defusedxml','piexif':'piexif','PIL':'Pillow','tqdm':'tqdm'}
+    if args.mode in ('gui','all'):
+        dependencies['PySide6']='PySide6'
+    if args.mode in ('ai','all') or args.ai_probe:
+        dependencies.update(torch='torch',torchvision='torchvision',ultralytics='ultralytics')
+    errors=[]
+    for module,distribution in dependencies.items():
+        try:
+            loaded=importlib.import_module(module)
+            try:
+                version=importlib.metadata.version(distribution)
+            except importlib.metadata.PackageNotFoundError:
+                version=getattr(loaded,'__version__','unknown distribution')
+            print(f'OK {module}: {version}')
+        except Exception as exc:
+            errors.append(f'{module}: {exc}')
+    for executable in ('ffmpeg','ffprobe'):
+        path=shutil.which(executable)
+        print(f'{executable}: {path or "unavailable (required for embedded GPS)"}')
+        if args.telemetry and not path:
+            errors.append(f'{executable} is required')
+    if args.ai_probe and not errors:
+        try:
+            import numpy as np
+            sys.path.insert(0,str(Path(__file__).resolve().parent/'src'))
+            from extractor360.core.ai_model import AIService
+            service=AIService()
+            service.device='cpu'
+            _,mask=service.process_image(np.zeros((64,64,3),np.uint8),mode='generate_mask')
+            if mask is None or mask.shape!=(64,64):
+                raise RuntimeError('Unexpected inference output')
+            print('CPU inference: OK (does not qualify segmentation accuracy or GPU)')
+        except Exception as exc:
+            errors.append(f'AI inference: {exc}')
+    for error in errors:
+        print(f'ERROR {error}',file=sys.stderr)
+    return 1 if errors else 0
 
-    # Check PySide6
-    try:
-        import PySide6
-        print(f"✅ PySide6 found: {PySide6.__version__}")
-    except ImportError:
-        missing_packages.append("PySide6")
-        print("❌ PySide6 NOT found")
-    except Exception as e:
-        missing_packages.append(f"PySide6 (Error: {e})")
-        print(f"❌ PySide6 error: {e}")
 
-    # Check ultralytics
-    try:
-        import ultralytics
-        print(f"✅ ultralytics found: {ultralytics.__version__}")
-    except ImportError:
-        missing_packages.append("ultralytics")
-        print("❌ ultralytics NOT found")
-    except Exception as e:
-        missing_packages.append(f"ultralytics (Error: {e})")
-        print(f"❌ ultralytics error: {e}")
-
-    # Check PyTorch & GPU acceleration (CUDA/MPS)
-    try:
-        import torch
-        print(f"✅ PyTorch found: {torch.__version__}")
-        if torch.cuda.is_available():
-            print(f"   - GPU Acceleration (CUDA): Available (Device: {torch.cuda.get_device_name(0)})")
-        elif torch.backends.mps.is_available():
-            print("   - GPU Acceleration (MPS): Available (Apple Silicon)")
-        else:
-            print("   - GPU Acceleration: NOT Available (Running on CPU)")
-            if "+cpu" in torch.__version__:
-                print("     ⚠️  You have the CPU-only version of PyTorch installed.")
-                print("     If you have an NVIDIA GPU, please run our automated GPU setup helper:")
-                print("         python setup_cuda.py")
-                print("     ")
-                print("     Or reinstall manually forcing both torch and torchvision from the CUDA index:")
-                print("         pip install --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu124")
-            else:
-                print("     If you have a compatible GPU, please check your CUDA drivers or PyTorch installation.")
-    except ImportError:
-        missing_packages.append("torch")
-        print("❌ PyTorch NOT found")
-    except Exception as e:
-        missing_packages.append(f"torch (Error: {e})")
-        print(f"❌ PyTorch error: {e}")
-
-    print("-" * 40)
-    
-    if missing_packages:
-        print("⚠️  Missing or broken packages detected:")
-        for pkg in missing_packages:
-            print(f"   - {pkg}")
-        print("\nPlease install the required dependencies by running:")
-        print("   pip install -r requirements.txt")
-        sys.exit(1)
-    else:
-        print("🎉 Environment verified! Ready to run 360 Extractor.")
-        sys.exit(0)
-
-if __name__ == "__main__":
-    check_imports()
+if __name__=='__main__':
+    raise SystemExit(main())

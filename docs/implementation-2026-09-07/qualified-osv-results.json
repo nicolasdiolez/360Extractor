@@ -1,0 +1,238 @@
+[
+  {
+    "name": "anyio",
+    "version": "4.15.1"
+  },
+  {
+    "name": "ast_serialize",
+    "version": "0.10.0"
+  },
+  {
+    "name": "certifi",
+    "version": "2026.7.22"
+  },
+  {
+    "name": "charset-normalizer",
+    "version": "3.5.1"
+  },
+  {
+    "name": "cloudpickle",
+    "version": "3.1.2"
+  },
+  {
+    "name": "contourpy",
+    "version": "1.3.3"
+  },
+  {
+    "name": "cycler",
+    "version": "0.12.1"
+  },
+  {
+    "name": "defusedxml",
+    "version": "0.7.1"
+  },
+  {
+    "name": "filelock",
+    "version": "3.32.5"
+  },
+  {
+    "name": "fonttools",
+    "version": "4.64.0"
+  },
+  {
+    "name": "fsspec",
+    "version": "2026.7.0"
+  },
+  {
+    "name": "h11",
+    "version": "0.16.0"
+  },
+  {
+    "name": "httpcore",
+    "version": "1.0.9"
+  },
+  {
+    "name": "httpx",
+    "version": "0.28.1"
+  },
+  {
+    "name": "idna",
+    "version": "3.19"
+  },
+  {
+    "name": "iniconfig",
+    "version": "2.3.0"
+  },
+  {
+    "name": "Jinja2",
+    "version": "3.1.6"
+  },
+  {
+    "name": "kiwisolver",
+    "version": "1.5.1"
+  },
+  {
+    "name": "librt",
+    "version": "0.15.0"
+  },
+  {
+    "name": "MarkupSafe",
+    "version": "3.0.3"
+  },
+  {
+    "name": "matplotlib",
+    "version": "3.11.1"
+  },
+  {
+    "name": "mpmath",
+    "version": "1.3.0"
+  },
+  {
+    "name": "mypy",
+    "version": "2.3.1"
+  },
+  {
+    "name": "mypy_extensions",
+    "version": "1.1.0"
+  },
+  {
+    "name": "networkx",
+    "version": "3.6.1"
+  },
+  {
+    "name": "numpy",
+    "version": "2.5.3"
+  },
+  {
+    "name": "nvidia-ml-py",
+    "version": "13.610.43"
+  },
+  {
+    "name": "opencv-python",
+    "version": "5.0.0.93"
+  },
+  {
+    "name": "packaging",
+    "version": "26.3"
+  },
+  {
+    "name": "pathspec",
+    "version": "1.1.1"
+  },
+  {
+    "name": "piexif",
+    "version": "1.1.3"
+  },
+  {
+    "name": "pillow",
+    "version": "12.3.0"
+  },
+  {
+    "name": "pip",
+    "version": "26.2.1"
+  },
+  {
+    "name": "pluggy",
+    "version": "1.6.0"
+  },
+  {
+    "name": "polars",
+    "version": "1.44.1"
+  },
+  {
+    "name": "polars-runtime-32",
+    "version": "1.44.1"
+  },
+  {
+    "name": "psutil",
+    "version": "7.2.2"
+  },
+  {
+    "name": "Pygments",
+    "version": "2.21.0"
+  },
+  {
+    "name": "pyparsing",
+    "version": "3.3.2"
+  },
+  {
+    "name": "PySide6",
+    "version": "6.11.2"
+  },
+  {
+    "name": "PySide6_Addons",
+    "version": "6.11.2"
+  },
+  {
+    "name": "PySide6_Essentials",
+    "version": "6.11.2"
+  },
+  {
+    "name": "pytest",
+    "version": "9.1.1"
+  },
+  {
+    "name": "python-dateutil",
+    "version": "2.9.0.post0"
+  },
+  {
+    "name": "PyYAML",
+    "version": "6.0.3"
+  },
+  {
+    "name": "requests",
+    "version": "2.34.2"
+  },
+  {
+    "name": "ruff",
+    "version": "0.16.6"
+  },
+  {
+    "name": "setuptools",
+    "version": "84.0.0"
+  },
+  {
+    "name": "shiboken6",
+    "version": "6.11.2"
+  },
+  {
+    "name": "six",
+    "version": "1.17.0"
+  },
+  {
+    "name": "sympy",
+    "version": "1.14.0"
+  },
+  {
+    "name": "torch",
+    "version": "2.14.0"
+  },
+  {
+    "name": "torchvision",
+    "version": "0.29.0"
+  },
+  {
+    "name": "tqdm",
+    "version": "4.70.0"
+  },
+  {
+    "name": "typing_extensions",
+    "version": "4.16.0"
+  },
+  {
+    "name": "ultralytics",
+    "version": "8.4.142"
+  },
+  {
+    "name": "ultralytics-platform",
+    "version": "0.1.32"
+  },
+  {
+    "name": "ultralytics-thop",
+    "version": "2.1.6"
+  },
+  {
+    "name": "urllib3",
+    "version": "2.7.0"
+  }
+]

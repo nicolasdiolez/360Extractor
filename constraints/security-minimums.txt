@@ -1,0 +1,10 @@
+# Floors for the advisory set reviewed on 2026-09-07.
+# Constraints are not a platform lock; validate the resolved graph with OSV.
+filelock>=3.20.3
+fonttools>=4.60.2
+idna>=3.15
+Pillow>=12.3.0
+requests>=2.33.0
+setuptools>=83.0.0
+torch>=2.13.0
+urllib3>=2.7.0

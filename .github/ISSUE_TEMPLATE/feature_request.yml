@@ -1,0 +1,59 @@
+name: Feature request
+description: Suggest a capability or an improvement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. The clearer the *problem* is, the easier it is to judge the solution — so please start there rather than with the implementation.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: What are you trying to achieve, and where does the tool get in your way today?
+      placeholder: I capture with a tripod, and the tripod legs pollute every reconstruction because...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like it to do?
+      description: The behaviour you have in mind. A CLI flag? A GUI control? A new export format?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the tool?
+      options:
+        - Reprojection / camera layouts
+        - AI masking
+        - Telemetry (GPS/IMU) and EXIF
+        - Export formats (COLMAP, RealityScan, Nerfstudio…)
+        - Frame selection (interval, blur, motion)
+        - GUI / usability
+        - CLI / automation
+        - Performance
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Your pipeline
+      description: Which camera and which reconstruction software (RealityScan, Postshot, COLMAP, Nerfstudio…)? It helps to know who the feature would serve.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Workarounds you have tried
+      description: Anything you currently do to get around the problem, in this tool or elsewhere.
+    validations:
+      required: false

@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "360-extractor-pro"
+name = "360-extractor"
 # Version is single-sourced from src/core/version.py (see [tool.setuptools.dynamic]).
 dynamic = ["version"]
 description = "Desktop and CLI tool to preprocess 360 and standard video/images into rectilinear datasets for photogrammetry and Gaussian Splatting, with AI operator removal."
@@ -31,28 +31,31 @@ gpu = ["torch", "torchvision"]
 dev = ["pytest>=7.0", "ruff>=0.5", "mypy>=1.8"]
 
 [project.scripts]
-"360extractor" = "main:main"
+"360extractor" = "extractor360.main:main"
 
 [project.urls]
 Homepage = "https://github.com/nicolasdiolez/360Extractor"
 Changelog = "https://github.com/nicolasdiolez/360Extractor/blob/main/CHANGELOG.md"
 
-# Flat "src" layout: modules live directly under src/ (core, ui, utils, main).
+# src layout with a single top-level package: everything lives under
+# src/extractor360/ so a pip install cannot collide with other packages
+# (the previous flat layout installed generic top-level names like `core`,
+# `ui` and `utils`). src/main.py is a dev-only launcher shim, not packaged.
 [tool.setuptools]
 package-dir = { "" = "src" }
-# main.py is a top-level module (the console entry point), not a package.
-py-modules = ["main"]
 
 [tool.setuptools.dynamic]
-version = { attr = "core.version.VERSION" }
+version = { attr = "extractor360.core.version.VERSION" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["core*", "ui*", "utils*"]
+include = ["extractor360*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+# "scripts" is on the path so the release tooling (check_release / release_notes)
+# is unit-testable without being part of the shipped package.
+pythonpath = ["src", "scripts"]
 
 [tool.ruff]
 target-version = "py310"
@@ -72,3 +75,6 @@ ignore_missing_imports = true
 check_untyped_defs = false
 warn_unused_ignores = true
 exclude = ["build/", "dist/"]
+
+[tool.setuptools.package-data]
+"extractor360.ui" = ["*.qss"]

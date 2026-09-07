@@ -1,0 +1,360 @@
+/* 360 Extractor Studio - Pro Dark Theme (Graphite & Warm Amber) */
+/* Inspired by DaVinci Resolve, Blender Pro, and Cinema 4D */
+
+/* ========================================
+   Global Styles & Typography
+   ======================================== */
+
+QMainWindow {
+    background-color: #141417;
+    color: #E6E6EA;
+}
+
+QWidget {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    font-size: 11px;
+    color: #9898A4;
+    outline: none;
+}
+
+/* ========================================
+   Scrollbars & Scroll Areas (Fix light bleed)
+   ======================================== */
+
+QScrollArea, QScrollArea > QWidget, QScrollArea > QWidget > QWidget {
+    background-color: transparent;
+    border: none;
+}
+
+QScrollArea::viewport {
+    background-color: transparent;
+}
+
+QScrollBar:vertical {
+    border: none;
+    background: transparent;
+    width: 4px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: #2E2E3E;
+    min-height: 25px;
+    border-radius: 2px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #F59E0B;
+}
+
+QScrollBar:horizontal {
+    border: none;
+    background: transparent;
+    height: 4px;
+    margin: 0;
+}
+
+QScrollBar::handle:horizontal {
+    background: #2E2E3E;
+    min-width: 25px;
+    border-radius: 2px;
+}
+
+/* ========================================
+   Studio Structural Sections
+   ======================================== */
+
+QFrame#topNav {
+    background-color: #19191E;
+    border-bottom: 1px solid #282833;
+    padding: 0px 14px;
+}
+
+QFrame#leftSidebar {
+    background-color: #16161A;
+    border-right: 1px solid #262630;
+}
+
+QFrame#centerArea {
+    background-color: #0F0F12;
+}
+
+QFrame#rightInspector {
+    background-color: #16161A;
+    border-left: 1px solid #262630;
+}
+
+QFrame#viewportContainer {
+    background-color: #000000;
+    border: 1px solid #262632;
+    border-radius: 6px;
+}
+
+QFrame#hudBar {
+    background-color: #19191E;
+    border-top: 1px solid #282833;
+    padding: 8px 18px;
+}
+
+QFrame#inspectorCard {
+    background-color: #1D1D24;
+    border: 1px solid #292934;
+    border-radius: 6px;
+    padding: 10px 12px;
+}
+
+QLabel#sectionHeader {
+    color: #E2E2E8;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+QLabel#cardTitle {
+    color: #E8E8EE;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+/* ========================================
+   Buttons & Controls
+   ======================================== */
+
+/* Primary Action Button (Amber CTA) */
+QPushButton#primaryActionBtn,
+QPushButton[primary="true"] {
+    background-color: #D97706;
+    color: #FAF9F6;
+    font-weight: 600;
+    font-size: 12px;
+    border-radius: 5px;
+    padding: 8px 20px;
+    border: none;
+}
+
+QPushButton#primaryActionBtn:hover,
+QPushButton[primary="true"]:hover {
+    background-color: #F59E0B;
+}
+
+QPushButton#primaryActionBtn:pressed,
+QPushButton[primary="true"]:pressed {
+    background-color: #B45309;
+}
+
+QPushButton#primaryActionBtn:disabled,
+QPushButton[primary="true"]:disabled {
+    background-color: #24242C;
+    color: #52525C;
+}
+
+/* Secondary Button (Dark Outlined) */
+QPushButton#secondaryActionBtn,
+QPushButton[secondary="true"] {
+    background-color: transparent;
+    border: 1px solid #323240;
+    border-radius: 5px;
+    color: #C8C8D0;
+    padding: 7px 16px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+QPushButton#secondaryActionBtn:hover,
+QPushButton[secondary="true"]:hover {
+    background-color: #22222B;
+    color: #E8E8EE;
+    border-color: #444455;
+}
+
+/* Tool Buttons & Small Actions */
+QPushButton#toolBtn {
+    background-color: #17171C;
+    border: 1px solid #2D2D3A;
+    border-radius: 4px;
+    color: #C8C8D0;
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+QPushButton#toolBtn:hover {
+    border-color: #F59E0B;
+    color: #E8E8EE;
+}
+
+/* Segmented Face Control Buttons */
+QPushButton#segmentBtn {
+    background-color: transparent;
+    border: none;
+    border-radius: 4px;
+    color: #9898A4;
+    padding: 5px 12px;
+    font-weight: 500;
+    font-size: 11px;
+}
+
+QPushButton#segmentBtn:hover {
+    color: #E8E8EE;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+QPushButton#segmentBtn[active="true"] {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: #FBBF24;
+    font-weight: 600;
+    border: 1px solid #F59E0B;
+}
+
+/* Disclosure Button for Collapsible Drawers */
+QPushButton#disclosureBtn {
+    background-color: transparent;
+    border: none;
+    color: #727280;
+    font-weight: 600;
+    font-size: 10px;
+    text-align: left;
+    padding: 4px 0px;
+}
+
+QPushButton#disclosureBtn:hover {
+    color: #FBBF24;
+}
+
+QPushButton#disclosureBtn:checked {
+    color: #F59E0B;
+}
+
+/* ========================================
+   Inputs, Combos & Sliders
+   ======================================== */
+
+QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+    background-color: #151519;
+    border: 1px solid #2C2C38;
+    border-radius: 4px;
+    padding: 4px 6px;
+    color: #E6E6EA;
+    font-size: 11px;
+}
+
+QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
+    border-color: #F59E0B;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1A1A22;
+    border: 1px solid #30303E;
+    selection-background-color: rgba(245, 158, 11, 0.2);
+    selection-color: #FBBF24;
+    color: #E6E6EA;
+    padding: 4px;
+}
+
+QSlider::groove:horizontal {
+    height: 3px;
+    background: #2E2E3C;
+    border-radius: 1.5px;
+}
+
+QSlider::sub-page:horizontal {
+    background: #F59E0B;
+    border-radius: 1.5px;
+}
+
+QSlider::handle:horizontal {
+    background: #D8D8E0;
+    border: 1px solid #F59E0B;
+    width: 10px;
+    margin-top: -3.5px;
+    margin-bottom: -3.5px;
+    border-radius: 5px;
+}
+
+QSlider::handle:horizontal:hover {
+    background: #FFFFFF;
+}
+
+/* ========================================
+   Checkboxes
+   ======================================== */
+
+QCheckBox {
+    color: #C8C8D0;
+    spacing: 6px;
+    font-size: 11px;
+}
+
+QCheckBox::indicator {
+    width: 13px;
+    height: 13px;
+    border-radius: 3px;
+    border: 1px solid #363646;
+    background-color: #17171C;
+}
+
+QCheckBox::indicator:hover {
+    border-color: #F59E0B;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #F59E0B;
+    border-color: #F59E0B;
+}
+
+/* ========================================
+   Video Cards in Queue
+   ======================================== */
+
+QWidget#videoCard {
+    background-color: #1B1B22;
+    border: 1px solid #262632;
+    border-radius: 6px;
+}
+
+QWidget#videoCard:hover {
+    background-color: #202028;
+    border-color: #383848;
+}
+
+QWidget#videoCard[selected="true"] {
+    background-color: #242430;
+    border: 1px solid #F59E0B;
+}
+
+/* ========================================
+   Progress Bar
+   ======================================== */
+
+QProgressBar {
+    background-color: #121216;
+    border: 1px solid #24242E;
+    border-radius: 3px;
+    text-align: center;
+    color: #A1A1AA;
+    font-size: 10px;
+    height: 8px;
+}
+
+QProgressBar::chunk {
+    background-color: #F59E0B;
+    border-radius: 2px;
+}
+
+/* ========================================
+   Tooltips
+   ======================================== */
+
+QToolTip {
+    background-color: #1E1E26;
+    border: 1px solid #363646;
+    border-radius: 5px;
+    color: #EDEDED;
+    padding: 6px 10px;
+    font-size: 11px;
+}

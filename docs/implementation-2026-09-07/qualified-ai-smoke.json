@@ -1,0 +1,11 @@
+{
+  "device": "cpu",
+  "mask_shape": [
+    96,
+    64
+  ],
+  "mask_values": [
+    255
+  ],
+  "success": true
+}

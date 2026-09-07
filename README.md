@@ -1,85 +1,92 @@
 # 360 Extractor
 
-High-performance desktop application and command-line tool for 360° and standard video/image preprocessing. This tool generates optimized datasets for Gaussian Splatting and photogrammetry (COLMAP, RealityScan) by converting equirectangular media into rectilinear pinhole views and removing operators using AI.
+[![CI](https://github.com/nicolasdiolez/360Extractor/actions/workflows/ci.yml/badge.svg)](https://github.com/nicolasdiolez/360Extractor/actions/workflows/ci.yml)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 
-> See the [CHANGELOG](CHANGELOG.md) for what's new in each release.
+Desktop and command-line preprocessing for stitched 360° panoramas and standard videos/images. Generate rectilinear views, filter blur and motion, and export segmentation masks and optional GPS metadata for reconstruction workflows.
 
-## Key Features
+**360 Extractor Studio — v4.0.0 candidate.** The new interface and reliability corrections are prepared for release after automated checks and a positive short maintainer test. Download availability is shown on the [releases page](https://github.com/nicolasdiolez/360Extractor/releases); only assets attached to the corresponding release are that version's binaries. Full camera/GPU/reconstruction qualification remains open in the [implementation follow-up](docs/implementation-2026-09-07/PROGRESSION.md).
 
-- **360° to Rectilinear:** Reproject equirectangular video and images to pinhole views with configurable FOV and overlap.
-- **Standard (Non-360) Media:** Process regular video and images as-is — every filter (blur, AI masking, sharpening, telemetry) still applies, without equirectangular reprojection.
-- **Dual Interface:** Graphical UI for ease of use and CLI for automation.
-- **Advanced Control:** Multiple layouts (Ring, Cube Map, Fibonacci), inclination settings, and selective camera extraction.
-- **AI-Powered:** Automatic operator/object removal (supports 80 COCO classes like humans, vehicles, plants) with adjustable confidence, mask inversion, per-face masking scope, and intelligent motion-based keyframing.
-- **Metadata Integration:** Extract GPS/IMU data (GoPro, Insta360, DJI) and embed into EXIF.
-- **Quality Control:** Automatic blur detection, filtering, and optional **Lanczos interpolation** for maximum sharpness.
-- **AI-Powered Masking:** Next-gen operator removal with **Native Softness** (probabilistic alpha blending) for seamless photogrammetry integration.
+![360 Extractor Studio: media queue, live Cube preview and processing settings](docs/images/screenshot-gui.png)
 
-## Installation
+*Actual Studio window with a synthetic demonstration panorama. Preview and controls are rendered by the application; the image is not evidence of segmentation or reconstruction accuracy.*
 
-> [!NOTE]
-> **Prerequisites:** Python 3.10+ and [FFmpeg](https://ffmpeg.org) (`ffmpeg`/`ffprobe` on your PATH — required for GPS/IMU telemetry extraction).
-> macOS: `brew install ffmpeg` · Windows: `winget install ffmpeg` · Linux: `sudo apt install ffmpeg`
+## Capabilities
 
-1.  **Clone the repository**
-2.  **Install dependencies:**
-    - **For CPU-only or Mac (Apple Silicon):**
-      ```bash
-      pip install -r requirements.txt
-      ```
-    - **For NVIDIA GPU acceleration (Windows/Linux):**
-      We provide an automated interactive setup helper that installs CUDA PyTorch and handles all dependency conflicts. Run:
-      ```bash
-      python setup_cuda.py
-      ```
+- Cube, Ring and Fibonacci layouts, selectable views, FOV, pitch and output resolution.
+- Flat media passthrough at native resolution with the same filtering and masking options.
+- GUI and Qt-free CLI execution; settings saved separately from each job's configuration.
+- YOLO segmentation with class selection, face scope, binary masks or smoothed edges. The Plants group means COCO's **potted plant**, not arbitrary vegetation.
+- A nadir disc on the Cube Down view, independent of AI.
+- Blur filtering, optional sharpening and motion-based selection. AI skipping currently rejects individual views.
+- GPS from supported CAMM/GPMF records and GPX/SRT sidecars; explicit telemetry status and time provenance. GPS9, IMU orientation and automatic horizon leveling are not supported.
+- COLMAP calibration and a portable runner that applies a virtual rig and separate masks. Reconstruction quality and compatibility with target software still require real dataset validation.
 
-      *Or manually install by forcing both `torch` and `torchvision` together from the custom PyTorch index before installing requirements:*
-      ```bash
-      pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
-      pip install -r requirements.txt
-      ```
-      > [!IMPORTANT]
-      > You must install `torch` and `torchvision` **together** using the `--index-url`. If you install them separately or omit torchvision, `pip` will resolve torchvision from standard PyPI and silently downgrade your `torch` package to the CPU-only version.
-3.  **Verify environment:**
-    ```bash
-    python3 check_env.py
-    ```
+Input 360 media must already be stitched. Accepting `.insv` does not imply native double-fisheye stitching. Pixel handling currently targets 8-bit SDR; HDR, ICC and alpha workflows are not qualified.
 
-## Quick Start
+## Install from source
 
-### GUI Mode
-Launch the graphical interface for interactive processing:
-```bash
-python3 src/main.py
+Clone the repository and select the candidate branch/commit you intend to test before installing. Run the commands below from that checkout’s root. The v4.0.0 candidate is prepared on `codex/audit-corrections` until its merge into `main`; use the version tag once that release is available.
+
+Use a supported Python interpreter with its own environment. The local correction tests use Python 3.13; CI targets Python 3.11. Wider Python compatibility is not yet qualified.
+
+```sh
+python3.13 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install ".[dev]" -c constraints/security-minimums.txt
+python check_env.py --mode all
 ```
 
-### CLI Mode
-Process videos via command line for automation:
-```bash
-python3 src/main.py --input <video_path> --output <output_dir> --interval 1.0
+The example selects Python 3.13 explicitly. On Windows, select an installed Python 3.11 or 3.13 interpreter, create the environment with `python -m venv .venv` and activate `.venv\Scripts\Activate.ps1` in PowerShell instead. Install FFmpeg/ffprobe for embedded GPS and verify with `python check_env.py --telemetry`. The interactive `setup_cuda.py` helper operates only inside a virtual environment; its `--index-url` must be selected from the official PyTorch installer for the target driver. A hashed macOS arm64/Python 3.13 lock is available in `constraints/macos-arm64-py313.lock`. Windows/CUDA locks and clean-machine binary builds remain work in progress.
+
+Standard model weights use `~/.cache/360-extractor/models` (override with `EXTRACTOR360_MODEL_DIR`). A model absent from the cache may be downloaded on first use. Provision the cache before offline use. Custom `.pt` files can execute code and require `--trust-custom-model` or `trust_custom_model: true` from an explicitly trusted source.
+
+## Run
+
+```sh
+# Studio
+python -m extractor360
+
+# Stitched panorama or video, six cube views
+360extractor --input panorama.mp4 --output out --layout cube --interval 1 --resolution 2048
+
+# Standard media
+360extractor --input video.mp4 --output out --flat
+
+# AI and a nadir disc on the Down face
+360extractor --input panorama.mp4 --output out --layout cube --ai-mask --ai-mask-cameras Down --nadir-mask
+
+# COLMAP preparation
+360extractor --input panorama.mp4 --output out --layout cube --export-colmap
 ```
 
-Process standard (non-360) media with `--flat` (skips equirectangular reprojection):
-```bash
-python3 src/main.py --input <media_path> --output <output_dir> --flat
+Every run creates a new source-specific folder: `panorama_processed`, `panorama_processed_001`, and so on. Existing datasets are never silently replaced or resumed. Recursive scans exclude generated folders. `manifest.json` starts as `running`, then records `completed`, `failed` or `cancelled` with confirmed write counts. A process kill or power loss can leave partial state; no automatic recovery is implemented. `images.jsonl` associates confirmed images and masks with their camera and frame.
+
+Run `python reconstruct.py` from an exported `colmap/` folder to prepare a new workspace and invoke COLMAP. It requires a COLMAP build with native `rig_configurator` support. This pipeline follows the [COLMAP rig workflow](https://colmap.github.io/rigs.html); it has not yet been qualified through a full real reconstruction on this branch.
+
+## Quality and metadata limits
+
+Feather means smoothing of a binary segmentation mask, not native model probabilities. The segmentation output uses the original image dimensions through Ultralytics' [retina mask option](https://docs.ultralytics.com/modes/predict/). Precision on real operators, partial limbs, posters and tripod scenes remains to be measured.
+
+GPS sidecars are aligned to video start by assumption. Camera heading is omitted without orientation evidence. Unknown or relative altitude is not written as sea-level altitude; only set `gps_altitude_reference: "orthometric"` after confirming the source reference. Inspect telemetry status and provenance in the manifest before relying on geotags.
+
+## Development and documentation
+
+```sh
+QT_QPA_PLATFORM=offscreen python -m pytest -q
+python -m ruff check .
+python scripts/check_release.py
 ```
 
-## Documentation
+In PowerShell, set `$env:QT_QPA_PLATFORM="offscreen"` and run `python -m pytest -q` separately. See [release preparation](CONTRIBUTING.md#preparing-and-publishing-a-release) for versioning, draft builds and binary acceptance.
 
-For detailed information on configuration and usage, please refer to:
+- [Settings reference](docs/SETTINGS.md)
+- [CLI reference](docs/CLI.md)
+- [Acceptance protocol for Studio, CLI and release binaries](docs/CLI_TESTING_PROTOCOL.md)
+- [Current roadmap](IMPROVEMENTS.md)
+- [Actual architecture](ARCHITECTURE.md)
+- [Audit](docs/audit-2026-09-07/RAPPORT.md) and [implementation plan](docs/audit-2026-09-07/PLAN.md)
+- [Contributing](CONTRIBUTING.md) and [changelog](CHANGELOG.md)
 
-- 🖥️ **[GUI & Settings Guide](docs/SETTINGS.md)**: Detailed explanation of all processing parameters, layout modes, AI filters, and JSON configuration.
-- ⌨️ **[CLI Reference](docs/CLI.md)**: Complete list of command-line arguments, flags, and automation examples.
-
-## Author
-
-**Nicolas Diolez**
-
-## License
-
-This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
-Required by usage of YOLO26 (Ultralytics). See [LICENSE](LICENSE) for details.
-
-## Credits
-
-Special thanks to **Ultralytics** (YOLO26), **The Qt Company** (PySide6), and **OpenCV**.
+Author: Nicolas Diolez. Licensed under [AGPL-3.0](LICENSE). The distribution also requires an inventory of the licenses of its bundled components.

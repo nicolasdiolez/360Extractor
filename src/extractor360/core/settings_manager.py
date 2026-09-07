@@ -1,0 +1,243 @@
+import json
+import os
+import copy
+from pathlib import Path
+
+from extractor360.utils.logger import logger
+
+class SettingsManager:
+    _instance = None
+    
+    DEFAULT_SETTINGS = {
+        "is_360": True,
+        "resolution": 2048,
+        "fov": 90,
+        "camera_count": 6,
+        "pitch_offset": 0,
+        "layout_mode": "ring",
+        "ai_mode": "None",
+        "ai_model": "yolo26n-seg.pt",
+        "trust_custom_model": False,
+        "ai_confidence": 0.25,
+        "ai_invert_mask": True,
+        "ai_detect_humans": True,
+        "ai_detect_vehicles": False,
+        "ai_detect_plants": False,
+        "ai_custom_classes": "",
+        "ai_mask_cameras": [],
+        "nadir_mask_enabled": False,
+        "nadir_mask_radius": 40.0,
+        "quality": 95,
+        "output_format": "jpg",
+        "custom_output_dir": "",
+        "interval_value": 1.0,
+        "interval_unit": "Seconds",
+        "blur_filter_enabled": False,
+        "smart_blur_enabled": False,
+        "blur_threshold": 100.0,
+        "sharpening_enabled": False,
+        "sharpening_strength": 0.5,
+        "adaptive_mode": False,
+        "adaptive_threshold": 0.5,
+        "export_telemetry": False,
+        "altitude_mode": "absolute",
+        "exif_intrinsics": True,
+        "gps_altitude_reference": "unknown",
+        "export_colmap": False,
+        "interpolation_mode": "linear",
+        "feather_mask": False,
+        "naming_mode": "realityscan",
+        "image_pattern": "{filename}_frame{frame}_{camera}",
+        "mask_pattern": "{filename}_frame{frame}_{camera}_mask"
+    }
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(SettingsManager, cls).__new__(cls)
+            cls._instance.initialized = False
+        return cls._instance
+
+    def __init__(self):
+        if self.initialized:
+            return
+            
+        self.settings = copy.deepcopy(self.DEFAULT_SETTINGS)
+        
+        # Determine config path: ~/.application360/config.json
+        self.config_dir = Path(os.environ.get("EXTRACTOR360_CONFIG_DIR", str(Path.home() / ".application360")))
+        self.config_file = self.config_dir / "config.json"
+        
+        self.load_settings()
+        self.initialized = True
+
+    def load_settings(self):
+        """Load settings from the JSON file. If file doesn't exist or is corrupt, use defaults."""
+        if not self.config_file.exists():
+            return
+
+        try:
+            with open(self.config_file, 'r') as f:
+                loaded_settings = json.load(f)
+                if not isinstance(loaded_settings, dict):
+                    raise ValueError("Settings must be a JSON object")
+                from extractor360.core.validation import validate_settings
+                self.settings = validate_settings(loaded_settings)
+        except (ValueError, OSError) as e:
+            logger.warning(f"Error loading settings from {self.config_file}: {e}. Using defaults.")
+
+    def save_settings(self, settings=None):
+        """Write settings to the JSON file."""
+        if settings:
+            self.settings.update(settings)
+            
+        try:
+            self.config_dir.mkdir(parents=True, exist_ok=True)
+            from extractor360.utils.file_manager import FileManager
+            FileManager.save_json(self.config_file, self.settings)
+        except OSError as e:
+            logger.error(f"Error saving settings to {self.config_file}: {e}")
+
+    def get(self, key, default=None):
+        """Get a setting value."""
+        return self.settings.get(key, default)
+
+    def set(self, key, value):
+        """Set a setting value."""
+        self.settings[key] = value
+
+    def get_all(self):
+        """Return a copy of all settings."""
+        return copy.deepcopy(self.settings)
+
+def normalize_mask_faces(ai_mask_cameras):
+    """Normalize a per-face mask selection into a lowercase set of face names.
+
+    Accepts a list of names or a comma-separated string. Returns ``None`` when
+    no face is selected, meaning AI masking applies to every face (the default,
+    backward-compatible behavior). Returning a set makes membership tests in the
+    processor case-insensitive.
+    """
+    if not ai_mask_cameras:
+        return None
+    if isinstance(ai_mask_cameras, str):
+        ai_mask_cameras = ai_mask_cameras.split(',')
+    faces = {str(c).strip().lower() for c in ai_mask_cameras if str(c).strip()}
+    return faces or None
+
+
+def build_settings(args, config, active_cameras=None, output_path=""):
+    """Assemble the settings dict consumed by the processor.
+
+    Precedence, lowest to highest: ``SettingsManager.DEFAULT_SETTINGS`` < config
+    file < explicit CLI arguments. Seeding from ``DEFAULT_SETTINGS`` guarantees
+    every key the processor reads is present even when the config file omits it,
+    which avoids silent fallbacks to hard-coded defaults (for example, a missing
+    ``blur_threshold`` previously reverted to ``100.0`` no matter what the config
+    file said, because the CLI never copied the key through).
+
+    ``args`` is the parsed ``argparse.Namespace``. ``active_cameras`` and
+    ``output_path`` are resolved by the caller (they involve validation / IO).
+    """
+    settings = SettingsManager.DEFAULT_SETTINGS.copy()
+
+    # Config file overrides defaults. Keys share the names used in
+    # DEFAULT_SETTINGS and the processor (interval_value, output_format,
+    # blur_threshold, interpolation_mode, ...), so they map straight through.
+    settings.update(config)
+
+    # Backward-compatible aliases for older config files.
+    if 'interval' in config and 'interval_value' not in config:
+        settings['interval_value'] = config['interval']
+    if 'format' in config and 'output_format' not in config:
+        settings['output_format'] = config['format']
+
+    # --- Explicit CLI arguments override the config file (when provided) ---
+    cli_overrides = {
+        'resolution': args.resolution,
+        'camera_count': args.camera_count,
+        'quality': args.quality,
+        'layout_mode': args.layout,
+        'output_format': args.format,
+        'altitude_mode': args.altitude_mode,
+        'ai_custom_classes': args.custom_classes,
+        'ai_model': getattr(args, 'ai_model', None),
+        'nadir_mask_radius': getattr(args, 'nadir_radius', None),
+        'naming_mode': args.naming_mode,
+        'image_pattern': args.image_pattern,
+        'mask_pattern': args.mask_pattern,
+    }
+    for key, value in cli_overrides.items():
+        if value is not None:
+            settings[key] = value
+
+    if getattr(args, 'trust_custom_model', False):
+        settings['trust_custom_model'] = True
+
+    # Nadir disc mask (no AI) on the Down face.
+    if getattr(args, 'nadir_mask', False):
+        settings['nadir_mask_enabled'] = True
+
+    # Calibration EXIF (focal from FOV, Make/Model, capture time, view
+    # direction) is on by default; the flag opts out.
+    if getattr(args, 'no_exif_intrinsics', False):
+        settings['exif_intrinsics'] = False
+
+    # COLMAP priors folder (exact intrinsics + rig rotations + script).
+    if getattr(args, 'export_colmap', False):
+        settings['export_colmap'] = True
+
+    # --interval is expressed in seconds.
+    if args.interval is not None:
+        settings['interval_value'] = args.interval
+        settings['interval_unit'] = 'Seconds'
+
+    # Flat (non-360) input.
+    if getattr(args, 'flat', False):
+        settings['is_360'] = False
+
+    # AI mode: CLI flags win; otherwise honor the legacy boolean 'ai' config key.
+    if getattr(args, 'ai_skip', False):
+        settings['ai_mode'] = 'Skip Frame'
+    elif getattr(args, 'ai_mask', False) or getattr(args, 'ai', False):
+        settings['ai_mode'] = 'Generate Mask'
+    elif settings.get('ai_mode', 'None') == 'None' and config.get('ai', False):
+        settings['ai_mode'] = 'Generate Mask'
+
+    # Adaptive interval.
+    if getattr(args, 'adaptive', False):
+        settings['adaptive_mode'] = True
+    if args.motion_threshold is not None:
+        settings['adaptive_threshold'] = args.motion_threshold
+
+    # Telemetry.
+    if getattr(args, 'export_telemetry', False):
+        settings['export_telemetry'] = True
+
+    # Per-face masking scope. Accepts a comma-separated string ("Down,Back") on
+    # the CLI or a list in the config file. Normalized to a list of face names;
+    # empty => mask every face (default).
+    if getattr(args, 'ai_mask_cameras', None) is not None:
+        settings['ai_mask_cameras'] = [
+            c.strip() for c in args.ai_mask_cameras.split(',') if c.strip()
+        ]
+    else:
+        raw = settings.get('ai_mask_cameras', [])
+        if isinstance(raw, str):
+            settings['ai_mask_cameras'] = [c.strip() for c in raw.split(',') if c.strip()]
+
+    # AI detection targets.
+    if args.targets is not None:
+        targets = [t.strip().lower() for t in args.targets.split(',')]
+        settings['ai_detect_humans'] = 'humans' in targets
+        settings['ai_detect_vehicles'] = 'vehicles' in targets
+        settings['ai_detect_plants'] = 'plants' in targets
+
+    # A supplied pattern without an explicit mode implies custom naming.
+    if (args.image_pattern or args.mask_pattern) and not args.naming_mode:
+        settings['naming_mode'] = 'custom'
+
+    # Values resolved by the caller.
+    settings['active_cameras'] = active_cameras
+    settings['custom_output_dir'] = output_path
+
+    return settings

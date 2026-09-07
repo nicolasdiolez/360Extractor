@@ -1,0 +1,93 @@
+name: Bug report
+description: Something went wrong — wrong output, a crash, or a feature not behaving as documented.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The single most useful thing you can attach is the **`manifest.json`** written next to your output images: it records the exact settings used and how many frames/views were extracted or skipped.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you get instead?
+      placeholder: I expected 6 images per frame, but only the Front view was written.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How can we reproduce it?
+      description: The CLI command you ran, or the GUI settings you used.
+      placeholder: |
+        python3 src/main.py --input MAX_0001.mp4 --output out --layout cube --interval 1 --ai-mask
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: manifest
+    attributes:
+      label: manifest.json
+      description: Paste the contents of the `manifest.json` from your output folder (it contains the settings and the frame/view counts). Feel free to redact the file paths.
+      render: json
+    validations:
+      required: false
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: Camera / media
+      description: Telemetry and stitching differ per vendor, so this matters.
+      options:
+        - GoPro (Max / Hero)
+        - Insta360
+        - DJI
+        - Qoocam / other 360 camera
+        - Flat (non-360) video or images
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 360 Extractor version
+      description: "Run `python3 src/main.py --version`, or check the bottom of the sidebar in the GUI."
+      placeholder: 360 Extractor 3.3.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows
+        - Linux
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - Pre-built app from a GitHub Release
+        - From source (pip install -r requirements.txt)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant output from the terminal, or from the Logs panel at the bottom of the GUI.
+      render: shell
+    validations:
+      required: false

@@ -1,0 +1,66 @@
+{
+  "local_links_and_anchors_checked": 53,
+  "default_settings_checked": 40,
+  "additional_settings_checked": 2,
+  "explicit_cli_option_names_covered": 33,
+  "documented_commands_parsed_and_settings_validated": 21,
+  "json_examples_validated": 1,
+  "real_cli_smoke_cases": [
+    {
+      "name": "cube",
+      "exit_code": 0,
+      "expected_images": 18
+    },
+    {
+      "name": "selective",
+      "exit_code": 0,
+      "expected_images": 6
+    },
+    {
+      "name": "flat",
+      "exit_code": 0,
+      "expected_images": 1
+    },
+    {
+      "name": "config",
+      "exit_code": 0,
+      "expected_images": 4
+    },
+    {
+      "name": "custom",
+      "exit_code": 0,
+      "expected_images": 18
+    },
+    {
+      "name": "nadir",
+      "exit_code": 0,
+      "expected_images": 18
+    },
+    {
+      "name": "colmap",
+      "exit_code": 0,
+      "expected_images": 18
+    },
+    {
+      "name": "invalid-resolution",
+      "exit_code": 2,
+      "expected_images": 0
+    },
+    {
+      "name": "missing-input",
+      "exit_code": 1,
+      "expected_images": 0
+    }
+  ],
+  "limits": [
+    "Commands with AI flags parsed/validated, but no new AI accuracy qualification",
+    "No real camera corpus, COLMAP reconstruction or binary build in this documentation check"
+  ],
+  "checked_at_utc": "2026-09-07T18:43:59.959536+00:00",
+  "code_commit": "82cf24ab808fa14308634717ad06d6ce86693716",
+  "release_guard": "passed (3.3.0)",
+  "release_tool_tests": {
+    "passed": 20,
+    "exit_code": 0
+  }
+}

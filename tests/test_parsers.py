@@ -12,8 +12,8 @@ import sys
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from utils.srt_parser import parse_srt_data
-from utils.camm_parser import parse_camm_data
+from extractor360.utils.srt_parser import parse_srt_data
+from extractor360.utils.camm_parser import parse_camm_data
 
 
 class TestSRTParser(unittest.TestCase):
@@ -97,8 +97,8 @@ class TestCAMMParser(unittest.TestCase):
 
     @staticmethod
     def _gps_packet(lat, lon, alt):
-        # Header: reserved (H)=0, type (H)=6 (GPS). Payload: lat,lon (double), alt (float)
-        return struct.pack('<HH', 0, 6) + struct.pack('<ddf', lat, lon, alt)
+        # CAMM type 5: three little-endian doubles (Google specification).
+        return struct.pack('<HHddd', 0, 5, lat, lon, alt)
 
     def test_parse_two_gps_packets_with_duration(self):
         raw = self._gps_packet(48.8566, 2.3522, 35.0) + self._gps_packet(48.8570, 2.3530, 36.0)
