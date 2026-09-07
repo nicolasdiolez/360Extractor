@@ -58,7 +58,7 @@ Use a focused branch and a pull request against the intended integration branch.
 
 ## Preparing and publishing a release
 
-The current candidate is **4.0.0**, dated **2026-09-07** in the changelog. This prepares the version metadata; the GitHub release and its tested assets determine publication. Follow the sequence below for this candidate and subsequent versions.
+Version **4.0.0**, dated **2026-09-07** in the changelog, is published as a [prerelease for user feedback](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.0). Its release notes describe the tested artifacts and remaining qualification limits, including an isolated Windows native crash. It does not replace the latest stable release. Follow the sequence below for subsequent versions.
 
 1. Run the [acceptance protocol](docs/CLI_TESTING_PROTOCOL.md) on representative real media. Record the exact commit, environment, results and unresolved limits. Resolve blocking failures and require CI on the final candidate.
 2. Merge the accepted candidate through review into the release branch (`main` for a public release). Do not merge unrelated local changes or reuse an existing published version.
@@ -69,6 +69,8 @@ The current candidate is **4.0.0**, dated **2026-09-07** in the changelog. This 
 7. If checks pass, publish the draft with accurate notes and limits. If they fail, retain the draft, correct the candidate and rebuild under the project's versioning policy. The workflow refuses to replace an already public release's assets.
 
 A source wheel smoke test does not replace steps 5–6. The workflow prepares a draft; it does not itself approve production readiness. Do not infer download availability from historical screenshots or a local `dist/` directory.
+
+For an explicitly accepted feedback preview with incomplete qualification, publish as **Pre-release**, keep it out of **Latest**, and describe exactly which artifacts and workflows were tested, any observed failures and the remaining checks. That status does not establish stable-release readiness. Keep published tags and artifacts immutable; use a new version for fixes.
 
 ## License
 
