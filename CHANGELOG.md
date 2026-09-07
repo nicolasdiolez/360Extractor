@@ -14,11 +14,13 @@ Feedback preview containing the Studio changes described in 4.0.0 below.
 
 - Exclude the obsolete pkg_resources namespace from the frozen bundle and pin the build tools while retaining setuptools 84.0.0 and the dependency security floors. The original 4.0.0 macOS draft binary failed in PyInstaller's legacy runtime hook before application startup with a missing NullProvider attribute; that draft was not published.
 - Provide null console streams in windowed executables so CLI dependencies can operate on Windows without an attached console.
+- Collect torchvision's dynamically loaded native libraries, including the new _C_stable/image_stable names, so frozen inference can register its operators. Include the application license in the bundle.
 - Give preview results explicit GUI-thread receivers and retain their signal owners through queued delivery. Retain thumbnail signals when a card is removed during decoding. Join the extraction thread after its finished signal before allowing controller deletion or relaunch.
 
 ### Added
 
 - Run the actual frozen executable after every macOS/Windows build: launcher, short flat extraction, completed manifest, native image dimensions and exact PNG pixels. Source tests alone had not detected the startup failure.
+- Provision the standard segmentation weights and verify that the frozen executable loads the model, performs inference and writes a correctly sized mask on a synthetic image.
 - Add a subprocess regression for preview results delivered after runnable destruction and card removal while a thumbnail is still decoding.
 
 ### Known limitations
