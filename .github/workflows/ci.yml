@@ -88,7 +88,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          1..10 | ForEach-Object {
+          1..100 | ForEach-Object {
             python -m pytest tests/test_gui_lifecycle.py -q
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
