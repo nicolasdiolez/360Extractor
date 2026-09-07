@@ -5,7 +5,9 @@
 
 Desktop and command-line preprocessing for stitched 360° panoramas and standard videos/images. Generate rectilinear views, filter blur and motion, and export segmentation masks and optional GPS metadata for reconstruction workflows.
 
-**360 Extractor Studio — v4.0.0 candidate.** The new interface and reliability corrections are prepared for release after automated checks and a positive short maintainer test. Download availability is shown on the [releases page](https://github.com/nicolasdiolez/360Extractor/releases); only assets attached to the corresponding release are that version's binaries. Full camera/GPU/reconstruction qualification remains open in the [implementation follow-up](docs/implementation-2026-09-07/PROGRESSION.md).
+**360 Extractor Studio — [v4.0.1 Preview](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.1).** This public prerelease introduces the new interface and reliability corrections for user feedback. It does not replace the latest stable release. Download the attached assets and read their installation notes and validation limits on the release page; start with a short clip and a separate output folder. Full camera/GPU/reconstruction qualification remains open in the [implementation follow-up](docs/implementation-2026-09-07/PROGRESSION.md).
+
+Earlier candidates reproduced an intermittent Windows native crash (`0xC0000005`) during extraction. Version 4.0.1 strengthens Qt worker ownership and shutdown; the exact native cause remains unconfirmed, so Windows remains experimental pending broader qualification. Report any recurrence through the [bug report form](https://github.com/nicolasdiolez/360Extractor/issues/new?template=bug_report.yml), with your settings and available logs.
 
 ![360 Extractor Studio: media queue, live Cube preview and processing settings](docs/images/screenshot-gui.png)
 
@@ -26,7 +28,12 @@ Input 360 media must already be stitched. Accepting `.insv` does not imply nativ
 
 ## Install from source
 
-Clone the repository and select the candidate branch/commit you intend to test before installing. Run the commands below from that checkout’s root. The v4.0.0 candidate is prepared on `codex/audit-corrections` until its merge into `main`; use the version tag once that release is available.
+Clone the repository and select the `v4.0.1` tag to test the published preview. `main` may contain subsequent changes. Run the commands below from the selected checkout’s root.
+
+```sh
+git clone --branch v4.0.1 https://github.com/nicolasdiolez/360Extractor.git
+cd 360Extractor
+```
 
 Use a supported Python interpreter with its own environment. The local correction tests use Python 3.13; CI targets Python 3.11. Wider Python compatibility is not yet qualified.
 
@@ -38,11 +45,13 @@ python -m pip install ".[dev]" -c constraints/security-minimums.txt
 python check_env.py --mode all
 ```
 
-The example selects Python 3.13 explicitly. On Windows, select an installed Python 3.11 or 3.13 interpreter, create the environment with `python -m venv .venv` and activate `.venv\Scripts\Activate.ps1` in PowerShell instead. Install FFmpeg/ffprobe for embedded GPS and verify with `python check_env.py --telemetry`. The interactive `setup_cuda.py` helper operates only inside a virtual environment; its `--index-url` must be selected from the official PyTorch installer for the target driver. A hashed macOS arm64/Python 3.13 lock is available in `constraints/macos-arm64-py313.lock`. Windows/CUDA locks and clean-machine binary builds remain work in progress.
+The example selects Python 3.13 explicitly. On Windows, select an installed Python 3.11 or 3.13 interpreter, create the environment with `python -m venv .venv` and activate `.venv\Scripts\Activate.ps1` in PowerShell instead. Install FFmpeg/ffprobe for embedded GPS and verify with `python check_env.py --telemetry`. The interactive `setup_cuda.py` helper operates only inside a virtual environment; its `--index-url` must be selected from the official PyTorch installer for the target driver. A hashed macOS arm64/Python 3.13 lock is available in `constraints/macos-arm64-py313.lock`. Windows/CUDA locks and clean-machine binary qualification remain work in progress.
 
 Standard model weights use `~/.cache/360-extractor/models` (override with `EXTRACTOR360_MODEL_DIR`). A model absent from the cache may be downloaded on first use. Provision the cache before offline use. Custom `.pt` files can execute code and require `--trust-custom-model` or `trust_custom_model: true` from an explicitly trusted source.
 
 ## Run
+
+AI selects an available accelerator automatically. If GPU inference is unavailable or unreliable on your machine, set `EXTRACTOR360_DEVICE=cpu` before launching (`export EXTRACTOR360_DEVICE=cpu` in a macOS/Linux terminal, or `$env:EXTRACTOR360_DEVICE="cpu"` in PowerShell). Use `auto` to restore automatic selection. The release smoke test qualifies CPU inference; it does not certify GPU profiles.
 
 ```sh
 # Studio

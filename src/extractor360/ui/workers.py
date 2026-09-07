@@ -2,7 +2,7 @@
 import copy
 import threading
 
-from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt
 
 from extractor360.core.analyzer import BlurAnalyzer
 from extractor360.core.processor import ProcessingWorker
@@ -55,7 +55,14 @@ class ProcessingController(QObject):
         self.worker = ProcessingWorker(copy.deepcopy(jobs))
         self.bridge = ProcessingBridge(self).attach(self.worker)
         self._thread = ProcessingThread(self.worker, self)
-        self._thread.finished.connect(self.finished)
+        self._thread.finished.connect(self._on_thread_finished, Qt.ConnectionType.QueuedConnection)
+
+    @Slot()
+    def _on_thread_finished(self):
+        # finished() precedes native thread-local cleanup. Join before allowing
+        # the window to delete this controller or start another extraction.
+        self._thread.wait()
+        self.finished.emit()
 
     def start(self):
         self._thread.start()

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import cv2
 from PySide6.QtCore import (
-    QEvent, QFile, QObject, Qt, QTextStream, QThread, QUrl, QTimer, QThreadPool, QSignalBlocker
+    QEvent, QFile, QObject, Qt, QTextStream, QThread, QUrl, QTimer, QThreadPool, QSignalBlocker, Slot
 )
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
@@ -1280,20 +1280,25 @@ class MainWindow(QMainWindow):
             if card.job is job:
                 card.refresh()
 
+    @Slot(int)
     def _on_job_started(self, index):
         self._active_job_index = index
         self._set_job_status(index, "Processing")
 
+    @Slot(int)
     def _on_job_finished(self, index):
         self._set_job_status(index, "Done")
 
+    @Slot(int, str)
     def _on_job_error(self, index, message):
         self._set_job_status(index, "Error")
         self.log_panel.log(message, "ERROR")
 
+    @Slot(int)
     def _on_job_cancelled(self, index):
         self._set_job_status(index, "Cancelled")
 
+    @Slot(int, str)
     def _on_processing_progress(self, percentage: int, message: str):
         self.hud_progress.setValue(int((self._active_job_index * 100 + percentage) / len(self._processing_jobs)))
         self.estimation_label.setText(message)
@@ -1301,6 +1306,7 @@ class MainWindow(QMainWindow):
             if card.job is self._processing_jobs[self._active_job_index]:
                 card.set_progress(percentage)
 
+    @Slot()
     def _on_processing_finished(self):
         self.is_processing = False
         self.left_panel.setEnabled(True)

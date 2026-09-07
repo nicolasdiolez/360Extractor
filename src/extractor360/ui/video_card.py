@@ -5,7 +5,7 @@ Modern card-style widget for displaying video jobs with thumbnail and metadata c
 from __future__ import annotations
 
 import cv2
-from PySide6.QtCore import QObject, Qt, QRunnable, QThreadPool, Signal
+from PySide6.QtCore import QObject, Qt, QRunnable, QThreadPool, Signal, Slot, QCoreApplication
 from PySide6.QtGui import QImage, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QProgressBar, QPushButton,
@@ -234,11 +234,16 @@ class VideoCard(QWidget):
     def _load_thumbnail(self):
         self._cleanup_thread()
         self._worker = ThumbnailWorker(self.job.file_path, size=54)
-        self._worker.signals.finished.connect(self._set_thumbnail)
+        # The card can be removed before decoding ends. Keep the signal owner
+        # alive on the GUI thread until completion, independently of the card.
+        self._worker.signals.setParent(QCoreApplication.instance())
+        self._worker.signals.finished.connect(self._set_thumbnail, Qt.ConnectionType.QueuedConnection)
+        self._worker.signals.finished.connect(self._worker.signals.deleteLater, Qt.ConnectionType.QueuedConnection)
         pool = QThreadPool.globalInstance()
         pool.setMaxThreadCount(4)
         pool.start(self._worker)
 
+    @Slot(QImage)
     def _set_thumbnail(self, image: QImage):
         pixmap = QPixmap.fromImage(image)
         if not pixmap.isNull():

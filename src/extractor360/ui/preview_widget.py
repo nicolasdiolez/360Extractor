@@ -33,6 +33,7 @@ class WorkerSignals(QObject):
     blur_score = Signal(float)
     duration_info = Signal(float, int, float)  # current_sec, current_frame, total_sec
     error = Signal(str)
+    finished = Signal()
 
 
 class PreviewWorker(QRunnable):
@@ -143,6 +144,33 @@ class PreviewWorker(QRunnable):
 
         except Exception as e:
             self.signals.error.emit(str(e))
+        finally:
+            self.signals.finished.emit()
+
+
+class PreviewDelivery(QObject):
+    """Keep result receivers and signal ownership on the GUI thread."""
+
+    def __init__(self, widget, generation):
+        super().__init__(widget)
+        self.widget = widget
+        self.generation = generation
+
+    @Slot(QImage)
+    def image(self, value):
+        self.widget._display_image(value, self.generation)
+
+    @Slot(float)
+    def blur(self, value):
+        self.widget._display_blur_score(value, self.generation)
+
+    @Slot(float, int, float)
+    def duration(self, seconds, frame, total):
+        self.widget._display_duration_info(seconds, frame, total, self.generation)
+
+    @Slot(str)
+    def error(self, value):
+        self.widget._display_error(value, self.generation)
 
 
 class EmptyStateWidget(QFrame):
@@ -382,6 +410,11 @@ class PreviewWidget(QWidget):
     def _run_pending(self):
         if not self._pending:
             return
+        if self.threadpool.activeThreadCount():
+            # Retain only the latest request, without orphaning GUI receivers
+            # for runnables removed from the pool before they can finish.
+            self._debounce.start()
+            return
         media_path, settings = self._pending
         self._pending = None
 
@@ -397,10 +430,13 @@ class PreviewWidget(QWidget):
             show_nadir_disc=self.show_nadir_disc,
             ai_cache=self._ai_cache,
         )
-        worker.signals.result.connect(lambda img, g=gen: self._display_image(img, g))
-        worker.signals.blur_score.connect(lambda s, g=gen: self._display_blur_score(s, g))
-        worker.signals.duration_info.connect(lambda c, f, t, g=gen: self._display_duration_info(c, f, t, g))
-        worker.signals.error.connect(lambda e, g=gen: self._display_error(e, g))
+        delivery = PreviewDelivery(self, gen)
+        worker.signals.setParent(delivery)
+        worker.signals.result.connect(delivery.image, Qt.ConnectionType.QueuedConnection)
+        worker.signals.blur_score.connect(delivery.blur, Qt.ConnectionType.QueuedConnection)
+        worker.signals.duration_info.connect(delivery.duration, Qt.ConnectionType.QueuedConnection)
+        worker.signals.error.connect(delivery.error, Qt.ConnectionType.QueuedConnection)
+        worker.signals.finished.connect(delivery.deleteLater, Qt.ConnectionType.QueuedConnection)
         self.threadpool.start(worker)
 
     def _display_image(self, image: QImage, generation: int):

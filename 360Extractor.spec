@@ -16,7 +16,7 @@ import ast
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_dynamic_libs
 
 SPEC_DIR = Path(SPECPATH)  # noqa: F821 — injected by PyInstaller
 SRC_DIR = SPEC_DIR / "src"
@@ -42,10 +42,14 @@ VERSION = _read_version()
 # The Qt stylesheet is loaded at runtime relative to the ui package directory,
 # so it must land at extractor360/ui/styles.qss inside the bundle.
 datas = [
+    (str(SPEC_DIR / "LICENSE"), "."),
     (str(PKG_DIR / "ui" / "styles.qss"), "extractor360/ui"),
     (str(PKG_DIR / "core" / "reconstruction.py"), "extractor360/core"),
 ]
 binaries = []
+# torchvision 0.29 loads _C_stable/image_stable through torch.ops rather than
+# Python imports. The standard hook only knows the former _C module name.
+binaries += collect_dynamic_libs("torchvision", search_patterns=["*.so", "*.pyd", "*.dll", "*.dylib"])
 hiddenimports = [
     # Imported lazily (only when an AI mode is enabled), so make sure the
     # analyzer keeps it in the bundle.
@@ -70,7 +74,10 @@ a = Analysis(  # noqa: F821
     hooksconfig={},
     runtime_hooks=[],
     # Other Qt bindings would clash with PySide6; tkinter is unused.
-    excludes=["tkinter", "PyQt5", "PyQt6", "PySide2"],
+    # setuptools >=82 no longer provides pkg_resources. An empty residual
+    # namespace can still be collected and trigger PyInstaller's legacy hook,
+    # which crashes before main(). Preserve the normal ImportError fallback.
+    excludes=["tkinter", "PyQt5", "PyQt6", "PySide2", "pkg_resources"],
     noarchive=False,
     optimize=0,
 )
