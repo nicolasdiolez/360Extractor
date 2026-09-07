@@ -84,6 +84,14 @@ jobs:
           python-version: "3.11"
       - run: python -m pip install numpy opencv-python-headless defusedxml pytest piexif Pillow PySide6
       - run: python -m pytest tests/test_studio_ui.py tests/test_gui_lifecycle.py tests/test_preview_parity.py -v
+      - name: Repeat Windows extraction and shutdown lifecycle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          1..10 | ForEach-Object {
+            python -m pytest tests/test_gui_lifecycle.py -q
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
   test_summary:
     # Preserve the required status name configured on main while testing all

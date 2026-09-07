@@ -17,6 +17,7 @@ def test_studio_extract_repeat_error_cancel_and_close(tmp_path):
         from PySide6.QtTest import QTest
         from extractor360.ui.main_window import MainWindow
         from extractor360.core.processor import ProcessingWorker
+        print('LIFECYCLE_STAGE: QApplication')
         app=QApplication([])
         def until(predicate):
             deadline=time.monotonic()+15
@@ -27,6 +28,7 @@ def test_studio_extract_repeat_error_cancel_and_close(tmp_path):
             app.processEvents()
         media=Path('pano.png').resolve()
         cv2.imwrite(str(media),np.zeros((32,64,3),np.uint8))
+        print('LIFECYCLE_STAGE: MainWindow')
         window=MainWindow()
         window.default_settings.update(resolution=32, layout_mode='cube', interval_unit='Frames', interval_value=1)
         window.show()
@@ -35,7 +37,9 @@ def test_studio_extract_repeat_error_cancel_and_close(tmp_path):
         assert encoder.isOpened()
         for value in (20,60,100): encoder.write(np.full((32,64,3),value,np.uint8))
         encoder.release()
+        print('LIFECYCLE_STAGE: import media')
         window.add_videos_from_paths([str(media),str(video)])
+        print('LIFECYCLE_STAGE: first extraction')
         QTest.mouseClick(window.extract_btn,Qt.LeftButton)
         until(lambda: not window.is_processing)
         assert window.jobs[0].status=='Done'
@@ -43,11 +47,13 @@ def test_studio_extract_repeat_error_cancel_and_close(tmp_path):
         assert len(list(first.glob('*.jpg')))==6
         assert window.jobs[1].status=='Done'
         assert len(list(Path(window.jobs[1].result['output_dir']).glob('*.jpg')))==18
+        print('LIFECYCLE_STAGE: second extraction')
         QTest.mouseClick(window.extract_btn,Qt.LeftButton)
         until(lambda: not window.is_processing)
         assert window.jobs[0].status=='Done'
         assert Path(window.jobs[0].result['output_dir'])!=first
         window.jobs[0].settings['resolution']=-1
+        print('LIFECYCLE_STAGE: invalid settings')
         QTest.mouseClick(window.extract_btn,Qt.LeftButton)
         until(lambda: not window.is_processing)
         assert window.jobs[0].status=='Error'
@@ -57,6 +63,7 @@ def test_studio_extract_repeat_error_cancel_and_close(tmp_path):
             while self.is_running:
                 time.sleep(.005)
         ProcessingWorker._process_video=slow
+        print('LIFECYCLE_STAGE: cancellation')
         QTest.mouseClick(window.extract_btn,Qt.LeftButton)
         until(lambda: window.jobs[0].status=='Processing')
         window.close()
@@ -66,7 +73,7 @@ def test_studio_extract_repeat_error_cancel_and_close(tmp_path):
         print('LIFECYCLE_OK')
     ''')
     env=dict(os.environ, QT_QPA_PLATFORM='offscreen', EXTRACTOR360_CONFIG_DIR=str(tmp_path/'config'), PYTHONPATH=str(Path(__file__).resolve().parents[1]/'src'))
-    result=subprocess.run([sys.executable,'-c',script],cwd=tmp_path,env=env,text=True,capture_output=True,timeout=45)
+    result=subprocess.run([sys.executable,'-X','faulthandler','-u','-c',script],cwd=tmp_path,env=env,text=True,capture_output=True,timeout=45)
     assert result.returncode==0, result.stdout+result.stderr
     assert 'LIFECYCLE_OK' in result.stdout
     assert 'Traceback' not in result.stderr
