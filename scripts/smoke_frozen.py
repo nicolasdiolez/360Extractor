@@ -14,6 +14,7 @@ import numpy as np
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dist", type=Path, required=True)
+    parser.add_argument("--model-dir", type=Path, help="Provisioned standard weights for an additional AI extraction")
     args = parser.parse_args()
     if sys.platform == "darwin":
         executable = args.dist / "360 Extractor.app/Contents/MacOS/360 Extractor"
@@ -53,6 +54,19 @@ def main():
         assert image is not None and image.shape[:2] == (64, 96)
         assert np.all(image == 127), "Flat extraction altered the input pixels"
         print("FROZEN_SMOKE_OK: launcher, completed manifest, one native-size PNG, exact pixels")
+        if args.model_dir:
+            env["EXTRACTOR360_MODEL_DIR"] = str(args.model_dir.resolve(strict=True))
+            env["YOLO_CONFIG_DIR"] = str(root / "ultralytics")
+            run("--input", str(source), "--output", str(root / "ai"), "--flat", "--format", "png", "--ai-mask")
+            manifests = list((root / "ai").rglob("manifest.json"))
+            assert len(manifests) == 1
+            manifest = json.loads(manifests[0].read_text(encoding="utf-8"))
+            assert manifest["status"] == "completed", manifest
+            records = [json.loads(line) for line in (manifests[0].parent / "images.jsonl").read_text().splitlines()]
+            assert len(records) == 1 and records[0]["mask"], records
+            mask = cv2.imread(str(manifests[0].parent / records[0]["mask"]), cv2.IMREAD_GRAYSCALE)
+            assert mask is not None and mask.shape == (64, 96)
+            print("FROZEN_AI_SMOKE_OK: model loading, inference and native-size mask (synthetic input)")
 
 
 if __name__ == "__main__":

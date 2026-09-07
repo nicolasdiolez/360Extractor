@@ -99,7 +99,10 @@ jobs:
       - name: Smoke-test the frozen application
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python scripts/smoke_frozen.py --dist dist
+          YOLO_CONFIG_DIR: .smoke-models/config
+        run: |
+          python -c "from pathlib import Path; from ultralytics import YOLO; p=Path('.smoke-models').resolve(); p.mkdir(exist_ok=True); YOLO(str(p/'yolo26n-seg.pt'))"
+          python scripts/smoke_frozen.py --dist dist --model-dir .smoke-models
 
       # ditto (not zip) preserves the .app bundle structure, symlinks and
       # permissions. xattr -cr first: stray extended attributes make PyInstaller's

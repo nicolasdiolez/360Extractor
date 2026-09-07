@@ -76,5 +76,70 @@ def test_studio_extract_repeat_error_cancel_and_close(tmp_path):
     result=subprocess.run([sys.executable,'-X','faulthandler','-u','-c',script],cwd=tmp_path,env=env,text=True,capture_output=True,timeout=45)
     assert result.returncode==0, result.stdout+result.stderr
     assert 'LIFECYCLE_OK' in result.stdout
+
+
+def test_preview_and_removed_thumbnail_queued_delivery(tmp_path):
+    script = textwrap.dedent('''
+        import gc
+        import threading
+        from pathlib import Path
+        import cv2
+        import numpy as np
+        from PySide6.QtCore import QCoreApplication, QEvent, QThread, QThreadPool
+        from PySide6.QtWidgets import QApplication
+        from extractor360.core.job import Job
+        from extractor360.core.settings_manager import SettingsManager
+        from extractor360.ui.preview_widget import PreviewWidget, PreviewDelivery
+        from extractor360.ui.video_card import VideoCard
+
+        app = QApplication([])
+        media = Path('flat.png').resolve()
+        assert cv2.imwrite(str(media), np.full((32,64,3),80,np.uint8))
+        calls = []
+        class Preview(PreviewWidget):
+            def _display_image(self, image, generation):
+                assert QThread.currentThread() == app.thread()
+                calls.append(generation)
+                super()._display_image(image, generation)
+        preview = Preview()
+        settings = dict(SettingsManager.DEFAULT_SETTINGS, is_360=False)
+        preview.update_preview(str(media), settings)
+        preview._debounce.stop()
+        preview._run_pending()
+        assert preview.threadpool.waitForDone(15000)
+        gc.collect()  # the runnable is gone, its queued result must survive
+        assert calls == []
+        app.processEvents()
+        assert calls == [preview._generation]
+        assert preview.cached_image.size().width() == 64
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        assert preview.findChildren(PreviewDelivery) == []
+
+        started, release = threading.Event(), threading.Event()
+        original = cv2.imread
+        def delayed(*args, **kwargs):
+            started.set()
+            assert release.wait(10)
+            return original(*args, **kwargs)
+        cv2.imread = delayed
+        card = VideoCard(Job(file_path=str(media), settings=settings))
+        assert started.wait(10)
+        card._cleanup_thread()
+        card.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        release.set()
+        assert QThreadPool.globalInstance().waitForDone(15000)
+        app.processEvents()
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        cv2.imread = original
+        preview.shutdown()
+        preview.close()
+        print('QUEUED_DELIVERY_OK')
+    ''')
+    env = dict(os.environ, QT_QPA_PLATFORM='offscreen', EXTRACTOR360_CONFIG_DIR=str(tmp_path/'config'), PYTHONPATH=str(Path(__file__).resolve().parents[1]/'src'))
+    result = subprocess.run([sys.executable, '-X', 'faulthandler', '-u', '-c', script], cwd=tmp_path, env=env, text=True, capture_output=True, timeout=45)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert 'QUEUED_DELIVERY_OK' in result.stdout
+    assert 'Traceback' not in result.stderr
     assert 'Traceback' not in result.stderr
     assert 'QThread: Destroyed' not in result.stderr
