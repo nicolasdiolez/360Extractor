@@ -58,7 +58,7 @@ Use a focused branch and a pull request against the intended integration branch.
 
 ## Preparing and publishing a release
 
-The next version/date has **not** been assigned. The current code still reports 3.3.0 while its changes are under `[Unreleased]`; this is development state, not an already published new version.
+The current candidate is **4.0.0**, dated **2026-09-07** in the changelog. This prepares the version metadata; the GitHub release and its tested assets determine publication. Follow the sequence below for this candidate and subsequent versions.
 
 1. Run the [acceptance protocol](docs/CLI_TESTING_PROTOCOL.md) on representative real media. Record the exact commit, environment, results and unresolved limits. Resolve blocking failures and require CI on the final candidate.
 2. Merge the accepted candidate through review into the release branch (`main` for a public release). Do not merge unrelated local changes or reuse an existing published version.

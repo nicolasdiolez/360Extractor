@@ -1,8 +1,14 @@
 # Changelog
 
-Versioned entries describe their historical releases. The current guides describe the correction branch. The next release version/date is not assigned; the application still reports 3.3.0 until release preparation.
+Versioned entries describe their historical releases. The current guides describe the correction branch. Version 4.0.0 is the prepared Studio release. Its dated section records the release candidate; availability is determined by the GitHub release, not this heading alone.
 
 ## [Unreleased]
+
+No changes recorded after the 4.0.0 candidate.
+
+## [4.0.0] - 2026-09-07
+
+360 Extractor Studio introduces the new three-column interface and the reliability corrections from the September audit. Existing CLI entry points remain available; Python imports move to the extractor360 package. A short manual test by the maintainer was positive. The narrower qualification limits below remain applicable.
 
 ### Changed
 

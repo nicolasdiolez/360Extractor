@@ -5,9 +5,11 @@
 
 Desktop and command-line preprocessing for stitched 360° panoramas and standard videos/images. Generate rectilinear views, filter blur and motion, and export segmentation masks and optional GPS metadata for reconstruction workflows.
 
-**Development status:** this branch implements corrections from the September 2026 audit. It is not a qualified production release. See the [implementation status and remaining work](docs/implementation-2026-09-07/PROGRESSION.md). The published v3.3 release had no downloadable binaries when checked on 7 September; do not treat local `dist/` bundles as current Studio builds.
+**360 Extractor Studio — v4.0.0 candidate.** The new interface and reliability corrections are prepared for release after automated checks and a positive short maintainer test. Download availability is shown on the [releases page](https://github.com/nicolasdiolez/360Extractor/releases); only assets attached to the corresponding release are that version's binaries. Full camera/GPU/reconstruction qualification remains open in the [implementation follow-up](docs/implementation-2026-09-07/PROGRESSION.md).
 
-![Studio at 1366 × 768](docs/implementation-2026-09-07/studio-1366.png)
+![360 Extractor Studio: media queue, live Cube preview and processing settings](docs/images/screenshot-gui.png)
+
+*Actual Studio window with a synthetic demonstration panorama. Preview and controls are rendered by the application; the image is not evidence of segmentation or reconstruction accuracy.*
 
 ## Capabilities
 
@@ -24,7 +26,7 @@ Input 360 media must already be stitched. Accepting `.insv` does not imply nativ
 
 ## Install from source
 
-Clone the repository and select the candidate branch/commit you intend to test before installing. Run the commands below from that checkout’s root. For this correction cycle the branch is `codex/audit-corrections`; a default-branch checkout may contain an older application.
+Clone the repository and select the candidate branch/commit you intend to test before installing. Run the commands below from that checkout’s root. The v4.0.0 candidate is prepared on `codex/audit-corrections` until its merge into `main`; use the version tag once that release is available.
 
 Use a supported Python interpreter with its own environment. The local correction tests use Python 3.13; CI targets Python 3.11. Wider Python compatibility is not yet qualified.
 
