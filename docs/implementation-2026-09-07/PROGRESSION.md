@@ -1,6 +1,6 @@
 # Implémentation des corrections — 7 septembre 2026
 
-Branche : `codex/audit-corrections`, basée sur `eef3edac24f4334180955848679137c123fa3e66`. Le rapport d’audit reste un document historique de cette révision. Ce document décrit les modifications locales qui lui succèdent ; aucune version publique ni aucun binaire signé n’a été publié.
+Branche : `codex/audit-corrections`, basée sur `eef3edac24f4334180955848679137c123fa3e66`. Le rapport d’audit reste un document historique de cette révision. Ce document décrit les corrections qui lui succèdent, enregistrées et poussées dans le commit `82cf24a` ; aucune nouvelle version publique ni aucun binaire signé n’a été publié.
 
 **Les trois blocages démontrés sont corrigés et couverts par des tests de régression. Le plan complet n’est pas déclaré terminé : la qualification de production, plusieurs variantes métier et les profils matériels restent ouverts.**
 
@@ -85,3 +85,9 @@ La wheel est construite et testée hors checkout : QSS présente et chargée, CL
 ## Prochaine porte de livraison
 
 La priorité suivante est la recette avec quelques clips réels représentatifs et une reconstruction COLMAP, puis le verrouillage Windows/CUDA et le test des binaires. Aucun bénéfice de reconstruction, taux de segmentation ou débit GPU ne doit être annoncé avant ces vérifications. Les améliorations exploratoires du second cycle du plan (cloud, stitching natif, inpainting, etc.) n’ont pas été engagées.
+
+## Consolidation documentaire après implémentation
+
+Les guides CLI/réglages, le README, les instructions de contribution et les notes Unreleased ont été harmonisés avec le code de correction. Le [protocole de recette](../CLI_TESTING_PROTOCOL.md) couvre Studio, CLI, GPS, reconstruction et binaires téléchargés ; la [feuille de route](../../IMPROVEMENTS.md) distingue les corrections réalisées des chantiers ouverts. Les rapports et résultats datés restent des preuves historiques ; la validation locale ci-dessus concerne la révision testée, pas une future release. La [CI du commit 82cf24a](https://github.com/nicolasdiolez/360Extractor/actions/runs/34151336481) a ensuite réussi, y compris les jobs multiplateformes configurés. Le numéro/date de la prochaine version restent à fixer après recette.
+
+Vérification documentaire : 40 réglages par défaut et 2 contrôles additionnels comparés au code, 33 noms d’options CLI couverts, 21 commandes parsées et validées, et 9 cas CLI exécutés sur médias synthétiques (7 succès, 2 erreurs attendues). Les liens locaux et ancres ont été vérifiés. Le contrôle de version et les 20 tests des outils de release passent. Voir [documentation-validation.json](documentation-validation.json). Ces vérifications ne remplacent pas la recette sur médias réels ni celle des binaires.

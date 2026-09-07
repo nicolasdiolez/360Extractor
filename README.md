@@ -24,17 +24,19 @@ Input 360 media must already be stitched. Accepting `.insv` does not imply nativ
 
 ## Install from source
 
+Clone the repository and select the candidate branch/commit you intend to test before installing. Run the commands below from that checkout’s root. For this correction cycle the branch is `codex/audit-corrections`; a default-branch checkout may contain an older application.
+
 Use a supported Python interpreter with its own environment. The local correction tests use Python 3.13; CI targets Python 3.11. Wider Python compatibility is not yet qualified.
 
 ```sh
-python3 -m venv .venv
+python3.13 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install '.[dev]' -c constraints/security-minimums.txt
+python -m pip install ".[dev]" -c constraints/security-minimums.txt
 python check_env.py --mode all
 ```
 
-On Windows, activate `.venv\Scripts\Activate.ps1` in PowerShell instead. Install FFmpeg/ffprobe for embedded GPS and verify with `python check_env.py --telemetry`. The interactive `setup_cuda.py` helper operates only inside a virtual environment; its `--index-url` must be selected from the official PyTorch installer for the target driver. A hashed macOS arm64/Python 3.13 lock is available in `constraints/macos-arm64-py313.lock`. Windows/CUDA locks and clean-machine binary builds remain work in progress.
+The example selects Python 3.13 explicitly. On Windows, select an installed Python 3.11 or 3.13 interpreter, create the environment with `python -m venv .venv` and activate `.venv\Scripts\Activate.ps1` in PowerShell instead. Install FFmpeg/ffprobe for embedded GPS and verify with `python check_env.py --telemetry`. The interactive `setup_cuda.py` helper operates only inside a virtual environment; its `--index-url` must be selected from the official PyTorch installer for the target driver. A hashed macOS arm64/Python 3.13 lock is available in `constraints/macos-arm64-py313.lock`. Windows/CUDA locks and clean-machine binary builds remain work in progress.
 
 Standard model weights use `~/.cache/360-extractor/models` (override with `EXTRACTOR360_MODEL_DIR`). A model absent from the cache may be downloaded on first use. Provision the cache before offline use. Custom `.pt` files can execute code and require `--trust-custom-model` or `trust_custom_model: true` from an explicitly trusted source.
 
@@ -57,7 +59,7 @@ python -m extractor360
 360extractor --input panorama.mp4 --output out --layout cube --export-colmap
 ```
 
-Every run creates a new source-specific folder: `panorama_processed`, `panorama_processed_001`, and so on. Existing datasets are never silently replaced or resumed. Recursive scans exclude generated folders. `manifest.json` records `completed`, `failed` or `cancelled` with exact write counts. `images.jsonl` associates confirmed images and masks with their camera and frame.
+Every run creates a new source-specific folder: `panorama_processed`, `panorama_processed_001`, and so on. Existing datasets are never silently replaced or resumed. Recursive scans exclude generated folders. `manifest.json` starts as `running`, then records `completed`, `failed` or `cancelled` with confirmed write counts. A process kill or power loss can leave partial state; no automatic recovery is implemented. `images.jsonl` associates confirmed images and masks with their camera and frame.
 
 Run `python reconstruct.py` from an exported `colmap/` folder to prepare a new workspace and invoke COLMAP. It requires a COLMAP build with native `rig_configurator` support. This pipeline follows the [COLMAP rig workflow](https://colmap.github.io/rigs.html); it has not yet been qualified through a full real reconstruction on this branch.
 
@@ -71,12 +73,16 @@ GPS sidecars are aligned to video start by assumption. Camera heading is omitted
 
 ```sh
 QT_QPA_PLATFORM=offscreen python -m pytest -q
-ruff check .
+python -m ruff check .
 python scripts/check_release.py
 ```
 
+In PowerShell, set `$env:QT_QPA_PLATFORM="offscreen"` and run `python -m pytest -q` separately. See [release preparation](CONTRIBUTING.md#preparing-and-publishing-a-release) for versioning, draft builds and binary acceptance.
+
 - [Settings reference](docs/SETTINGS.md)
 - [CLI reference](docs/CLI.md)
+- [Acceptance protocol for Studio, CLI and release binaries](docs/CLI_TESTING_PROTOCOL.md)
+- [Current roadmap](IMPROVEMENTS.md)
 - [Actual architecture](ARCHITECTURE.md)
 - [Audit](docs/audit-2026-09-07/RAPPORT.md) and [implementation plan](docs/audit-2026-09-07/PLAN.md)
 - [Contributing](CONTRIBUTING.md) and [changelog](CHANGELOG.md)

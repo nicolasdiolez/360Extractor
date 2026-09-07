@@ -1,74 +1,41 @@
 # Changelog
 
-All notable changes to 360 Extractor will be documented in this file.
+Versioned entries describe their historical releases. The current guides describe the correction branch. The next release version/date is not assigned; the application still reports 3.3.0 until release preparation.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased] — v4.0 foundation
-
-### Studio reliability corrections (7 September 2026, not released)
-- Restore extraction, job states, cancellation and Qt shutdown; bounded QImage thumbnail workers.
-- Validate settings and output names, isolate runs, check every writer, publish complete image/mask pairs and record terminal manifests plus an image index.
-- Preserve preferences and per-job values, complete naming/quality controls and presets, and calculate real preview projections and mask overlays.
-- Reject failed AI loading, align masks to source dimensions, implement explicit binary-mask feather and require trust for custom model files.
-- Correct CAMM layouts, preserve metadata packet timestamps, support GPX 1.0/1.1 and SRT sidecars, bound subprocesses and interpolation.
-- Connect COLMAP rig configuration and masks through a portable runner; real reconstruction qualification remains pending.
-- Tile projection work, include QSS in installed packages, expand CI and protect published release assets.
-- See `docs/implementation-2026-09-07/PROGRESSION.md` for tests, limitations and unfinished plan items.
-
+## [Unreleased]
 
 ### Changed
-- **BREAKING (imports only): single-package layout.** The flat top-level
-  packages `core`/`ui`/`utils` and the `main` module moved into one
-  `extractor360` package, so a pip install can no longer collide with other
-  packages (prerequisite for PyPI). All documented invocations still work:
-  `python3 src/main.py` (launcher shim), the `360extractor` entry point, and
-  the new `python -m extractor360`.
-- **Qt-free processing core.** `ProcessingWorker` now reports progress through
-  plain callback events; the GUI bridges them to Qt signals
-  (`extractor360.ui.workers.ProcessingBridge`) and runs the worker on a plain
-  Python thread. The CLI no longer creates a `QCoreApplication`, never imports
-  Qt, and only imports the AI stack (torch/ultralytics) when an AI mode is
-  enabled — CLI-only server installs can use `opencv-python-headless` and skip
-  display libraries entirely.
-- **Distribution renamed to `360-extractor`** (was `360-extractor-pro`): the
-  app has always called itself "360 Extractor"; the pip distribution name now
-  matches, before any PyPI publication makes it permanent. The `360extractor`
-  console entry point is unchanged.
+
+- **Breaking import change:** move the former top-level core/ui/utils packages into `extractor360`. The development launcher `python src/main.py`, console command `360extractor` and `python -m extractor360` remain available.
+- Rename the distribution to `360-extractor`; keep the application name 360 Extractor.
+- Keep the processing core Qt-free. Studio runs it through a ProcessingController/ProcessingThread (QThread) and bridges callback events to Qt. The CLI runs synchronously and imports AI only on demand.
+- Introduce Studio's three-column interface, expandable advanced controls and app icon; preserve per-job edits, persistent defaults, naming, quality and active-view selections. Presets remain starting points, not certified reconstruction profiles.
+- Calculate preview projections at export resolution before display reduction, use real AI/nadir overlays and retain timeline scrubbing. Automatic playback is not implemented.
+- Give each extraction a new source-specific run folder. Add shared settings/naming validation, checked image/mask writes, a confirmed image index and schema-2 state/provenance manifests. Automatic resume is not implemented.
+- Sample seconds using decoder timestamps with an identified FPS fallback; tile projection work and use bounded preview/thumbnail pools and small AI batches.
+
+### Fixed
+
+- Restore Studio extraction, card state/progress updates, reruns, cancellation and deferred shutdown; add subprocess regression coverage for normal process exit.
+- Report model loading/inference and output-writing failures instead of treating them as successful outputs. Match masks to original image dimensions and implement explicit smoothing of binary-mask edges.
+- Keep blur history per view, remove forced acceptance of rejected views and update motion reference only after a successful write. AI skip remains per view.
+- Correct CAMM type 5/6 layouts, GPMF GPS5 scales/fix handling and packet timing; support GPX 1.0/1.1 and SRT sidecars and bound telemetry subprocesses/interpolation.
+- Stop presenting filesystem mtime as capture time or GPS travel direction as optical heading. Omit unknown/relative EXIF altitude. Capture timestamps are conditional on available container metadata.
+- Package the Qt stylesheet in wheels and include the reconstruction runner in the PyInstaller data.
 
 ### Added
-- **Calibration EXIF on every image** (`exif_intrinsics`, default on;
-  `--no-exif-intrinsics` to opt out): focal length derived from the FOV
-  (`FocalLength` + `FocalLengthIn35mmFilm`, e.g. FOV 90° → 18 mm), a stable
-  `Make`/`Model` per rig so photogrammetry tools group calibration across all
-  views, `Software`, per-frame `DateTimeOriginal` (+ms), and — when telemetry
-  is enabled and the rig is moving — `GPSImgDirection` (GPS travel heading +
-  view yaw, true-north referenced).
-- **COLMAP priors export** (`export_colmap` / `--export-colmap` / GUI toggle):
-  writes a `colmap/` folder with the exact shared PINHOLE `cameras.txt`, exact
-  per-view cam-from-rig quaternions (`rig_rotations.json`), a turnkey
-  `reconstruct.sh` running COLMAP with the intrinsics fixed during bundle
-  adjustment, and a README (incl. GLOMAP note and COLMAP mask-naming tip).
-- **Core e2e tests in CI**: the extraction pipeline (cube + nadir + manifest,
-  flat passthrough) now runs in CI on a synthetic 360 video — previously the
-  processor could not even be imported there — plus a guard asserting the
-  core imports without PySide6/torch.
-- **Downloadable apps.** Tagging a release now builds the desktop app for
-  macOS (Apple Silicon) and Windows (x64) with a versioned PyInstaller spec and
-  attaches both to a draft GitHub Release, with the notes taken straight from
-  this changelog. No Python install needed to run the tool any more. The macOS
-  app is unsigned: right-click → Open on first launch (documented in the README).
-- **Release consistency guard** (`scripts/check_release.py`, run in CI and
-  before every release build): refuses a release unless `version.py`,
-  `pyproject.toml`, the newest versioned CHANGELOG entry and the tag all agree.
-  Three releases in a row had shipped with one of them out of sync.
-- **Cross-platform CI**: the test suite now runs on Ubuntu, macOS *and* Windows
-  — it is a cross-platform desktop tool, but only Linux was ever exercised.
-- **Contributor onboarding**: `CONTRIBUTING.md`, issue templates (the bug one
-  asks for the `manifest.json`, which usually explains the problem by itself),
-  README badges, a GUI screenshot, and "Typical workflows" for the three common
-  pipelines (GoPro Max → RealityScan, Insta360 → Postshot, DJI → COLMAP).
+
+- Calibration EXIF for virtual 360 views, with focal length derived from projection FOV and stable camera labels. GPS is optional; orientation is not inferred from travel direction.
+- COLMAP calibration and rig exports: cameras.txt, rig_rotations.json, rig_config.json, reconstruct.py, a shell wrapper and instructions. The runner stages per-camera images/separate masks, applies rig_configurator before sequential matching and fixes calibration during mapping. Real reconstruction qualification is pending.
+- Explicit trust for custom .pt models and a stable weight cache with application-specific Ultralytics settings.
+- Security constraints and a hashed macOS arm64/Python 3.13 dependency resolution, qualified in a separate environment. Existing user environments are not automatically upgraded.
+- Core CI on Ubuntu/macOS/Windows, dedicated Qt jobs on macOS/Windows, blocking critical-interface typing and version/changelog checks.
+- A release workflow that validates/tests dependencies, builds macOS/Windows apps and creates a draft release. It refuses to overwrite already published assets. Downloaded binaries still require clean-machine qualification before publication.
+- Consolidated CLI/settings/contributor guides, acceptance protocol and current roadmap, with older audits identified as historical evidence.
+
+### Qualification remaining
+
+Real camera/codec/GPS corpora, segmentation accuracy, COLMAP reconstruction, Windows/GPU profiles, clean-machine binaries and complete distribution notices remain open. GPS9, IMU orientation, native stitching, HDR/ICC/alpha workflows and project/resume support are not claimed as implemented. See the [implementation follow-up](docs/implementation-2026-09-07/PROGRESSION.md) for evidence and all eight workstreams.
 
 ## [3.3.0] - 2026-07-13
 

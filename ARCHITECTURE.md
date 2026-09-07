@@ -16,7 +16,7 @@ flowchart LR
   Worker --> Filters[Blur and motion]
   Worker --> AI[Lazy AIService]
   Worker --> GPS[TelemetryHandler]
-  Worker --> Writer[Atomic image and mask writer]
+  Worker --> Writer[Staged image and mask writer]
   Writer --> Index[Image index and terminal manifest]
   Index --> COLMAP[Portable reconstruction runner]
 ```
@@ -33,7 +33,7 @@ Thumbnail work uses a shared pool capped at four jobs and returns QImage. Previe
 
 `validation.py` merges defaults and checks types, ranges, enums, active views, AI targets, model trust and a projection memory budget. `output_plan.py` discovers and deduplicates input files, excludes prior datasets and validates output names. Every run gets a new `_processed`, `_processed_001`, … folder. Replacing or resuming an existing run is deliberately not yet implemented.
 
-`FileManager.write_pair` stages complete image/mask files before publishing them. Failed writes raise, all futures are inspected, and counters count confirmed writes. `images.jsonl` lists successful images with camera/frame associations. Manifest schema 2 records terminal state, output folder, counts, errors and run identity. It distinguishes source size/mtime identification from cryptographic verification; a source hash is not yet calculated.
+`FileManager.write_pair` stages complete image/mask files before publishing them. Failed writes raise, all futures are inspected, and counters count confirmed writes. `images.jsonl` lists successful images with camera/frame associations. Manifest schema 2 starts in running state and records terminal state, output folder, counts, errors and run identity. It distinguishes source size/mtime identification from cryptographic verification; a source hash is not yet calculated. Publishing two files is not a power-loss-atomic transaction; a process kill can leave partial files/index data and a running manifest.
 
 ## Image and model pipeline
 
@@ -43,7 +43,7 @@ AI loading is lazy; loading/inference failures propagate. Batches contain at mos
 
 ## Telemetry and reconstruction
 
-FFprobe packet data preserves CAMM/GPMF packet PTS. GPMF samples are distributed inside each packet's declared duration. CAMM supports standard GPS types 5 and 6; GPS9 is explicitly unsupported pending fixtures. GPX 1.0/1.1 and SRT sidecars are recognized case-insensitively. Sidecar alignment still assumes their start corresponds to video start. Lookup is bounded to available times and a maximum interpolation gap.
+FFprobe packet data preserves CAMM/GPMF packet PTS. GPMF samples are distributed inside each packet's declared duration. CAMM supports standard GPS types 5 and 6. GPMF GPS9 records are explicitly unsupported pending fixtures. GPX 1.0/1.1 and SRT sidecars are recognized case-insensitively. Sidecar alignment still assumes their start corresponds to video start. Lookup is bounded to available times and a maximum interpolation gap.
 
 Direction of travel is not written as optical heading. Filesystem mtime is not used as capture time. The manifest reports time provenance; uncertain altitude is omitted from GPS EXIF unless an orthometric reference is explicitly declared.
 
