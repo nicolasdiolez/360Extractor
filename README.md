@@ -7,7 +7,7 @@ Desktop and command-line preprocessing for stitched 360° panoramas and standard
 
 **360 Extractor Studio — [v4.0.1 Preview](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.1).** This public prerelease introduces the new interface and reliability corrections for user feedback. It does not replace the latest stable release. Download the attached assets and read their installation notes and validation limits on the release page; start with a short clip and a separate output folder. Full camera/GPU/reconstruction qualification remains open in the [implementation follow-up](docs/implementation-2026-09-07/PROGRESSION.md).
 
-Windows lifecycle tests have reproduced an intermittent native crash (`0xC0000005`), including during the first extraction. Other diagnostic and stress runs passed; the cause remains unknown. Report any recurrence through the [bug report form](https://github.com/nicolasdiolez/360Extractor/issues/new?template=bug_report.yml), with your settings and available logs.
+Earlier candidates reproduced an intermittent Windows native crash (`0xC0000005`) during extraction. Version 4.0.1 strengthens Qt worker ownership and shutdown; the exact native cause remains unconfirmed, so Windows remains experimental pending broader qualification. Report any recurrence through the [bug report form](https://github.com/nicolasdiolez/360Extractor/issues/new?template=bug_report.yml), with your settings and available logs.
 
 ![360 Extractor Studio: media queue, live Cube preview and processing settings](docs/images/screenshot-gui.png)
 
@@ -50,6 +50,8 @@ The example selects Python 3.13 explicitly. On Windows, select an installed Pyth
 Standard model weights use `~/.cache/360-extractor/models` (override with `EXTRACTOR360_MODEL_DIR`). A model absent from the cache may be downloaded on first use. Provision the cache before offline use. Custom `.pt` files can execute code and require `--trust-custom-model` or `trust_custom_model: true` from an explicitly trusted source.
 
 ## Run
+
+AI selects an available accelerator automatically. If GPU inference is unavailable or unreliable on your machine, set `EXTRACTOR360_DEVICE=cpu` before launching (`export EXTRACTOR360_DEVICE=cpu` in a macOS/Linux terminal, or `$env:EXTRACTOR360_DEVICE="cpu"` in PowerShell). Use `auto` to restore automatic selection. The release smoke test qualifies CPU inference; it does not certify GPU profiles.
 
 ```sh
 # Studio

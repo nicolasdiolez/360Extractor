@@ -1,6 +1,8 @@
 # Settings and configuration
 
-This reference describes the current correction branch. See [installation](../README.md#install-from-source), [CLI arguments](CLI.md) and [qualification status](implementation-2026-09-07/PROGRESSION.md).
+This reference describes the Studio 4.0.1 preview. See [installation](../README.md#install-from-source), [CLI arguments](CLI.md) and [qualification status](implementation-2026-09-07/PROGRESSION.md).
+
+The process environment variable `EXTRACTOR360_DEVICE` accepts `auto` (default) or `cpu`. It applies to both Studio preview and extraction, including the CLI, and is independent of per-job JSON settings. Select `cpu` when the accelerator is unavailable or unreliable; portable release smoke tests qualify this mode, not every GPU profile.
 
 ## Studio behavior
 

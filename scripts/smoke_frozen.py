@@ -55,6 +55,9 @@ def main():
         assert np.all(image == 127), "Flat extraction altered the input pixels"
         print("FROZEN_SMOKE_OK: launcher, completed manifest, one native-size PNG, exact pixels")
         if args.model_dir:
+            # Hosted macOS VMs can report MPS available while GPU allocations
+            # fail. Qualify portable CPU inference; GPU acceptance is separate.
+            env["EXTRACTOR360_DEVICE"] = "cpu"
             env["EXTRACTOR360_MODEL_DIR"] = str(args.model_dir.resolve(strict=True))
             env["YOLO_CONFIG_DIR"] = str(root / "ultralytics")
             run("--input", str(source), "--output", str(root / "ai"), "--flat", "--format", "png", "--ai-mask")
@@ -66,7 +69,7 @@ def main():
             assert len(records) == 1 and records[0]["mask"], records
             mask = cv2.imread(str(manifests[0].parent / records[0]["mask"]), cv2.IMREAD_GRAYSCALE)
             assert mask is not None and mask.shape == (64, 96)
-            print("FROZEN_AI_SMOKE_OK: model loading, inference and native-size mask (synthetic input)")
+            print("FROZEN_AI_SMOKE_OK: model loading, CPU inference and native-size mask (synthetic input)")
 
 
 if __name__ == "__main__":

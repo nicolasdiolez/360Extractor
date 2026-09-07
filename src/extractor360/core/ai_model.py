@@ -40,6 +40,12 @@ class AIService:
             'device_name': 'CPU',
             'is_accelerated': False
         }
+        requested = os.environ.get('EXTRACTOR360_DEVICE', 'auto').strip().lower()
+        if requested not in ('auto', 'cpu'):
+            raise ValueError('EXTRACTOR360_DEVICE must be auto or cpu')
+        if requested == 'cpu':
+            logger.info('CPU inference explicitly selected with EXTRACTOR360_DEVICE=cpu')
+            return info
         
         if torch.backends.mps.is_available():
             info['device'] = 'mps'

@@ -21,6 +21,7 @@ Feedback preview containing the Studio changes described in 4.0.0 below.
 
 - Run the actual frozen executable after every macOS/Windows build: launcher, short flat extraction, completed manifest, native image dimensions and exact PNG pixels. Source tests alone had not detected the startup failure.
 - Provision the standard segmentation weights and verify that the frozen executable loads the model, performs inference and writes a correctly sized mask on a synthetic image.
+- Add `EXTRACTOR360_DEVICE=cpu` for explicit CPU inference, keeping automatic accelerator selection as the default. Use CPU for portable release smoke tests: hosted macOS can report MPS available yet fail even a tiny GPU allocation.
 - Add a subprocess regression for preview results delivered after runnable destruction and card removal while a thumbnail is still decoding.
 
 ### Known limitations

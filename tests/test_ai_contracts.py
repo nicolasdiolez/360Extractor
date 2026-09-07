@@ -7,6 +7,20 @@ pytest.importorskip('ultralytics')
 from extractor360.core.ai_model import AIService
 
 
+def test_cpu_selection_overrides_reported_gpu_availability(monkeypatch):
+    monkeypatch.setenv('EXTRACTOR360_DEVICE', 'cpu')
+    with patch.object(torch.backends.mps, 'is_available', return_value=True), patch.object(torch.cuda, 'is_available', return_value=True):
+        info = AIService.get_device_info()
+    assert info['device'] == 'cpu'
+    assert info['is_accelerated'] is False
+
+
+def test_unknown_device_selection_is_explicit_error(monkeypatch):
+    monkeypatch.setenv('EXTRACTOR360_DEVICE', 'typo')
+    with pytest.raises(ValueError, match='auto or cpu'):
+        AIService.get_device_info()
+
+
 def test_mask_feather_is_float_edge_smoothing():
     image=np.zeros((100,100,3),np.uint8)
     tensor=torch.zeros((1,100,100),dtype=torch.uint8)

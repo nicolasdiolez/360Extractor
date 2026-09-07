@@ -1,6 +1,6 @@
 # Command-line guide
 
-This guide describes the correction branch, before its next release. Install the project using the [README](../README.md#install-from-source). Commands below run from the repository root with that environment activated. `python -m extractor360`, `360extractor` and the development launcher `python src/main.py` use the same entry point.
+This guide describes the Studio 4.0.1 preview. Install the project using the [README](../README.md#install-from-source). Commands below run from the repository root with that environment activated. `python -m extractor360`, `360extractor` and the development launcher `python src/main.py` use the same entry point.
 
 ## Starting a job
 
@@ -9,6 +9,8 @@ This guide describes the correction branch, before its next release. Install the
 ```
 
 Providing `--input` or `--config` selects CLI mode. With neither, the application opens Studio. The processing core does not import Qt; AI libraries load only when AI processing is requested. The standard installation still installs GUI and AI dependencies; separate lightweight distributions are not available yet.
+
+For CPU inference, set the environment variable `EXTRACTOR360_DEVICE=cpu` before launch; `auto` restores the default accelerator selection. This is an environment option, not a CLI flag or JSON key. In PowerShell use `$env:EXTRACTOR360_DEVICE="cpu"`; in a macOS/Linux shell use `export EXTRACTOR360_DEVICE=cpu`.
 
 Supported extensions are `.mp4`, `.avi`, `.mov`, `.mkv`, `.insv`, `.jpg`, `.jpeg`, `.png`, `.tif` and `.tiff`, case-insensitively. The installed decoder must support the actual codec. 360 input must already be stitched; raw dual-fisheye stitching is not implemented.
 
