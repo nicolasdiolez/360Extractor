@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] — v4.0 foundation
 
+### Studio reliability corrections (7 September 2026, not released)
+- Restore extraction, job states, cancellation and Qt shutdown; bounded QImage thumbnail workers.
+- Validate settings and output names, isolate runs, check every writer, publish complete image/mask pairs and record terminal manifests plus an image index.
+- Preserve preferences and per-job values, complete naming/quality controls and presets, and calculate real preview projections and mask overlays.
+- Reject failed AI loading, align masks to source dimensions, implement explicit binary-mask feather and require trust for custom model files.
+- Correct CAMM layouts, preserve metadata packet timestamps, support GPX 1.0/1.1 and SRT sidecars, bound subprocesses and interpolation.
+- Connect COLMAP rig configuration and masks through a portable runner; real reconstruction qualification remains pending.
+- Tile projection work, include QSS in installed packages, expand CI and protect published release assets.
+- See `docs/implementation-2026-09-07/PROGRESSION.md` for tests, limitations and unfinished plan items.
+
+
 ### Changed
 - **BREAKING (imports only): single-package layout.** The flat top-level
   packages `core`/`ui`/`utils` and the `main` module moved into one

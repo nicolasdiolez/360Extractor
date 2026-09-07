@@ -1,10 +1,11 @@
 name: CI
 
 on:
+  workflow_call:
   push:
-    branches: ["main", "dev", "claude/**"]
+    branches: ["main", "dev", "claude/**", "feat/**", "codex/**"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "dev"]
 
 permissions:
   contents: read
@@ -21,7 +22,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install lint tools
-        run: python -m pip install --upgrade pip ruff mypy
+        run: python -m pip install --upgrade pip ruff mypy PySide6
 
       - name: Ruff (blocking — real bugs only, configured in pyproject.toml)
         run: ruff check .
@@ -31,6 +32,9 @@ jobs:
 
       - name: Mypy (informational)
         run: mypy src || true
+
+      - name: Critical contracts (blocking)
+        run: mypy --python-version 3.13 --check-untyped-defs --follow-imports=silent src/extractor360/ui/workers.py src/extractor360/core/validation.py src/extractor360/core/output_plan.py src/extractor360/core/reconstruction.py
 
       # Cheap guard against the recurring release-metadata drift (version.py vs
       # pyproject vs CHANGELOG). No tag here — that part is checked in release.yml.
@@ -62,4 +66,21 @@ jobs:
           python -m pip install numpy "opencv-python-headless>=4.8.0" defusedxml pytest piexif Pillow
 
       - name: Run tests
-        run: pytest tests/ -v
+        run: pytest tests/ -v --ignore=tests/test_studio_ui.py --ignore=tests/test_gui_lifecycle.py --ignore=tests/test_preview_parity.py
+
+  gui:
+    name: Studio (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install numpy opencv-python-headless defusedxml pytest piexif Pillow PySide6
+      - run: python -m pytest tests/test_studio_ui.py tests/test_gui_lifecycle.py tests/test_preview_parity.py -v

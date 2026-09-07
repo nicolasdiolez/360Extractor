@@ -5,7 +5,7 @@ Modern card-style widget for displaying video jobs with thumbnail and metadata c
 from __future__ import annotations
 
 import cv2
-from PySide6.QtCore import QObject, Qt, QThread, Signal
+from PySide6.QtCore import QObject, Qt, QRunnable, QThreadPool, Signal
 from PySide6.QtGui import QImage, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QProgressBar, QPushButton,
@@ -16,12 +16,16 @@ from extractor360.ui.icons import get_icon, get_pixmap
 from extractor360.utils.logger import logger
 
 
-class ThumbnailWorker(QObject):
+class ThumbnailSignals(QObject):
+    finished = Signal(QImage)
+
+
+class ThumbnailWorker(QRunnable):
     """Worker to generate video thumbnails in background."""
-    finished = Signal(QPixmap)
 
     def __init__(self, video_path: str, size: int = 64):
         super().__init__()
+        self.signals = ThumbnailSignals()
         self.video_path = video_path
         self.size = size
         self._is_cancelled = False
@@ -31,7 +35,7 @@ class ThumbnailWorker(QObject):
 
     def run(self):
         if self._is_cancelled:
-            self.finished.emit(QPixmap())
+            self.signals.finished.emit(QImage())
             return
 
         try:
@@ -39,19 +43,20 @@ class ThumbnailWorker(QObject):
             if is_image:
                 frame = cv2.imread(self.video_path)
                 if frame is None or self._is_cancelled:
-                    self.finished.emit(QPixmap())
+                    self.signals.finished.emit(QImage())
                     return
             else:
                 cap = cv2.VideoCapture(self.video_path)
                 if not cap.isOpened():
-                    self.finished.emit(QPixmap())
+                    cap.release()
+                    self.signals.finished.emit(QImage())
                     return
 
                 ret, frame = cap.read()
                 cap.release()
 
                 if not ret or self._is_cancelled or frame is None:
-                    self.finished.emit(QPixmap())
+                    self.signals.finished.emit(QImage())
                     return
 
             # Crop to square from center and resize
@@ -68,16 +73,16 @@ class ThumbnailWorker(QObject):
 
             h, w, ch = frame.shape
             img = QImage(frame.data, w, h, ch * w, QImage.Format_RGB888)
-            pixmap = QPixmap.fromImage(img)
+            image = img.copy()
 
             if not self._is_cancelled:
-                self.finished.emit(pixmap)
+                self.signals.finished.emit(image)
             else:
-                self.finished.emit(QPixmap())
+                self.signals.finished.emit(QImage())
 
         except Exception as e:
             logger.error(f"Thumbnail error: {e}")
-            self.finished.emit(QPixmap())
+            self.signals.finished.emit(QImage())
 
 
 class VideoCard(QWidget):
@@ -92,6 +97,7 @@ class VideoCard(QWidget):
         "Processing": "#F59E0B",
         "Done": "#10B981",
         "Error": "#EF4444",
+        "Cancelled": "#A1A1AA",
     }
 
     def __init__(self, job, parent=None):
@@ -224,26 +230,17 @@ class VideoCard(QWidget):
         if self._worker:
             self._worker.cancel()
             self._worker = None
-        if self._thread and self._thread.isRunning():
-            self._thread.quit()
-            self._thread.wait(500)
-            self._thread = None
 
     def _load_thumbnail(self):
         self._cleanup_thread()
-        self._thread = QThread()
         self._worker = ThumbnailWorker(self.job.file_path, size=54)
-        self._worker.moveToThread(self._thread)
+        self._worker.signals.finished.connect(self._set_thumbnail)
+        pool = QThreadPool.globalInstance()
+        pool.setMaxThreadCount(4)
+        pool.start(self._worker)
 
-        self._thread.started.connect(self._worker.run)
-        self._worker.finished.connect(self._set_thumbnail)
-        self._worker.finished.connect(self._thread.quit)
-        self._worker.finished.connect(self._worker.deleteLater)
-        self._thread.finished.connect(self._thread.deleteLater)
-        self._thread.finished.connect(lambda: setattr(self, '_thread', None))
-        self._thread.start()
-
-    def _set_thumbnail(self, pixmap: QPixmap):
+    def _set_thumbnail(self, image: QImage):
+        pixmap = QPixmap.fromImage(image)
         if not pixmap.isNull():
             rounded = QPixmap(pixmap.size())
             rounded.fill(Qt.transparent)
@@ -295,6 +292,3 @@ class VideoCard(QWidget):
             else:
                 self.clicked.emit()
         super().mousePressEvent(event)
-
-    def __del__(self):
-        self._cleanup_thread()

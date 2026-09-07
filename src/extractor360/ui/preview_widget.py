@@ -9,14 +9,20 @@ Features:
 from __future__ import annotations
 
 import cv2
+import numpy as np
+import copy
 from PySide6.QtCore import Qt, QRunnable, QThreadPool, QObject, Signal, Slot, QTimer
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
-    QCheckBox, QFrame, QHBoxLayout, QLabel, QPushButton,
+    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton,
     QSizePolicy, QSlider, QVBoxLayout, QWidget
 )
 
 from extractor360.core.geometry import GeometryProcessor
+from extractor360.core.validation import validate_settings
+from extractor360.core.processor import ProcessingWorker
+from extractor360.core.ai_classes import PRESETS, parse_custom_classes
+from extractor360.core.settings_manager import normalize_mask_faces
 from extractor360.utils.image_utils import ImageUtils
 from extractor360.ui.icons import get_pixmap
 
@@ -32,10 +38,11 @@ class WorkerSignals(QObject):
 class PreviewWorker(QRunnable):
     """Background worker generating perspective preview with overlays."""
     def __init__(self, media_path: str, settings: dict, face_name: str = "Front",
-                 position_ratio: float = 0.0, show_ai_mask: bool = True, show_nadir_disc: bool = True):
+                 position_ratio: float = 0.0, show_ai_mask: bool = True, show_nadir_disc: bool = True, ai_cache=None):
         super().__init__()
         self.media_path = media_path
-        self.settings = settings
+        self.settings = copy.deepcopy(settings)
+        self.ai_cache = ai_cache if ai_cache is not None else {}
         self.face_name = face_name
         self.position_ratio = position_ratio
         self.show_ai_mask = show_ai_mask
@@ -45,6 +52,7 @@ class PreviewWorker(QRunnable):
     @Slot()
     def run(self):
         try:
+            self.settings = validate_settings(self.settings)
             is_image = self.media_path.lower().endswith(('.jpg', '.jpeg', '.png', '.tiff', '.tif'))
             total_sec = 0.0
             current_sec = 0.0
@@ -58,6 +66,7 @@ class PreviewWorker(QRunnable):
             else:
                 cap = cv2.VideoCapture(self.media_path)
                 if not cap.isOpened():
+                    cap.release()
                     self.signals.error.emit(f"Could not open video: {self.media_path}")
                     return
 
@@ -80,69 +89,50 @@ class PreviewWorker(QRunnable):
 
             self.signals.duration_info.emit(current_sec, current_frame, total_sec)
 
+            settings = self.settings
             h, w = frame.shape[:2]
-            fov = self.settings.get('fov', 90)
-            pitch_offset = self.settings.get('pitch_offset', 0)
-            sharpen_enabled = self.settings.get('sharpening_enabled', False)
-            sharpen_strength = self.settings.get('sharpening_strength', 0.5)
-            is_360 = self.settings.get('is_360', True)
-            nadir_radius = float(self.settings.get('nadir_mask_radius', 35.0))
-
-            preview_res = 800
-
-            if w > 4096:
-                scale = 4096 / w
-                frame = cv2.resize(frame, (4096, int(h * scale)), interpolation=cv2.INTER_AREA)
-                h, w = frame.shape[:2]
-
-            if is_360:
-                face_angles = {
-                    "Front": (0.0, float(pitch_offset), 0.0),
-                    "Right": (90.0, float(pitch_offset), 0.0),
-                    "Back": (180.0, float(pitch_offset), 0.0),
-                    "Left": (270.0, float(pitch_offset), 0.0),
-                    "Up": (0.0, 90.0, 0.0),
-                    "Down": (0.0, -90.0, 0.0),
-                }
-                yaw, pitch, roll = face_angles.get(self.face_name, (0.0, float(pitch_offset), 0.0))
-
-                map_x, map_y = GeometryProcessor.create_rectilinear_map(
-                    src_h=h, src_w=w,
-                    dest_h=preview_res, dest_w=preview_res,
-                    fov_deg=fov,
-                    yaw_deg=yaw,
-                    pitch_deg=pitch,
-                    roll_deg=roll
-                )
-                remapped = cv2.remap(frame, map_x, map_y, cv2.INTER_LINEAR)
+            if settings['is_360']:
+                views = GeometryProcessor.generate_views(settings['camera_count'], settings['pitch_offset'], settings['layout_mode'])
+                active = settings.get('active_cameras')
+                views = [v for i, v in enumerate(views) if active is None or i in active]
+                name, yaw, pitch, roll = next((v for v in views if v[0] == self.face_name), views[0])
+                resolution = settings['resolution']
+                maps = GeometryProcessor.create_rectilinear_map(h, w, resolution, resolution, settings['fov'], yaw, pitch, roll)
+                maps = cv2.convertMaps(*maps, cv2.CV_16SC2)
+                interpolation = cv2.INTER_LANCZOS4 if settings['interpolation_mode'] == 'lanczos' else cv2.INTER_LINEAR
+                remapped = cv2.remap(frame, *maps, interpolation, borderMode=cv2.BORDER_WRAP)
             else:
-                remapped = cv2.resize(frame, (preview_res, preview_res), interpolation=cv2.INTER_LINEAR)
-
-            # Apply Sharpening if enabled
-            if sharpen_enabled:
-                gaussian = cv2.GaussianBlur(remapped, (0, 0), 2.0)
-                remapped = cv2.addWeighted(remapped, 1.0 + sharpen_strength, gaussian, -sharpen_strength, 0)
-
-            # Nadir Disc & AI Mask Overlays on Down face
-            if self.face_name == "Down":
-                overlay = remapped.copy()
-                cx, cy = preview_res // 2, preview_res // 2
-
-                if self.show_nadir_disc:
-                    rad_px = int((nadir_radius / 100.0) * (preview_res / 2.0))
-                    cv2.circle(overlay, (cx, cy), rad_px, (15, 15, 18), -1)
-                    cv2.circle(overlay, (cx, cy), rad_px, (245, 158, 11), 1)
-
-                if self.show_ai_mask:
-                    op_x1, op_y1 = cx - 110, cy + 50
-                    op_x2, op_y2 = cx + 110, preview_res - 30
-                    cv2.ellipse(overlay, ((op_x1 + op_x2) // 2, (op_y1 + op_y2) // 2), (110, 150), 0, 0, 360, (20, 70, 210), -1)
-
-                cv2.addWeighted(overlay, 0.40, remapped, 0.60, 0, remapped)
-
-            # Calculate blur score
-            blur_score = ImageUtils.calculate_blur_score(remapped)
-            self.signals.blur_score.emit(blur_score)
+                name = 'flat'
+                remapped = frame.copy()
+            self.signals.blur_score.emit(ImageUtils.calculate_blur_score(remapped))
+            if settings['sharpening_enabled']:
+                strength = settings['sharpening_strength']
+                remapped = cv2.addWeighted(remapped, 1 + strength, cv2.GaussianBlur(remapped, (0, 0), 2.0), -strength, 0)
+            mask = None
+            selected_faces = normalize_mask_faces(settings.get('ai_mask_cameras'))
+            eligible = not settings['is_360'] or selected_faces is None or name.lower() in selected_faces
+            if self.show_ai_mask and settings['ai_mode'] != 'None' and eligible:
+                from extractor360.core.ai_model import AIService
+                model_name = settings['ai_model']
+                if model_name not in self.ai_cache:
+                    self.ai_cache.clear()
+                    self.ai_cache[model_name] = AIService(model_name)
+                classes = parse_custom_classes(settings['ai_custom_classes'])
+                for key, preset in [('ai_detect_humans', 'Humans'), ('ai_detect_vehicles', 'Vehicles'), ('ai_detect_plants', 'Plants')]:
+                    if settings[key]:
+                        classes.extend(PRESETS[preset])
+                _, mask = self.ai_cache[model_name].process_image(remapped, mode='generate_mask', classes=sorted(set(classes)), conf=settings['ai_confidence'], invert_mask=settings['ai_invert_mask'], feather_mask=settings['feather_mask'])
+            if self.show_nadir_disc and settings['nadir_mask_enabled'] and name.lower() == 'down':
+                disc = ProcessingWorker._build_nadir_mask(remapped.shape, settings['nadir_mask_radius'], settings['ai_invert_mask'])
+                mask = disc if mask is None else (cv2.min(mask, disc) if settings['ai_invert_mask'] else cv2.max(mask, disc))
+            if mask is not None:
+                ignored = (255 - mask if settings['ai_invert_mask'] else mask).astype(np.float32) / 255
+                alpha = ignored[..., None] * 0.4
+                remapped = np.clip(remapped * (1 - alpha) + np.array([20, 70, 210]) * alpha, 0, 255).astype(np.uint8)
+            # Downsample only after computing the exported projection and quality score.
+            if max(remapped.shape[:2]) > 800:
+                scale = 800 / max(remapped.shape[:2])
+                remapped = cv2.resize(remapped, (round(remapped.shape[1] * scale), round(remapped.shape[0] * scale)), interpolation=cv2.INTER_AREA)
 
             # Convert to QImage
             rgb_image = cv2.cvtColor(remapped, cv2.COLOR_BGR2RGB)
@@ -193,10 +183,13 @@ class PreviewWidget(QWidget):
         self.show_nadir_disc = True
         self.current_media_path = None
         self.current_settings = {}
+        self._ai_cache = {}
         self.cached_image = None
         self._position_ratio = 0.0
 
-        self.threadpool = QThreadPool()
+        self.threadpool = QThreadPool(self)
+        self.threadpool.setMaxThreadCount(1)
+        self._closed = False
         self._generation = 0
 
         self._debounce = QTimer(self)
@@ -238,7 +231,12 @@ class PreviewWidget(QWidget):
             self.face_buttons[face_name] = btn
             seg_layout.addWidget(btn)
 
+        self.segment_container = seg_container
         tb_layout.addWidget(seg_container)
+        self.view_combo = QComboBox()
+        self.view_combo.currentTextChanged.connect(self.set_face)
+        tb_layout.addWidget(self.view_combo)
+        self.view_combo.hide()
         tb_layout.addSpacing(6)
 
         self.chk_ai_mask = QCheckBox("Mask Overlay")
@@ -289,6 +287,7 @@ class PreviewWidget(QWidget):
         self.play_btn = QPushButton("▶")
         self.play_btn.setFixedSize(22, 22)
         self.play_btn.setObjectName("toolBtn")
+        self.play_btn.hide()
         tl_layout.addWidget(self.play_btn)
 
         self.timecode_label = QLabel("00:00.0 / 00:00.0")
@@ -356,14 +355,28 @@ class PreviewWidget(QWidget):
             return
 
         self.current_media_path = media_path
-        self.current_settings = settings
+        self.current_settings = copy.deepcopy(settings)
+        views = GeometryProcessor.generate_views(max(1, min(64, settings.get("camera_count", 6))), settings.get("pitch_offset", 0), settings.get("layout_mode", "ring")) if settings.get("is_360", True) else [("flat", 0, 0, 0)]
+        active = settings.get("active_cameras")
+        names = [v[0] for i, v in enumerate(views) if active is None or i in active]
+        self.view_combo.blockSignals(True)
+        self.view_combo.clear()
+        self.view_combo.addItems(names)
+        if self.current_face not in names and names:
+            self.current_face = names[0]
+        self.view_combo.setCurrentText(self.current_face)
+        self.view_combo.blockSignals(False)
+        self.view_combo.show()
+        self.segment_container.hide()
         self.set_empty(False)
         self._schedule_update()
 
     def _schedule_update(self):
-        if not self.current_media_path:
+        if self._closed or not self.current_media_path:
             return
-        self._pending = (self.current_media_path, self.current_settings)
+        self._generation += 1
+        self._pending = (self.current_media_path, dict(self.current_settings))
+        self.threadpool.clear()
         self._debounce.start()
 
     def _run_pending(self):
@@ -382,6 +395,7 @@ class PreviewWidget(QWidget):
             position_ratio=self._position_ratio,
             show_ai_mask=self.show_ai_mask,
             show_nadir_disc=self.show_nadir_disc,
+            ai_cache=self._ai_cache,
         )
         worker.signals.result.connect(lambda img, g=gen: self._display_image(img, g))
         worker.signals.blur_score.connect(lambda s, g=gen: self._display_blur_score(s, g))
@@ -395,12 +409,12 @@ class PreviewWidget(QWidget):
         self.cached_image = image
         self.image_label.setText("")
         self._update_label_pixmap()
-        self.res_label.setText(f"{image.width()}x{image.height()}")
+        self.res_label.setText(f"Preview {image.width()}×{image.height()} · export {self.current_settings.get('resolution', 2048) if self.current_settings.get('is_360', True) else 'native'}")
 
     def _display_blur_score(self, score: float, generation: int):
         if generation != self._generation:
             return
-        self.score_label.setText(f"Blur: {score:.1f}")
+        self.score_label.setText(f"Export blur: {score:.1f}")
 
     def _display_duration_info(self, current_sec: float, current_frame: int, total_sec: float, generation: int):
         if generation != self._generation:
@@ -431,6 +445,13 @@ class PreviewWidget(QWidget):
                 Qt.SmoothTransformation
             )
             self.image_label.setPixmap(scaled)
+
+    def shutdown(self):
+        self._closed = True
+        self._debounce.stop()
+        self._pending = None
+        self._generation += 1
+        self.threadpool.clear()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

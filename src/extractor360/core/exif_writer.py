@@ -95,8 +95,9 @@ def build_exif_bytes(fov_deg=None, capture_dt=None, gps=None, heading_deg=None,
         gps_ifd[piexif.GPSIFD.GPSLongitude] = _deg_min_sec(lon)
         # GPSAltitude is an UNSIGNED rational; the sign lives in GPSAltitudeRef
         # (0 = above sea level, 1 = below).
-        gps_ifd[piexif.GPSIFD.GPSAltitudeRef] = 0 if alt >= 0 else 1
-        gps_ifd[piexif.GPSIFD.GPSAltitude] = _rational(abs(alt), 1000000)
+        if alt is not None:
+            gps_ifd[piexif.GPSIFD.GPSAltitudeRef] = 0 if alt >= 0 else 1
+            gps_ifd[piexif.GPSIFD.GPSAltitude] = _rational(abs(alt), 1000000)
 
     if heading_deg is not None:
         # Round to the stored precision BEFORE the final wrap so 359.999…
@@ -116,8 +117,7 @@ def save_image_with_exif(path: str, image, params, exif_bytes: bytes) -> bool:
     - PNG/TIFF: build the image with Pillow directly from the array (lossless)
       and save once with EXIF.
 
-    Falls back to a plain write (no EXIF) if anything goes wrong, so an EXIF
-    problem can never lose the image itself.
+    Raises on image or metadata failure so the caller can report a partial run.
     """
     ext = os.path.splitext(path)[1].lower()
     try:
@@ -132,8 +132,4 @@ def save_image_with_exif(path: str, image, params, exif_bytes: bytes) -> bool:
         return True
     except Exception as e:
         logger.error(f"Error writing {path} with EXIF: {type(e).__name__} - {e}")
-        try:
-            cv2.imwrite(path, image, params or [])
-        except Exception:
-            pass
-        return False
+        raise OSError(f"Could not write image and EXIF to {path}") from e

@@ -75,3 +75,6 @@ ignore_missing_imports = true
 check_untyped_defs = false
 warn_unused_ignores = true
 exclude = ["build/", "dist/"]
+
+[tool.setuptools.package-data]
+"extractor360.ui" = ["*.qss"]

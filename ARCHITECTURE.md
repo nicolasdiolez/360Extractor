@@ -1,167 +1,56 @@
-# Software Architecture & Technical Specifications: 360° Video Preprocessor
+# Application architecture
 
-## 1. Executive Summary
-This document outlines the technical design for a high-performance desktop and CLI application dedicated to preprocessing 4K-8K 360° video files. The application prepares datasets for Gaussian Splatting and photogrammetry pipelines (COLMAP, RealityScan) by converting equirectangular footage into optimized, overlap-controlled rectilinear pinhole views, while simultaneously cleaning the data using AI and enriching it with telemetry.
-
-**Key Constraints:**
-- **Cross-Platform:** Primary support for macOS (Apple Silicon), portable to Windows 11.
-- **Modes:** Dual interface via PySide6 GUI and Headless CLI for cloud/server deployments.
-- **Intelligence:** Motion-aware adaptive frame extraction (Optical Flow).
-- **Data Enrichment:** Native extraction of GPS/IMU metadata (GoPro, Insta360, DJI).
-- **Advanced Processing:** Choice of High-Quality (Lanczos) or Standard interpolation.
-- **AI-Powered Masking:** Native probability-based soft edge generation for professional photogrammetry.
-
----
-
-## 2. Technology Stack Selection (v2.5.0)
-
-### Core Framework: Python 3.10+ & PySide6 (Qt)
-**Justification:**
-- **Cross-Platform:** Qt offers the most robust cross-platform UI framework.
-- **Ecosystem:** Python is the native language of Computer Vision and AI.
-- **CLI Robustness:** Leveraging `argparse` for a professional command-line experience.
-
-### Libraries & Dependencies
-| Component | Technology | Reasoning |
-|-----------|------------|-----------|
-| **UI Framework** | **PySide6** | Modern Qt bindings for Python. |
-| **Video Processing** | **OpenCV (cv2) + FFmpeg** | Industry standard for decoding/encoding. |
-| **Math/Array Ops** | **NumPy** | Essential for vectorized matrix operations. |
-| **AI/ML** | **YOLO26 (Ultralytics)** | Next-gen NMS-Free architecture for deterministic latency. |
-| **Telemetry** | **piexif + Custom Parsers** | Native GPMF/CAMM parsing and EXIF injection. |
-| **Motion Detection** | **OpenCV Farneback** | Dense Optical Flow for adaptive extraction. |
-| **Progress Tracking**| **tqdm** | Real-time CLI progress monitoring. |
-
----
-
-## 3. System Architecture
-
-The application follows a **Model-View-Controller (MVC)** architectural pattern.
+This document describes the correction branch based on Studio, rather than the obsolete v2 architecture. See [implementation status](docs/implementation-2026-09-07/PROGRESSION.md) for remaining qualification work.
 
 ```mermaid
-graph TD
-    User[User] -->|Interacts| UI[View: PySide6 UI]
-    User -->|Commands| CLI[View: Headless CLI]
-    UI -->|Signals| Controller[Controller: Main Logic]
-    CLI -->|Calls| Controller
-    
-    subgraph Core Processing [Backend / Workers]
-        Controller -->|Spawns| Worker[Worker Thread]
-        Worker -->|Uses| VideoService[Video Pipeline Service]
-        Worker -->|Uses| AIService[AI Inference Service]
-        Worker -->|Uses| TelemetryService[Telemetry Extraction Service]
-        Worker -->|Uses| MotionService[Motion Detection Service]
-        VideoService -->|Reads/Writes| FileSystem[(File System)]
-    end
-    
-    Worker -->|Status/Progress| Controller
-    Controller -->|Updates| UI
-    Controller -->|Updates| CLI
+flowchart LR
+  CLI[CLI] --> Worker[ProcessingWorker]
+  UI[MainWindow] --> Controller[ProcessingController]
+  Controller --> Thread[ProcessingThread]
+  Thread --> Worker
+  Worker --> Events[Core callbacks]
+  Events --> Bridge[ProcessingBridge]
+  Bridge --> UI
+  Worker --> Validation[Settings validation and output preflight]
+  Worker --> Projection[Geometry tiles]
+  Worker --> Filters[Blur and motion]
+  Worker --> AI[Lazy AIService]
+  Worker --> GPS[TelemetryHandler]
+  Worker --> Writer[Atomic image and mask writer]
+  Writer --> Index[Image index and terminal manifest]
+  Index --> COLMAP[Portable reconstruction runner]
 ```
 
-### Component Breakdown
+## Execution and ownership
 
-#### A. View (UI & CLI Layer)
-- **MainWindow:** Redesigned persistent layout: [Queue (Left) | Content + Preview (Right)].
-- **Sidebar:** Navigation component (Icons only/Compact) for switching "Content" pages.
-- **VideoCard:** Modern card widget displaying video jobs with thumbnails and progress.
-- **PreviewWidget:** Persistent preview panel, always visible during navigation.
-- **LogPanel:** Collapsible log viewer at the bottom of the content area.
-- **Icons:** Centralized SVG icon library (`icons.py`) replacing emojis.
-- **Headless Interface:** Command-line entry point using `argparse` with custom naming support.
+`core/processor.py` is Qt-free. The CLI calls `run()` synchronously; Studio owns a `ProcessingController`, which owns a `ProcessingThread` and the worker. `ProcessingBridge` forwards callbacks through Qt signals. Completion of the GUI controller means the thread has terminated, not merely that an image task was submitted.
 
-#### B. Controller (Logic Layer)
-- **AppController:** Manages application state and settings prioritization (CLI > Config > Default).
-- **SignalManager:** Routes events (signals) to both GUI widgets and CLI progress bars (`tqdm`).
+`stop()` requests cooperative cancellation. The I/O executor drains in `run()`'s `finally`. Projection tiles and metadata subprocesses observe cancellation. The GUI defers closing until active extraction, analysis and preview work ends. Video decoder and model calls may still impose cancellation latency.
 
-#### C. Model (Processing Layer)
-- **VideoProcessor:** Orchestrates the re-projection loop. Utilizes `concurrent.futures.ThreadPoolExecutor` for asynchronous, non-blocking I/O saving.
-- **MotionDetector:** Implements Farneback Optical Flow to calculate scene change magnitude.
-- **TelemetryHandler:** Detects and parses GPMF (GoPro), CAMM (Insta360), and SRT (DJI) metadata.
-- **AIService:** Wraps YOLO26, featuring `process_batch` for high-throughput GPU inference across multiple camera views simultaneously.
+Thumbnail work uses a shared pool capped at four jobs and returns QImage. Preview has its own single-worker pool and invalidates stale generations. GUI-only QPixmap creation stays in the GUI thread. Blur analysis owns a QThread and records the identity of the analyzed job.
 
----
+## Settings and output contract
 
-## 4. Video Pipeline & Algorithms
+`validation.py` merges defaults and checks types, ranges, enums, active views, AI targets, model trust and a projection memory budget. `output_plan.py` discovers and deduplicates input files, excludes prior datasets and validates output names. Every run gets a new `_processed`, `_processed_001`, … folder. Replacing or resuming an existing run is deliberately not yet implemented.
 
-### 4.1. Data Flow
+`FileManager.write_pair` stages complete image/mask files before publishing them. Failed writes raise, all futures are inspected, and counters count confirmed writes. `images.jsonl` lists successful images with camera/frame associations. Manifest schema 2 records terminal state, output folder, counts, errors and run identity. It distinguishes source size/mtime identification from cryptographic verification; a source hash is not yet calculated.
 
-```mermaid
-sequenceDiagram
-    participant F as File (360 Video)
-    participant T as Telemetry
-    participant E as Extractor
-    participant P as Projector
-    participant A as AI Service
-    participant IO as ThreadPool (Disk)
+## Image and model pipeline
 
-    F->>T: Extract GPMF/CAMM/SRT
-    T-->>T: Sync & Interpolate GPS
-    F->>E: Decode Frame (t)
-    alt Mode: Adaptive (Motion)
-        E->>E: Check Optical Flow
-        note over E: If score < threshold, skip
-    end
-    E->>P: Raw Equirectangular Frame
-    
-    P->>P: Reproject selected cameras (Batch Builders)
-    P->>A: Send Batch of Images
-    alt AI: Skip Frame
-        A->>A: Batch Detect -> Skip frame if any person
-    else AI: Generate Mask
-        A->>A: Batch Segment -> Return masks
-    end
-    
-    P->>IO: Submit parallel save tasks
-    IO->>IO: Save Images & Masks + Embed EXIF
-```
+Geometry uses float64 ray tiles and float32 remapping tables. Preview and export use the same generated view definitions, fixed-point OpenCV maps, wrapping and interpolation. Preview scores are calculated at export resolution before sharpening or overlays, then its display image is reduced. Flat input retains its aspect ratio and is exported at native resolution.
 
-### 4.2. Algorithms
+AI loading is lazy; loading/inference failures propagate. Batches contain at most two inputs. Standard model weights use a stable user cache. Custom `.pt` loading requires explicit trust at the settings/CLI boundary. Returned masks are requested at original image dimensions; feather is smoothing of a binary mask, not a native model probability.
 
-#### Adaptive Interval (Optical Flow)
-To minimize redundancy, the application calculates the **Dense Optical Flow** between the current frame and the last extracted frame using the Farneback algorithm. 
+## Telemetry and reconstruction
 
-#### Custom Naming Strategies
-The system supports dynamic file naming patterns using context variables:
-- `{filename}`, `{frame}`, `{camera}`
-- Modes: Standard (RealityScan), Simple, and fully Custom patterns.
+FFprobe packet data preserves CAMM/GPMF packet PTS. GPMF samples are distributed inside each packet's declared duration. CAMM supports standard GPS types 5 and 6; GPS9 is explicitly unsupported pending fixtures. GPX 1.0/1.1 and SRT sidecars are recognized case-insensitively. Sidecar alignment still assumes their start corresponds to video start. Lookup is bounded to available times and a maximum interpolation gap.
 
----
+Direction of travel is not written as optical heading. Filesystem mtime is not used as capture time. The manifest reports time provenance; uncertain altitude is omitted from GPS EXIF unless an orthometric reference is explicitly declared.
 
-## 5. Directory Structure
+COLMAP export includes an image index, separate mask tree, per-camera image folders and a rig configuration relative to an active reference camera. The portable runner applies `rig_configurator` before sequential matching. Real reconstruction, supplier camera compatibility and non-central stitching effects remain to be qualified.
 
-```text
-360Extractor/
-├── src/
-│   ├── main.py                     # Dev launcher shim (back-compat)
-│   └── extractor360/               # Single top-level package
-│       ├── main.py                 # Entry point (GUI/CLI router)
-│       ├── __main__.py             # `python -m extractor360`
-│       ├── ui/                     # GUI Layer
-│       │   ├── main_window.py      # Main window (Persistent Queue/Preview)
-│       │   ├── sidebar.py          # Navigation sidebar
-│       │   ├── video_card.py       # Job card component
-│       │   ├── preview_widget.py   # Persistent preview panel
-│       │   ├── log_panel.py        # Log viewer component
-│       │   ├── icons.py            # SVG Icon assets
-│       │   ├── styles.qss          # Modern dark theme stylesheet
-│       │   └── widgets.py          # Shared widgets
-│       ├── core/                   # Processing Core
-│       │   ├── processor.py        # Extraction Loop & Naming Logic
-│       │   ├── geometry.py         # Projection Math
-│       │   ├── analyzer.py         # Blur analysis
-│       │   ├── telemetry.py        # GPS/IMU Manager (+ GPX sidecar)
-│       │   ├── motion_detector.py  # Optical Flow Logic
-│       │   ├── settings_manager.py # Defaults / config / CLI merge
-│       │   └── ai_model.py         # YOLO Wrapper
-│       └── utils/
-│           ├── gpmf_parser.py      # Binary GPMF Logic
-│           ├── camm_parser.py      # Binary CAMM Logic
-│           ├── srt_parser.py       # DJI Metadata Logic
-│           └── gpx_parser.py       # GPX Sidecar Parser
-├── tests/
-├── docs/                           # Protocole & Handbooks
-├── pyproject.toml
-├── requirements.txt
-└── ARCHITECTURE.md
-```
+## Validation and packaging
+
+CI runs core tests on three operating systems and Qt tests in dedicated jobs. A subprocess test covers GUI extraction, relaunch, failure, cancellation and normal exit. Critical new controller/validation/output interfaces have a blocking type check; broader legacy typing remains informational.
+
+The wheel explicitly includes QSS. Release builds depend on CI, scan installed Python dependencies and refuse to overwrite an already published release. A hashed macOS arm64/Python 3.13 lock is qualified locally. Windows/CUDA locks, signed binaries, GPU qualification and clean-machine testing remain release prerequisites.

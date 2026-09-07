@@ -21,3 +21,5 @@ def setup_logger(name="Application360", level=logging.INFO):
 
 # Create a default logger instance
 logger = setup_logger()
+# Module loggers used by telemetry should share the application diagnostic level.
+logging.getLogger("extractor360").setLevel(logging.INFO)

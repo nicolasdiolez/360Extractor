@@ -86,3 +86,18 @@ Run a job defined in a JSON file.
 ```bash
 python src/main.py --config my_job.json
 ```
+
+
+## September 2026 correction branch
+
+Use `360extractor --help` from the installed package for the current arguments. See [implementation status](implementation-2026-09-07/PROGRESSION.md).
+
+Custom model example (only for a trusted file):
+
+```sh
+360extractor --input panorama.mp4 --output out --ai-mask --ai-model /path/to/trusted.pt --trust-custom-model
+```
+
+New runs never overwrite prior datasets; `_processed_001`, `_processed_002`, etc. are allocated as needed. Recursive import excludes prior datasets and the destination. Configuration must be a JSON object with valid bounds/types; errors are reported before model loading. Invalid settings exit with code 2, job failures with code 1, interruption with code 130.
+
+`--export-telemetry` handles GPS, not IMU orientation. Check the manifest for time and altitude provenance. For COLMAP, run the generated `colmap/reconstruct.py` with Python and a COLMAP build supporting `rig_configurator`; it separates masks and applies the virtual rig before matching. A complete reconstruction still needs validation on real datasets.

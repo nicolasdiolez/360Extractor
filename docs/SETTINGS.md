@@ -130,3 +130,17 @@ the JSON config, and the CLI; the config file accepts exactly these names.
 
 > Older config files using `interval` and `format` are still accepted as
 > aliases for `interval_value` and `output_format`.
+
+
+## September 2026 correction branch
+
+The [implementation status](implementation-2026-09-07/PROGRESSION.md) takes precedence over older screenshots and workflow descriptions in this guide.
+
+- `active_cameras`: null means all generated views; an explicit empty list or an out-of-range index is rejected. Studio's Active views field accepts comma-separated indices.
+- `memory_budget_mb`: projection working-set guard, default 1536 MiB. It does not certify total decoder/GPU memory consumption.
+- `trust_custom_model`: false by default. Custom `.pt` models require explicit true because loading them can execute code. Standard named variants use a stable model cache.
+- `gps_altitude_reference`: default `unknown`; set `orthometric` only after verifying that the source altitude is relative to mean sea level. Unknown and relative altitudes are omitted from GPS EXIF.
+- `feather_mask`: edge smoothing of the binary segmentation mask; it is not a probability map.
+- Custom image names must include `{camera}` for multiple views and `{frame}` for videos, and their extension must match the output format. Mask names identify frame/view or use `{image_name}`; the mask is PNG.
+- Each run gets a distinct folder. There is currently no overwrite or resume mode. A terminal schema-2 manifest reports failed/cancelled/completed and actual write counts.
+- Sidecar GPS is aligned to video start by assumption. GPS9 and IMU orientation are explicitly not qualified/supported.

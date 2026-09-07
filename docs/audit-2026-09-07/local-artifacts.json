@@ -1,0 +1,35 @@
+[
+  {
+    "path": "dist/.DS_Store",
+    "is_dir": false,
+    "bytes": 6148
+  },
+  {
+    "path": "dist/Application360",
+    "is_dir": true
+  },
+  {
+    "path": "dist/Application360.app",
+    "is_dir": true,
+    "bundle": {
+      "CFBundleName": "Application360",
+      "CFBundleVersion": null,
+      "CFBundleShortVersionString": "0.0.0",
+      "CFBundleIconFile": "icon-windowed.icns"
+    }
+  },
+  {
+    "path": "dist/360 Extractor",
+    "is_dir": true
+  },
+  {
+    "path": "dist/360 Extractor.app",
+    "is_dir": true,
+    "bundle": {
+      "CFBundleName": "360 Extractor",
+      "CFBundleVersion": "3.3.0",
+      "CFBundleShortVersionString": "3.3.0",
+      "CFBundleIconFile": "icon-windowed.icns"
+    }
+  }
+]

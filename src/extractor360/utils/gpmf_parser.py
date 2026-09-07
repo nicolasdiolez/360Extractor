@@ -13,6 +13,7 @@ class GPMFParser:
         self.scales: Dict[str, List[float]] = {}
         self.gps_data: List[Dict[str, float]] = []
         self.current_timestamp = 0.0
+        self.gps_fix = None
         # Assuming ~18Hz for GPS as default, but this is rough estimation
         # Real implementation would look for TSMP (Total Samples) or TICK to map time accurately
         self.sample_duration = 1.0 / 18.0 
@@ -30,6 +31,7 @@ class GPMFParser:
         self.gps_data = []
         self.scales = {} # Reset scales? Or keep them? GPMF usually repeats SCAL in each stream chunk.
         self.current_timestamp = 0.0
+        self.gps_fix = None
         
         if not data:
             return []
@@ -79,11 +81,24 @@ class GPMFParser:
                 # Container: Recurse
                 # Note: DEVC/STRM payload contains other tags.
                 # We assume the container payload is also a sequence of KLV tags.
+                previous = self.scales
+                previous_fix = self.gps_fix
+                if key == 'STRM':
+                    self.scales = {}
+                    self.gps_fix = None
                 self._parse_recursive(payload)
+                if key == 'STRM':
+                    self.scales = previous
+                    self.gps_fix = previous_fix
                 
             elif key == 'SCAL':
                 self._handle_scal(payload, type_char, structure_size, repeat_count)
                 
+            elif key == 'GPSF':
+                values = self._unpack_values(payload, type_char, structure_size, repeat_count)
+                self.gps_fix = values[0] if values else None
+            elif key == 'GPS9':
+                raise ValueError('GPS9 requires a qualified parser; use a GPX sidecar for this source')
             elif key == 'GPS5':
                 self._handle_gps5(payload, type_char, structure_size, repeat_count)
             
@@ -110,8 +125,8 @@ class GPMFParser:
         # Mapping for struct format
         # Big-endian is standard for GPMF
         fmt_map = {
-            'b': 'b', # int8
-            'B': 'B', # uint8
+            'b': '>b', # int8
+            'B': '>B', # uint8
             's': '>h', # int16
             'S': '>H', # uint16
             'l': '>i', # int32
@@ -223,6 +238,9 @@ class GPMFParser:
                 # Append data
                 self.gps_data.append({
                     'timestamp': self.current_timestamp,
+                    'time_source': 'estimated',
+                    'fix': self.gps_fix,
+                    'altitude_reference': 'unspecified',
                     'lat': lat,
                     'lon': lon,
                     'alt': alt

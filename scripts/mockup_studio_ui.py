@@ -34,7 +34,7 @@ from PySide6.QtGui import QImage, QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFrame,
     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
-    QPushButton, QScrollArea, QSlider, QSpinBox,
+    QPushButton, QScrollArea, QSlider,
     QSplitter, QVBoxLayout, QWidget
 )
 
@@ -295,7 +295,7 @@ class StudioMockupWindow(QMainWindow):
                 color: #E8E8EE;
             }
             /* Inputs */
-            QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit {
+            QComboBox, QDoubleSpinBox, QLineEdit {
                 background-color: #151519;
                 border: 1px solid #2C2C38;
                 border-radius: 4px;

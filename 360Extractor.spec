@@ -41,7 +41,10 @@ VERSION = _read_version()
 
 # The Qt stylesheet is loaded at runtime relative to the ui package directory,
 # so it must land at extractor360/ui/styles.qss inside the bundle.
-datas = [(str(PKG_DIR / "ui" / "styles.qss"), "extractor360/ui")]
+datas = [
+    (str(PKG_DIR / "ui" / "styles.qss"), "extractor360/ui"),
+    (str(PKG_DIR / "core" / "reconstruction.py"), "extractor360/core"),
+]
 binaries = []
 hiddenimports = [
     # Imported lazily (only when an AI mode is enabled), so make sure the

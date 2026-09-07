@@ -1,0 +1,7 @@
+{
+  "wheel": "360_extractor-3.3.0-py3-none-any.whl",
+  "file_count": 42,
+  "qss_files": [],
+  "weight_files": [],
+  "entrypoint": "[console_scripts]\n360extractor = extractor360.main:main\n"
+}

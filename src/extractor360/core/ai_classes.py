@@ -9,8 +9,8 @@ stack is not installed.
 import os
 
 # Segmentation model variants shipped by Ultralytics, smallest/fastest first.
-# The nano model is bundled with the app; the others are auto-downloaded by
-# Ultralytics on first use.
+# Standard weights are provisioned in the model cache; missing weights may be
+# downloaded by Ultralytics on first use.
 AI_MODEL_VARIANTS = {
     'n': 'yolo26n-seg.pt',
     's': 'yolo26s-seg.pt',

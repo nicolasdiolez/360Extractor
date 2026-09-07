@@ -31,7 +31,7 @@ def parse_gpx_data(gpx_content: str) -> list[dict]:
             pts = element.findall('.//gpx:trkpt', namespaces)
             if not pts:
                 # Try GPX 1.0 or no namespace
-                pts = element.findall('.//trkpt')
+                pts = element.findall('.//gpx10:trkpt', namespaces) or element.findall('.//trkpt')
             return pts
 
         trkpts = find_all_points(root)
@@ -49,11 +49,11 @@ def parse_gpx_data(gpx_content: str) -> list[dict]:
                 lon = float(pt.get('lon'))
                 
                 # Elevation
-                ele_elem = pt.find('gpx:ele', namespaces) if pt.find('gpx:ele', namespaces) is not None else pt.find('ele')
+                ele_elem = next((e for e in pt if e.tag.rsplit('}', 1)[-1] == 'ele'), None)
                 alt = float(ele_elem.text) if ele_elem is not None else 0.0
                 
                 # Time
-                time_elem = pt.find('gpx:time', namespaces) if pt.find('gpx:time', namespaces) is not None else pt.find('time')
+                time_elem = next((e for e in pt if e.tag.rsplit('}', 1)[-1] == 'time'), None)
                 if time_elem is not None and time_elem.text:
                     # Parse ISO format (e.g., 2023-10-27T10:00:00Z)
                     # Python 3.7+ fromisoformat handles simple Z, but let's be safe
@@ -68,6 +68,8 @@ def parse_gpx_data(gpx_content: str) -> list[dict]:
                     
                     parsed_points.append({
                         'timestamp': rel_time,
+                        'utc_epoch': epoch,
+                        'time_source': 'gpx_track_relative',
                         'lat': lat,
                         'lon': lon,
                         'alt': alt

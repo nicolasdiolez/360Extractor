@@ -1,121 +1,41 @@
+"""CAMM GPS records (Google Camera Motion Metadata specification).
+
+https://developers.google.com/streetview/publish/camm-spec
+A media demuxer must provide packet PTS for synchronization. The legacy duration
+argument only produces explicitly estimated timestamps for standalone raw dumps.
+"""
+import math
 import struct
-import logging
-from typing import List, Dict
 
-logger = logging.getLogger(__name__)
+_SIZES = {0: 12, 1: 8, 2: 12, 3: 12, 4: 12, 5: 24, 6: 56, 7: 12}
 
-def parse_camm_data(raw_data: bytes, duration: float = 0.0) -> List[Dict[str, float]]:
-    """
-    Parses raw CAMM data stream (Insta360 format).
-    
-    Args:
-        raw_data: Binary data from the CAMM stream.
-        duration: Total duration of the video in seconds (used for timestamp estimation).
-        
-    Returns:
-        List of dictionaries containing 'timestamp', 'lat', 'lon', 'alt'.
-    """
-    offset = 0
-    length = len(raw_data)
+
+def parse_camm_data(raw_data: bytes, duration: float = 0.0, timestamp=None) -> list[dict]:
     samples = []
-    
-    # Iterate through the binary stream
-    # Each packet: reserved (2 bytes), type (2 bytes), data (variable)
-    
-    while offset < length:
-        # Check if we have enough bytes for header
-        if offset + 4 > length:
-            break
-            
-        try:
-            # Little-endian: reserved (H), type (H)
-            reserved, packet_type = struct.unpack_from('<HH', raw_data, offset)
-        except struct.error:
-            break
-            
-        current_header_offset = offset
+    offset = 0
+    while offset + 4 <= len(raw_data):
+        reserved, kind = struct.unpack_from('<HH', raw_data, offset)
+        size = _SIZES.get(kind)
+        if reserved or size is None or offset + 4 + size > len(raw_data):
+            raise ValueError(f'Invalid or truncated CAMM packet at byte {offset}')
         offset += 4
-        
-        payload_size = 0
-        is_gps = False
-        
-        # Determine payload size based on type
-        # Type 6: GPS (lat, lon, alt) -> double, double, float -> 8+8+4 = 20 bytes
-        if packet_type == 6:
-            payload_size = 20
-            is_gps = True
-        elif packet_type == 2: # Gyro: 3 floats -> 12 bytes
-            payload_size = 12
-        elif packet_type == 3: # Accel: 3 floats -> 12 bytes
-            payload_size = 12
-        elif packet_type == 1: # Exposure/Time: 8 bytes? (Educated guess for Insta360)
-             # If we don't handle this, we might desync.
-             # However, without exact spec, assume 8 bytes or risk desync.
-             payload_size = 8
-        elif packet_type == 0: # Reserved/Empty
-             payload_size = 0
-        else:
-             # Unknown type. 
-             payload_size = -1
-             
-        if payload_size >= 0:
-            if offset + payload_size > length:
-                break
-                
-            if is_gps:
-                try:
-                    lat, lon, alt = struct.unpack_from('<ddf', raw_data, offset)
-                    # Basic validation (ignore 0,0 island unless valid)
-                    if -90 <= lat <= 90 and -180 <= lon <= 180 and (abs(lat) > 0.0001 or abs(lon) > 0.0001):
-                         samples.append({
-                            'lat': lat,
-                            'lon': lon,
-                            'alt': float(alt)
-                        })
-                except struct.error:
-                    pass
-            
-            offset += payload_size
-        else:
-            # Unknown type or size. Scan for next likely header.
-            # Look for 0x0000 (reserved) aligned to ... actually just scan bytes.
-            # logger.debug(f"Unknown CAMM type {packet_type} at {current_header_offset}. Scanning for next packet.")
-            
-            scan_ptr = current_header_offset + 1
-            found = False
-            while scan_ptr < length - 4:
-                # Check for 0x0000
-                try:
-                    possible_reserved = struct.unpack_from('<H', raw_data, scan_ptr)[0]
-                    if possible_reserved == 0:
-                        # Check next 2 bytes for plausible type (1, 2, 3, 6)
-                        possible_type = struct.unpack_from('<H', raw_data, scan_ptr + 2)[0]
-                        if possible_type in [1, 2, 3, 6]:
-                            offset = scan_ptr
-                            found = True
-                            break
-                except struct.error:
-                    break
-                scan_ptr += 1
-            
-            if not found:
-                break # Can't recover
-                
-    # Assign timestamps
-    # If we have duration, we distribute samples evenly.
-    # Insta360 GPS is typically 5Hz or 10Hz.
-    if samples:
-        num_samples = len(samples)
-        if duration > 0:
-            for i, sample in enumerate(samples):
-                sample['timestamp'] = (i / num_samples) * duration
-        else:
-            # If no duration, we can't do much. 
-            # Default to 5Hz (0.2s) just to have something?
-            # Or log warning.
-            logger.warning("CAMM data found but no duration provided. Assuming 5Hz.")
-            for i, sample in enumerate(samples):
-                sample['timestamp'] = i * 0.2
-
-    logger.info(f"Parsed {len(samples)} CAMM GPS samples.")
+        sample = None
+        if kind == 5:
+            lat, lon, alt = struct.unpack_from('<ddd', raw_data, offset)
+            sample = dict(lat=lat, lon=lon, alt=alt, altitude_reference='unspecified')
+        elif kind == 6:
+            epoch, fix, lat, lon, alt, hacc, vacc, ve, vn, vu, sacc = struct.unpack_from('<didd7f', raw_data, offset)
+            if fix in (2, 3):
+                sample = dict(lat=lat, lon=lon, alt=alt, gps_epoch=epoch, fix=fix,
+                              horizontal_accuracy=hacc, vertical_accuracy=vacc,
+                              altitude_reference='wgs84_ellipsoid')
+        if sample and all(math.isfinite(sample[k]) for k in ('lat', 'lon', 'alt')):
+            if -90 <= sample['lat'] <= 90 and -180 <= sample['lon'] <= 180 and (abs(sample['lat']) > .0001 or abs(sample['lon']) > .0001):
+                samples.append(sample)
+        offset += size
+    if offset != len(raw_data):
+        raise ValueError('Truncated CAMM header')
+    for index, sample in enumerate(samples):
+        sample['timestamp'] = float(timestamp) if timestamp is not None else (index * duration / len(samples) if duration > 0 else index * .2)
+        sample['time_source'] = 'packet_pts' if timestamp is not None else 'estimated'
     return samples

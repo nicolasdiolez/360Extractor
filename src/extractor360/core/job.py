@@ -7,6 +7,7 @@ class Job:
     file_path: str
     status: str = "Pending"  # Pending, Processing, Done, Error
     settings: Dict[str, Any] = field(default_factory=dict)
+    result: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def active_cameras(self) -> Optional[List[int]]:

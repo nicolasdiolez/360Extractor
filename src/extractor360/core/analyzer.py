@@ -4,7 +4,7 @@ from extractor360.utils.image_utils import ImageUtils
 
 class BlurAnalyzer:
     @staticmethod
-    def analyze_sample(video_path, settings):
+    def analyze_sample(video_path, settings, cancelled=lambda: False):
         """
         Analyzes a sample frame from the video to estimate blur scores.
         
@@ -22,6 +22,7 @@ class BlurAnalyzer:
         """
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
+            cap.release()
             raise IOError(f"Could not open video: {video_path}")
             
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -71,12 +72,17 @@ class BlurAnalyzer:
             views = GeometryProcessor.generate_views(
                 camera_count, pitch_offset=pitch_offset, layout_mode=layout_mode
             )
-            for name, y, p, r in views:
+            active = settings.get('active_cameras')
+            for index, (name, y, p, r) in enumerate(views):
+                if cancelled():
+                    raise InterruptedError("Analysis cancelled")
+                if active is not None and index not in active:
+                    continue
                 map_x, map_y = GeometryProcessor.create_rectilinear_map(
                     src_h, src_w, out_res, out_res, fov, y, p, r
                 )
 
-                rect_img = cv2.remap(frame, map_x, map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_WRAP)
+                rect_img = cv2.remap(frame, map_x, map_y, cv2.INTER_LANCZOS4 if settings.get("interpolation_mode") == "lanczos" else cv2.INTER_LINEAR, borderMode=cv2.BORDER_WRAP)
                 score = ImageUtils.calculate_blur_score(rect_img)
                 scores.append(score)
                 details.append((name, score))

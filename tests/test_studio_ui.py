@@ -155,3 +155,38 @@ def test_studio_estimate_calculation(qapp):
         window.update_estimate()
         assert "pinhole images" in window.estimation_label.text()
         assert window.extract_btn.isEnabled()
+
+
+def test_selection_preserves_unedited_settings_and_models(qapp,tmp_path):
+    import cv2
+    import numpy as np
+    window=MainWindow()
+    files=[]
+    for index in range(2):
+        path=tmp_path/f'view{index}.png'
+        cv2.imwrite(str(path),np.zeros((16,32,3),np.uint8))
+        files.append(str(path))
+    window.add_videos_from_paths(files)
+    first,second=window.jobs
+    first.settings.update(quality=87,active_cameras=[1],ai_model='yolo26l-seg.pt',pitch_offset=13,ai_mask_cameras=['View_1'])
+    second.settings.update(quality=65,ai_model='yolo26x-seg.pt')
+    window.select_card(window._video_cards[0])
+    current=window.get_settings_from_ui()
+    for key in ('quality','active_cameras','ai_model','pitch_offset','ai_mask_cameras'):
+        assert current[key]==first.settings[key]
+    window.toggle_card_selection(window._video_cards[1])
+    window.fov_spin.setValue(100)
+    assert first.settings['fov']==second.settings['fov']==100
+    assert first.settings['quality']==87 and second.settings['quality']==65
+    assert first.settings['ai_model']=='yolo26l-seg.pt'
+    window.close()
+
+
+def test_preferences_persist_without_touching_user_config(qapp):
+    from extractor360.core.settings_manager import SettingsManager
+    window=MainWindow()
+    window.quality_spin.setValue(81)
+    assert window.settings_manager.config_file.is_file()
+    window.close()
+    SettingsManager._instance=None
+    assert SettingsManager().get('quality')==81

@@ -12,6 +12,11 @@ permissions:
   contents: write # required to create the Release and upload assets
 
 jobs:
+  validate:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   guard:
     name: Release consistency guard
     runs-on: ubuntu-latest
@@ -40,7 +45,7 @@ jobs:
 
   build:
     name: Build ${{ matrix.label }}
-    needs: guard
+    needs: [guard, validate]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -65,8 +70,20 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install .
+          python -m pip install . -c constraints/security-minimums.txt
           python -m pip install pyinstaller
+
+      - name: Test the release environment
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -m pip install pytest
+          python -m pytest -q
+
+      - name: Check installed dependency advisories
+        run: |
+          python -m pip install pip-audit
+          python -m pip_audit --vulnerability-service osv --strict
 
       - name: Build with PyInstaller
         run: pyinstaller 360Extractor.spec --noconfirm
@@ -117,7 +134,12 @@ jobs:
           TITLE="360 Extractor ${GITHUB_REF_NAME}"
 
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            echo "Release ${GITHUB_REF_NAME} already exists — updating it."
+            IS_DRAFT=$(gh release view "${GITHUB_REF_NAME}" --json isDraft --jq .isDraft)
+            if [ "$IS_DRAFT" != "true" ]; then
+              echo "Refusing to replace an already published release." >&2
+              exit 1
+            fi
+            echo "Updating existing draft ${GITHUB_REF_NAME}."
             gh release edit "${GITHUB_REF_NAME}" --title "$TITLE" --notes-file "$NOTES"
             gh release upload "${GITHUB_REF_NAME}" artifacts/*/*.zip --clobber
           else

@@ -1,0 +1,23 @@
+{
+  "package_path": "/private/tmp/360-final-install/extractor360",
+  "python": "3.13.3",
+  "stylesheet_packaged": true,
+  "stylesheet_loaded": true,
+  "reconstruction_launcher_packaged": true,
+  "gui_open_close": true,
+  "cli_exit": 0,
+  "cli_image_shape": [
+    96,
+    64,
+    3
+  ],
+  "cpu_mask_shape": [
+    96,
+    64
+  ],
+  "cpu_mask_values": [
+    255
+  ],
+  "wheel_sha256": "834a05884d921a04d366603cfcaed5bdeb4684ec84d863fee8a0e523bc9cfca8",
+  "wheel_size": 107940
+}

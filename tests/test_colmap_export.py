@@ -61,7 +61,7 @@ class TestExportedFiles(unittest.TestCase):
         self.assertTrue(ok)
         target = os.path.join(self.tmp, 'colmap')
         files = set(os.listdir(target))
-        self.assertEqual(files, {'cameras.txt', 'rig_rotations.json', 'reconstruct.sh', 'README.txt'})
+        self.assertEqual(files, {'cameras.txt', 'rig_rotations.json', 'reconstruct.sh', 'reconstruct.py', 'rig_config.json', 'README.txt'})
 
         with open(os.path.join(target, 'rig_rotations.json'), encoding='utf-8') as fh:
             rig = json.load(fh)
@@ -69,10 +69,23 @@ class TestExportedFiles(unittest.TestCase):
         self.assertAlmostEqual(rig['intrinsics']['fx'], 32.0, places=5)
 
         script = open(os.path.join(target, 'reconstruct.sh'), encoding='utf-8').read()
-        self.assertIn('--ImageReader.camera_params "32.000000,32.000000,32.000000,32.000000"', script)
-        self.assertIn('--Mapper.ba_refine_focal_length 0', script)
+        self.assertIn('reconstruct.py', script)
+        with open(os.path.join(target, 'rig_config.json'), encoding='utf-8') as fh:
+            config = json.load(fh)
+        np.testing.assert_allclose(config[0]['cameras'][0]['camera_params'], [32, 32, 32, 32], atol=1e-8)
         self.assertTrue(os.access(os.path.join(target, 'reconstruct.sh'), os.X_OK))
 
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
+
+
+def test_reconstruction_stages_only_images_and_separate_masks(tmp_path):
+    from extractor360.core.reconstruction import prepare
+    (tmp_path/'photo.jpg').write_bytes(b'image')
+    (tmp_path/'photo.jpg.mask.png').write_bytes(b'mask')
+    (tmp_path/'images.jsonl').write_text(json.dumps({'image':'photo.jpg','mask':'photo.jpg.mask.png','camera':'Front','frame':7})+'\n')
+    destination=prepare(tmp_path,tmp_path/'workspace')
+    assert (destination/'images'/'Front'/'frame000000007.jpg').read_bytes()==b'image'
+    assert (destination/'masks'/'Front'/'frame000000007.jpg.png').read_bytes()==b'mask'
+    assert (destination/'images.txt').read_text()=='Front/frame000000007.jpg\n'

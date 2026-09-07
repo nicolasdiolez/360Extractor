@@ -1,4 +1,6 @@
 import json
+import os
+import copy
 from pathlib import Path
 
 from extractor360.utils.logger import logger
@@ -15,6 +17,7 @@ class SettingsManager:
         "layout_mode": "ring",
         "ai_mode": "None",
         "ai_model": "yolo26n-seg.pt",
+        "trust_custom_model": False,
         "ai_confidence": 0.25,
         "ai_invert_mask": True,
         "ai_detect_humans": True,
@@ -39,6 +42,7 @@ class SettingsManager:
         "export_telemetry": False,
         "altitude_mode": "absolute",
         "exif_intrinsics": True,
+        "gps_altitude_reference": "unknown",
         "export_colmap": False,
         "interpolation_mode": "linear",
         "feather_mask": False,
@@ -57,10 +61,10 @@ class SettingsManager:
         if self.initialized:
             return
             
-        self.settings = self.DEFAULT_SETTINGS.copy()
+        self.settings = copy.deepcopy(self.DEFAULT_SETTINGS)
         
         # Determine config path: ~/.application360/config.json
-        self.config_dir = Path.home() / ".application360"
+        self.config_dir = Path(os.environ.get("EXTRACTOR360_CONFIG_DIR", str(Path.home() / ".application360")))
         self.config_file = self.config_dir / "config.json"
         
         self.load_settings()
@@ -74,11 +78,11 @@ class SettingsManager:
         try:
             with open(self.config_file, 'r') as f:
                 loaded_settings = json.load(f)
-                # Update current settings with loaded values
-                # This ensures any new defaults keys are preserved if missing in file
-                for key, value in loaded_settings.items():
-                    self.settings[key] = value
-        except (json.JSONDecodeError, OSError) as e:
+                if not isinstance(loaded_settings, dict):
+                    raise ValueError("Settings must be a JSON object")
+                from extractor360.core.validation import validate_settings
+                self.settings = validate_settings(loaded_settings)
+        except (ValueError, OSError) as e:
             logger.warning(f"Error loading settings from {self.config_file}: {e}. Using defaults.")
 
     def save_settings(self, settings=None):
@@ -88,8 +92,8 @@ class SettingsManager:
             
         try:
             self.config_dir.mkdir(parents=True, exist_ok=True)
-            with open(self.config_file, 'w') as f:
-                json.dump(self.settings, f, indent=4)
+            from extractor360.utils.file_manager import FileManager
+            FileManager.save_json(self.config_file, self.settings)
         except OSError as e:
             logger.error(f"Error saving settings to {self.config_file}: {e}")
 
@@ -103,7 +107,7 @@ class SettingsManager:
 
     def get_all(self):
         """Return a copy of all settings."""
-        return self.settings.copy()
+        return copy.deepcopy(self.settings)
 
 def normalize_mask_faces(ai_mask_cameras):
     """Normalize a per-face mask selection into a lowercase set of face names.
@@ -165,6 +169,9 @@ def build_settings(args, config, active_cameras=None, output_path=""):
     for key, value in cli_overrides.items():
         if value is not None:
             settings[key] = value
+
+    if getattr(args, 'trust_custom_model', False):
+        settings['trust_custom_model'] = True
 
     # Nadir disc mask (no AI) on the Down face.
     if getattr(args, 'nadir_mask', False):

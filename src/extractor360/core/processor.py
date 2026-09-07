@@ -1,14 +1,17 @@
 import cv2
 import numpy as np
 import os
-import json
 import time
+import json
+import uuid
 import concurrent.futures
-from collections import deque
+from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 
 from extractor360.core import colmap_export, exif_writer
 from extractor360.core.events import Event
+from extractor360.core.validation import validate_settings
+from extractor360.core.output_plan import create_output_directory, output_names, preflight_names
 from extractor360.core.geometry import GeometryProcessor
 from extractor360.core.motion_detector import MotionDetector
 from extractor360.core.telemetry import TelemetryHandler
@@ -36,6 +39,7 @@ class ProcessingWorker:
         self.progress_updated = Event()  # (value 0-100, message)
         self.job_started = Event()       # (job index)
         self.job_finished = Event()      # (job index)
+        self.job_cancelled = Event()
         self.job_error = Event()         # (job index, error message)
         self.finished = Event()          # ()
         self.error_occurred = Event()    # (error message)
@@ -73,7 +77,7 @@ class ProcessingWorker:
 
     def stop(self):
         self.is_running = False
-        self.io_pool.shutdown(wait=False)
+
 
     @staticmethod
     def _build_nadir_mask(shape, radius_pct, invert_mask):
@@ -95,30 +99,57 @@ class ProcessingWorker:
     def run(self):
         total_jobs = len(self.jobs)
         self.error_count = 0
+        try:
+            for i, job in enumerate(self.jobs):
+                if not self.is_running:
+                    job.status = "Cancelled"
+                    job.result = {"status": "cancelled", "images_written": 0}
+                    self.job_cancelled.emit(i)
+                    continue
+                self.job_started.emit(i)
+                try:
+                    self.process_video(job, i, total_jobs)
+                    if not self.is_running:
+                        job.status = "Cancelled"
+                        self.job_cancelled.emit(i)
+                    else:
+                        job.status = "Done"
+                        self.progress_updated.emit(100, f"Finished {job.filename}")
+                        self.job_finished.emit(i)
+                except Exception as exc:
+                    if not self.is_running:
+                        job.status = "Cancelled"
+                        job.result["status"] = "cancelled"
+                        self.job_cancelled.emit(i)
+                        continue
+                    logger.error(f"Error processing {job.filename}: {exc}", exc_info=True)
+                    self.error_count += 1
+                    job.status = "Error"
+                    self.job_error.emit(i, str(exc))
+                    self.error_occurred.emit(f"Error processing {job.filename}: {exc}")
+        finally:
+            self.io_pool.shutdown(wait=True)
+            self.finished.emit()
 
-        for i, job in enumerate(self.jobs):
-            if not self.is_running:
-                break
-
-            self.job_started.emit(i)
-            try:
-                self.process_video(job, i, total_jobs)
-                self.job_finished.emit(i)
-            except Exception as e:
-                # Log the full traceback, mark the job as failed and continue
-                # with the remaining jobs instead of aborting the whole batch.
-                logger.error(
-                    f"Error processing {os.path.basename(job.file_path)}: {e}",
-                    exc_info=True
-                )
-                self.error_count += 1
-                self.job_error.emit(i, str(e))
-                # Kept for CLI mode which relies on error_occurred for logging.
-                self.error_occurred.emit(
-                    f"Error processing {os.path.basename(job.file_path)}: {str(e)}"
-                )
-
-        self.finished.emit()
+    def process_video(self, job, job_index, total_jobs):
+        job.result = {"run_id": uuid.uuid4().hex, "status": "running", "extraction": {"images_written": 0}}
+        started = time.monotonic()
+        try:
+            job.settings = validate_settings(job.settings)
+            stat = os.stat(job.file_path)
+            job.result["source_identity"] = {"size_bytes": stat.st_size, "mtime_ns": stat.st_mtime_ns, "hash_verified": False}
+            self._process_video(job, job_index, total_jobs)
+            job.result['status'] = 'completed' if self.is_running else 'cancelled'
+        except BaseException as exc:
+            if isinstance(exc, KeyboardInterrupt):
+                self.stop()
+            job.result.update(status='cancelled' if isinstance(exc, KeyboardInterrupt) or not self.is_running else 'failed', error=str(exc))
+            raise
+        finally:
+            job.result['elapsed_seconds'] = round(time.monotonic() - started, 3)
+            output_dir = job.result.get('output_dir')
+            if output_dir:
+                self._write_manifest(output_dir, job, job.result)
 
     def generate_filename(self, pattern, context):
         """
@@ -130,27 +161,14 @@ class ProcessingWorker:
             result = result.replace(f"{{{key}}}", str(value))
         return result
 
-    def process_video(self, job, job_index, total_jobs):
+    def _process_video(self, job, job_index, total_jobs):
         file_path = job.file_path
         filename = os.path.basename(file_path)
         name_no_ext = os.path.splitext(filename)[0]
 
-        # Determine Output Directory
-        custom_dir = job.output_dir
-        # If custom_dir is provided, use it as base. Otherwise use file's directory.
-        if custom_dir and os.path.isdir(custom_dir):
-            base_output_dir = custom_dir
-        else:
-            base_output_dir = os.path.dirname(file_path)
-
-        # Create a specific subfolder for this video to keep things organized
-        output_dir = os.path.join(base_output_dir, f"{name_no_ext}_processed")
-
-        try:
-            FileManager.ensure_directory(output_dir)
-        except OSError as e:
-            # If we can't create the directory (e.g. permission error), raise it
-            raise IOError(f"Cannot create or access output directory {output_dir}: {e}")
+        output_dir = create_output_directory(file_path, job.output_dir)
+        job.result['output_dir'] = output_dir
+        self._write_manifest(output_dir, job, job.result)
 
         # Determine Output Format & Params
         fmt = job.output_format.lower()
@@ -278,8 +296,7 @@ class ProcessingWorker:
             blur_threshold = job.settings.get('blur_threshold', 100.0)
 
             # Adaptive Blur State
-            blur_history = deque(maxlen=10)
-            consecutive_blur_skips = 0
+            blur_history = defaultdict(lambda: deque(maxlen=10))
 
             # Nadir mask (no AI): a disc on the Down view covering the pole/tripod
             # at the bottom of the capture. Combines with the AI mask when both
@@ -302,9 +319,12 @@ class ProcessingWorker:
             current_gps = None
             current_heading = None
             if job.export_telemetry:
-                telemetry_handler = TelemetryHandler(altitude_mode=job.altitude_mode)
+                telemetry_handler = TelemetryHandler(altitude_mode=job.altitude_mode, cancelled=lambda: not self.is_running)
                 logger.info(f"Extracting telemetry for {filename}...")
                 telemetry_handler.extract_metadata(file_path)
+                job.result["telemetry"] = telemetry_handler.metadata
+                if not telemetry_handler.has_gps:
+                    logger.warning("No valid GPS samples were extracted; output will not be geotagged")
 
             # EXIF enrichment (I1): the virtual cameras have exactly known
             # intrinsics, so write them (focal from FOV + a stable Make/Model
@@ -313,18 +333,16 @@ class ProcessingWorker:
             exif_enabled = job.settings.get('exif_intrinsics', True)
             camera_model_label = f"Virtual Pinhole {fov}deg" if is_360 else None
 
-            # Approximate capture start: the file mtime is ~the end of the
-            # recording, so subtract the clip duration. Per-frame times then
-            # keep the true spacing, which is what tools use for ordering.
+            # Filesystem modification time is not a capture timestamp.
             capture_start = None
-            try:
-                mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
-                if is_image or fps <= 0:
-                    capture_start = mtime
-                else:
-                    capture_start = mtime - timedelta(seconds=total_frames_video / fps)
-            except OSError:
-                capture_start = None
+            if telemetry_handler:
+                creation = telemetry_handler.metadata.get('format_tags', {}).get('creation_time')
+                if creation:
+                    try:
+                        capture_start = datetime.fromisoformat(creation.replace('Z', '+00:00'))
+                    except ValueError:
+                        pass
+            job.result['capture_time_source'] = 'container_creation_time' if capture_start else 'unknown'
 
             # Generate views and reprojection maps (only for 360 input).
             maps = {}
@@ -341,12 +359,16 @@ class ProcessingWorker:
 
                 active_cams = job.active_cameras
 
+                selected_views = [v for i, v in enumerate(views) if active_cams is None or i in active_cams]
+                preflight_names(job.settings, name_no_ext, selected_views, is_image)
                 for i, (name, y, p, r) in enumerate(views):
+                    if not self.is_running:
+                        return
                     if active_cams is not None and i not in active_cams:
                         continue
 
                     map_x, map_y = GeometryProcessor.create_rectilinear_map(
-                        src_h, src_w, out_res, out_res, fov, y, p, r
+                        src_h, src_w, out_res, out_res, fov, y, p, r, cancelled=lambda: not self.is_running
                     )
                     # Convert to fixed-point (CV_16SC2): cv2.remap is markedly
                     # faster on these than on two float32 maps, with no visible
@@ -355,6 +377,7 @@ class ProcessingWorker:
             else:
                 # Flat / non-360 media: a single passthrough "view".
                 views = [("flat", 0.0, 0.0, 0.0)]
+                preflight_names(job.settings, name_no_ext, views, is_image)
                 self.progress_updated.emit(0, f"Processing {filename} (flat / non-360)...")
 
             active_view_names = set(maps.keys()) if is_360 else {"flat"}
@@ -378,6 +401,8 @@ class ProcessingWorker:
             frames_processed = 0       # frames hit at the extraction interval
             frames_skipped_motion = 0  # skipped by the adaptive/motion filter
             images_written = 0         # image files actually saved
+            written_view_names = set()
+            next_extract_time = 0.0
             views_skipped_ai = 0       # views dropped by AI "Skip Frame"
 
             frame_idx = 0
@@ -389,26 +414,37 @@ class ProcessingWorker:
                         break
                     frame = current_image_frame
                 else:
-                    if frame_idx % interval != 0:
-                        # Skipped frame: grab() advances the decoder WITHOUT the
-                        # expensive YUV->BGR conversion + copy that read() does.
-                        # Big win at long intervals where most frames are dropped.
-                        if not cap.grab():
-                            break
+                    if not cap.grab():
+                        break
+                    sample_time = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+                    if frame_idx and sample_time <= 0:
+                        sample_time = frame_idx / fps if fps > 0 else 0.0
+                    due = frame_idx % interval == 0 if interval_unit == 'Frames' else sample_time + 1e-8 >= next_extract_time
+                    if not due:
                         frame_idx += 1
                         continue
-                    ret, frame = cap.read()
-                    if not ret:
-                        break
+                    ret, frame = cap.retrieve()
+                    if not ret or frame is None:
+                        raise IOError(f'Could not decode selected frame {frame_idx}')
+                    if interval_unit == 'Seconds':
+                        next_extract_time = (int(sample_time / interval_value) + 1) * interval_value
 
                 # Reached only on extraction points (or the single image frame).
-                if frame_idx % interval == 0:
-                    frame_time = frame_idx / fps if fps > 0 else 0.0
+                if is_image or interval_unit == 'Seconds' or frame_idx % interval == 0:
+                    frame_time = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000 if cap is not None else 0.0
+                    if frame_idx and frame_time <= 0:
+                        frame_time = frame_idx / fps if fps > 0 else 0.0
+                        job.result["frame_time_source"] = "fps_estimate"
+                    else:
+                        job.result["frame_time_source"] = "decoder_timestamp"
 
                     # Update GPS fix and travel heading for the current time
                     if telemetry_handler:
                         current_gps = telemetry_handler.get_gps_at_time(frame_time)
-                        current_heading = telemetry_handler.get_heading_at_time(frame_time)
+                        if current_gps and (job.altitude_mode == "relative" or job.settings.get("gps_altitude_reference") != "orthometric"):
+                            current_gps = (current_gps[0], current_gps[1], None)
+                        # Direction of travel does not establish optical orientation.
+                        current_heading = None
 
                     frame_dt = None
                     if capture_start is not None:
@@ -444,7 +480,7 @@ class ProcessingWorker:
                                 frame_idx += 1
                                 continue
 
-                        last_extracted_frame = frame.copy()
+
 
                     frames_processed += 1
 
@@ -471,28 +507,10 @@ class ProcessingWorker:
                             is_blurry = False
 
                             if smart_blur_enabled:
-                                # 1. Check Minimum Floor (Safety net against black/garbage frames)
-                                if score < blur_threshold:
-                                    is_blurry = True
-
-                                # 2. Adaptive Check
-                                elif len(blur_history) > 0:
-                                    avg_score = sum(blur_history) / len(blur_history)
-                                    if score < avg_score * 0.6:
-                                        is_blurry = True
-
-                                # 3. Safety Override (Force accept if too many consecutive skips)
-                                if is_blurry:
-                                    consecutive_blur_skips += 1
-                                    if consecutive_blur_skips > 5:
-                                        logger.warning(f"Force accepting frame due to consecutive skips: {filename} - Frame {frame_idx}")
-                                        is_blurry = False
-                                        consecutive_blur_skips = 0
-
-                                # 4. Update History (if accepted, either naturally or forced)
+                                history = blur_history[name]
+                                is_blurry = score < blur_threshold or (bool(history) and score < sum(history) / len(history) * 0.6)
                                 if not is_blurry:
-                                    consecutive_blur_skips = 0
-                                    blur_history.append(score)
+                                    history.append(score)
                             else:
                                 # Standard Mode
                                 if score < blur_threshold:
@@ -568,52 +586,13 @@ class ProcessingWorker:
 
                     # 5. Save (Multi-threaded I/O)
                     futures = []
-                    naming_mode = job.settings.get('naming_mode', 'realityscan')
-                    img_pattern = job.settings.get('image_pattern', '{filename}_frame{frame}_{camera}')
-                    mask_pattern = job.settings.get('mask_pattern', '{filename}_frame{frame}_{camera}_mask')
-
-                    def io_save_task(save_path, final_img, params, exif_bytes, mask_path, mask_img):
-                        if exif_bytes is not None:
-                            # Single write: encode in memory and embed the EXIF
-                            # straight into the bytes (no write-reload-rewrite).
-                            exif_writer.save_image_with_exif(save_path, final_img, params, exif_bytes)
-                        else:
-                            FileManager.save_image(save_path, final_img, params)
-                        if mask_img is not None and isinstance(mask_img, np.ndarray):
-                            FileManager.save_mask(mask_path, mask_img)
-
                     for i, (final_img, mask_or_skip) in enumerate(ai_results):
                         if final_img is None and mask_or_skip is True:
                             views_skipped_ai += 1
                             continue # Skipped
 
                         name = batch_names[i]
-                        ctx = batch_contexts[i]
-
-                        save_name = ""
-                        mask_name = ""
-
-                        if naming_mode == 'realityscan':
-                             save_name = f"{name_no_ext}_frame{frame_idx:06d}_{name}{ext}"
-                             mask_name = f"{save_name}.mask.png"
-                        elif naming_mode == 'simple':
-                            save_name = f"{name_no_ext}_frame{frame_idx:06d}_{name}{ext}"
-                            mask_name = f"{name_no_ext}_frame{frame_idx:06d}_{name}_mask.png"
-                        elif naming_mode == 'custom':
-                            if '{ext}' in img_pattern:
-                                save_name = self.generate_filename(img_pattern, ctx)
-                            else:
-                                save_name = self.generate_filename(img_pattern, ctx) + ext
-                            ctx['image_name'] = save_name
-                            if '{ext}' in mask_pattern:
-                                mask_name = self.generate_filename(mask_pattern, ctx)
-                            else:
-                                mask_name = self.generate_filename(mask_pattern, ctx) + ".png"
-
-                        # Confine outputs to output_dir: a custom naming pattern must
-                        # not be able to escape the destination folder via '../'.
-                        save_name = os.path.basename(save_name)
-                        mask_name = os.path.basename(mask_name)
+                        save_name, mask_name = output_names(job.settings, name_no_ext, frame_idx, name)
 
                         full_save_path = os.path.join(output_dir, save_name)
                         full_mask_path = os.path.join(output_dir, mask_name)
@@ -638,23 +617,39 @@ class ProcessingWorker:
                         if not self.is_running:
                             break
 
-                        try:
-                            futures.append(self.io_pool.submit(
-                                io_save_task, full_save_path, final_img, save_params,
-                                exif_bytes, full_mask_path, mask_or_skip
-                            ))
-                            images_written += 1
-                        except RuntimeError:
-                            # Pool closed, stop loop
-                            logger.warning("I/O Pool closed, stopping save loop.")
-                            break
+                        futures.append((self.io_pool.submit(
+                            FileManager.write_pair, full_save_path, final_img, save_params,
+                            exif_bytes, full_mask_path,
+                            mask_or_skip if isinstance(mask_or_skip, np.ndarray) else None
+                        ), {"image": save_name, "mask": mask_name if isinstance(mask_or_skip, np.ndarray) else None, "camera": name, "frame": frame_idx}))
 
-                    # Wait for all saves for this frame to complete before moving to the next
-                    # This prevents unbounded memory buildup if GPU is faster than SSD
-                    if futures:
-                        concurrent.futures.wait(futures)
+                    failures = []
+                    accepted = 0
+                    for future, record in futures:
+                        try:
+                            if not future.result():
+                                raise OSError("Writer did not confirm the output")
+                            images_written += 1
+                            accepted += 1
+                            written_view_names.add(record["camera"])
+                            with open(os.path.join(output_dir, "images.jsonl"), "a", encoding="utf-8") as index_file:
+                                index_file.write(json.dumps(record) + "\n")
+                        except Exception as exc:
+                            failures.append(str(exc))
+                    job.result['extraction'] = dict(
+                        interval_frames=interval, frames_processed=frames_processed,
+                        frames_skipped_motion=frames_skipped_motion, images_written=images_written,
+                        views_skipped_blur=skipped_blur_count, views_skipped_ai=views_skipped_ai,
+                        writes_failed=len(failures),
+                    )
+                    if failures:
+                        raise OSError("; ".join(failures))
+                    if accepted and adaptive_mode:
+                        last_extracted_frame = frame.copy()
 
                 frame_idx += 1
+            if not is_image and self.is_running and frame_idx < total_frames_video - 1:
+                raise IOError(f"Decoder stopped at frame {frame_idx}, expected {total_frames_video}; output is partial")
         finally:
             if cap:
                 cap.release()
@@ -664,10 +659,10 @@ class ProcessingWorker:
 
         # COLMAP priors (I1-N2): exact shared intrinsics + exact cam-from-rig
         # rotations + a turnkey reconstruction script.
-        if job.settings.get('export_colmap', False):
+        if self.is_running and images_written and job.settings.get('export_colmap', False):
             if is_360:
                 colmap_export.write_colmap_export(
-                    output_dir, views, active_view_names, fov, out_res
+                    output_dir, views, written_view_names, fov, out_res
                 )
             else:
                 logger.warning(
@@ -677,7 +672,7 @@ class ProcessingWorker:
 
         # Per-job manifest: reproducibility + support ("why only N images?").
         duration_seconds = (total_frames_video / fps) if fps else 0.0
-        self._write_manifest(output_dir, job, {
+        job.result.update({
             "video": {
                 "fps": round(fps, 3),
                 "total_frames": total_frames_video,
@@ -709,8 +704,5 @@ class ProcessingWorker:
             "settings": job.settings,
             **stats,
         }
-        try:
-            with open(os.path.join(output_dir, "manifest.json"), "w", encoding="utf-8") as f:
-                json.dump(manifest, f, indent=2, default=str)
-        except OSError as e:
-            logger.warning(f"Could not write manifest.json in {output_dir}: {e}")
+        manifest["schema_version"] = 2
+        FileManager.save_json(os.path.join(output_dir, "manifest.json"), manifest)

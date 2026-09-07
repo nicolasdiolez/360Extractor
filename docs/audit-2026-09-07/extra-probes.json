@@ -1,0 +1,21 @@
+{
+  "real_cli_flat": {
+    "exit_code": 0,
+    "stdout_tail": "[INFO] Starting Application360 in CLI Mode...\n[INFO] Found 1 file(s) to process.\n[INFO] All jobs finished.\n",
+    "stderr_tail": "\n  0%|          | 0/100% [00:00<?]\nProcessing flat.png (flat / non-360)...:   0%|          | 0/100% [00:00<?]\nProcessing flat.png (flat / non-360)...:   0%|          | 0.0/100% [00:00<?]\nProcessing flat.png:   0%|          | 0.0/100% [00:00<?]                    \nProcessing flat.png:   0%|          | 0.0/100% [00:00<?]\nProcessing flat.png: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 100/100% [00:00<00:00]\nProcessing flat.png: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 100/100% [00:00<00:00]\n"
+  },
+  "recursive_rerun": {
+    "exit_code": 0,
+    "stdout_tail": "[INFO] Starting Application360 in CLI Mode...\n[INFO] Found 2 file(s) to process.\n[INFO] All jobs finished.\n",
+    "stderr_tail": "flat.jpg (flat / non-360)...:   0%|          | 0.0/100% [00:00<?]\nProcessing flat_frame000000_flat.jpg (flat / non-360)...:  50%|\u2588\u2588\u2588\u2588\u2588     | 50.0/100% [00:00<00:00]\nProcessing flat_frame000000_flat.jpg:  50%|\u2588\u2588\u2588\u2588\u2588     | 50.0/100% [00:00<00:00]                    \nProcessing flat_frame000000_flat.jpg:  50%|\u2588\u2588\u2588\u2588\u2588     | 50.0/100% [00:00<00:00]\nProcessing flat_frame000000_flat.jpg: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 100/100% [00:00<00:00] \nProcessing flat_frame000000_flat.jpg: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 100/100% [00:00<00:00]\n"
+  },
+  "nested_generated_manifests": 2,
+  "smart_blur_uniform_cube": {
+    "interval_frames": 1,
+    "frames_processed": 1,
+    "frames_skipped_motion": 0,
+    "images_written": 1,
+    "views_skipped_blur": 5,
+    "views_skipped_ai": 0
+  }
+}

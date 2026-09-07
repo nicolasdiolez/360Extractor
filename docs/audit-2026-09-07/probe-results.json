@@ -1,0 +1,143 @@
+{
+  "filemanager_ignores_imwrite_false": true,
+  "async_write_failure": {
+    "error_count": 0,
+    "events": [
+      [
+        "finished",
+        0
+      ]
+    ],
+    "actual_images": 0,
+    "reported_images": 6,
+    "output_exists": true,
+    "unexpected_source_output": true
+  },
+  "custom_filename_collision": {
+    "error_count": 0,
+    "events": [
+      [
+        "finished",
+        0
+      ]
+    ],
+    "actual_images": 1,
+    "reported_images": 6,
+    "output_exists": true,
+    "unexpected_source_output": true
+  },
+  "zero_cameras": {
+    "error_count": 0,
+    "events": [
+      [
+        "finished",
+        0
+      ]
+    ],
+    "actual_images": 0,
+    "reported_images": 0,
+    "output_exists": true,
+    "unexpected_source_output": true
+  },
+  "invalid_camera_selection": {
+    "error_count": 0,
+    "events": [
+      [
+        "finished",
+        0
+      ]
+    ],
+    "actual_images": 0,
+    "reported_images": 0,
+    "output_exists": true,
+    "unexpected_source_output": true
+  },
+  "nonexistent_output_fallback": {
+    "error_count": 0,
+    "events": [
+      [
+        "finished",
+        0
+      ]
+    ],
+    "actual_images": 6,
+    "reported_images": 6,
+    "output_exists": true,
+    "unexpected_source_output": true
+  },
+  "gpmf_byte_type": {
+    "exception": "IndexError",
+    "message": "string index out of range"
+  },
+  "camm_standard_type5": [],
+  "camm_standard_type6": [],
+  "gpx10_namespaced": [],
+  "settings_json_array": {
+    "exception": "AttributeError",
+    "message": "'list' object has no attribute 'items'"
+  },
+  "gui_start": {
+    "exception": "AttributeError",
+    "message": "'ProcessingBridge' object has no attribute 'log_message'"
+  },
+  "gui_stuck_processing_after_failure": true,
+  "bridge_contract": {
+    "log_message": false,
+    "all_finished": false,
+    "finished": true,
+    "attach": true
+  },
+  "worker_contract": {
+    "start": false,
+    "cancel": false,
+    "run": true,
+    "stop": true
+  },
+  "log_contract": {
+    "append_log": false,
+    "log": true
+  },
+  "blur_slot_dict": {
+    "exception": "TypeError",
+    "message": "MainWindow._on_blur_analysis_finished() missing 1 required positional argument: 'mean_score'"
+  },
+  "missing_gui_settings": [
+    "quality"
+  ],
+  "custom_pattern_widgets_have_no_parent": true,
+  "initial_preset_vs_layout": [
+    "Postshot (3D Gaussian Splatting)",
+    "ring",
+    false
+  ],
+  "selection_settings_mutations": {
+    "ai_model": [
+      "yolo26l-seg.pt",
+      "yolo26n-seg.pt"
+    ],
+    "quality": [
+      95,
+      null
+    ],
+    "active_cameras": [
+      [
+        1
+      ],
+      null
+    ]
+  },
+  "colmap_preset_from_flat": false,
+  "window_render_size": [
+    1520,
+    920
+  ],
+  "duplicate_log_occurrences": 2,
+  "log_limit": {
+    "block_count": 1,
+    "retained_lines": 600
+  },
+  "blur_uniform_without_then_with_fake_overlay": [
+    0.0,
+    0.1845
+  ]
+}

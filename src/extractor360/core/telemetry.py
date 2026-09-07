@@ -13,6 +13,9 @@ from extractor360.utils.srt_parser import parse_srt_data
 from extractor360.utils.camm_parser import parse_camm_data
 from extractor360.utils.gpx_parser import parse_gpx_data
 import os
+import re
+from pathlib import Path
+from extractor360.utils.subprocess_utils import capture
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +25,11 @@ _FFMPEG_INSTALL_HINT = (
 )
 
 class TelemetryHandler:
-    def __init__(self, altitude_mode: str = 'absolute'):
+    def __init__(self, altitude_mode: str = 'absolute', cancelled=lambda: False):
+        self.cancelled = cancelled
+        self._times = []
+        self._indexed_samples = None
+        self.max_gap_seconds = 10.0
         self.metadata = {}
         self.has_gps = False
         self.gps_samples: List[Dict[str, float]] = []
@@ -52,6 +59,8 @@ class TelemetryHandler:
             except (KeyError, TypeError, ValueError):
                 continue
 
+            if s.get('fix') not in (None, 2, 3):
+                continue
             if not all(math.isfinite(v) for v in (lat, lon, alt, ts)):
                 continue
             if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
@@ -61,7 +70,7 @@ class TelemetryHandler:
             if abs(lat) < 1e-4 and abs(lon) < 1e-4:
                 continue
 
-            cleaned.append({'lat': lat, 'lon': lon, 'alt': alt, 'timestamp': ts})
+            cleaned.append({**s, 'lat': lat, 'lon': lon, 'alt': alt, 'timestamp': ts})
 
         cleaned.sort(key=lambda x: x['timestamp'])
         return cleaned
@@ -71,6 +80,24 @@ class TelemetryHandler:
         Extracts metadata from the video file using ffmpeg.
         Checks for GPMF or CAMM streams, OR a sidecar .gpx file.
         """
+        self.has_gps = False
+        self.gps_samples = []
+        self._times = []
+        self.metadata = {'status': 'absent'}
+        # Sidecars are matched case-insensitively, including SRT.
+        source = Path(video_path)
+        for sidecar in source.parent.iterdir():
+            if sidecar.stem.casefold() == source.stem.casefold() and sidecar.suffix.lower() in ('.gpx', '.srt'):
+                if sidecar.stat().st_size > 64 * 1024 * 1024:
+                    raise ValueError('Sidecar exceeds 64 MiB')
+                if sidecar.suffix.lower() == '.gpx':
+                    self._extract_gpx_data(str(sidecar))
+                else:
+                    self.gps_samples = self._sanitize_gps_samples(parse_srt_data(sidecar.read_bytes(), self.altitude_mode))
+                self.has_gps = bool(self.gps_samples)
+                if self.has_gps:
+                    self.metadata = {'status': 'valid', 'source': sidecar.name, 'time_source': 'sidecar_relative', 'alignment': 'track start assumed to equal video start'}
+                    return True
         # 1. First Check for Sidecar GPX (Priority for Qoocam workflow)
         base_name = os.path.splitext(video_path)[0]
         gpx_path = f"{base_name}.gpx"
@@ -95,8 +122,9 @@ class TelemetryHandler:
                 '-show_format',
                 video_path
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True, encoding='utf-8', errors='replace')
-            data = json.loads(result.stdout)
+            data = json.loads(capture(cmd, self.cancelled))
+            self.metadata = {'status': 'absent', 'format_tags': data.get('format', {}).get('tags', {})}
+            self.metadata['video_start_pts'] = float(next((s.get('start_time', 0) for s in data.get('streams', []) if s.get('codec_type') == 'video'), 0))
             
             duration = 0.0
             try:
@@ -113,7 +141,6 @@ class TelemetryHandler:
                 # Basic check for telemetry streams (GPMF, CAMM)
                 if codec_type == 'data':
                     if 'gpmd' in codec_tag_string or 'camm' in codec_tag_string:
-                        self.has_gps = True
                         logger.info(f"Found telemetry stream: {codec_tag_string}")
                         
                         stream_index = stream.get('index')
@@ -122,7 +149,9 @@ class TelemetryHandler:
                         elif 'camm' in codec_tag_string:
                             self._extract_camm_data(video_path, stream_index, duration)
                         
-                        return True
+                        self.has_gps = bool(self.gps_samples)
+                        self.metadata.update(status='valid' if self.has_gps else 'failed', source=codec_tag_string, time_source='packet_pts')
+                        return self.has_gps
                 
                 # Check for subtitles (often used by DJI)
                 if codec_type == 'subtitle' and subtitle_stream_index is None:
@@ -139,72 +168,53 @@ class TelemetryHandler:
             return False
             
         except FileNotFoundError:
+            self.metadata.update(status="failed", error="ffprobe unavailable")
             logger.error(f"ffprobe not found — telemetry extraction requires FFmpeg. {_FFMPEG_INSTALL_HINT}")
             return False
         except subprocess.CalledProcessError as e:
             logger.error(f"FFprobe error: {e}")
             return False
         except Exception as e:
+            self.metadata.update(status="failed", error=str(e))
             logger.error(f"Error extracting metadata: {e}")
             return False
 
-    def _extract_camm_data(self, video_path: str, stream_index: int, duration: float):
-        """
-        Extracts and parses CAMM data from the video.
-        """
-        try:
-            cmd = [
-                'ffmpeg',
-                '-y',
-                '-i', video_path,
-                '-map', f'0:{stream_index}',
-                '-f', 'data',
-                '-'
-            ]
-            result = subprocess.run(cmd, capture_output=True, check=True)
-            raw_data = result.stdout
-            
-            self.gps_samples = self._sanitize_gps_samples(parse_camm_data(raw_data, duration))
-            if self.gps_samples:
-                self.has_gps = True
-                logger.info(f"Extracted {len(self.gps_samples)} CAMM GPS samples.")
-            else:
-                logger.warning("CAMM stream found but no GPS samples extracted.")
-                
-        except FileNotFoundError:
-            logger.error(f"ffmpeg not found — cannot extract the CAMM stream. {_FFMPEG_INSTALL_HINT}")
-        except subprocess.CalledProcessError as e:
-            logger.error(f"FFmpeg extraction failed for CAMM: {e}")
-        except Exception as e:
-            logger.error(f"Error parsing CAMM data: {e}")
+    def _metadata_packets(self, video_path, stream_index):
+        raw = capture(['ffprobe', '-v', 'error', '-select_streams', str(stream_index),
+                       '-show_packets', '-show_data', '-show_entries',
+                       'packet=pts_time,duration_time,data', '-of', 'json', video_path], self.cancelled)
+        for packet in json.loads(raw).get('packets', []):
+            if self.cancelled():
+                raise InterruptedError('Metadata extraction cancelled')
+            if 'pts_time' not in packet:
+                continue
+            pieces = []
+            for line in packet.get('data', '').splitlines():
+                if ':' in line:
+                    hexpart = line.split(':', 1)[1].strip().split('  ')[0]
+                    if re.fullmatch(r'[0-9a-fA-F ]*', hexpart):
+                        pieces.append(bytes.fromhex(hexpart))
+            yield float(packet['pts_time']) - self.metadata.get('video_start_pts', 0), float(packet.get('duration_time', 0)), b''.join(pieces)
 
-    def _extract_gpmf_data(self, video_path: str, stream_index: int):
-        """
-        Extracts and parses GPMF data from the video.
-        """
-        try:
-            cmd = [
-                'ffmpeg',
-                '-y',
-                '-i', video_path,
-                '-map', f'0:{stream_index}',
-                '-f', 'data',
-                '-'
-            ]
-            # Use a large buffer size for subprocess to prevent hanging on large outputs
-            result = subprocess.run(cmd, capture_output=True, check=True)
-            raw_data = result.stdout
-            
-            parser = GPMFParser()
-            self.gps_samples = self._sanitize_gps_samples(parser.parse(raw_data))
-            logger.info(f"Extracted {len(self.gps_samples)} GPS samples.")
-            
-        except FileNotFoundError:
-            logger.error(f"ffmpeg not found — cannot extract the GPMF stream. {_FFMPEG_INSTALL_HINT}")
-        except subprocess.CalledProcessError as e:
-            logger.error(f"FFmpeg extraction failed: {e}")
-        except Exception as e:
-            logger.error(f"Error parsing GPMF data: {e}")
+    def _extract_camm_data(self, video_path, stream_index, duration):
+        samples = []
+        for pts, _, data in self._metadata_packets(video_path, stream_index):
+            samples.extend(parse_camm_data(data, timestamp=pts))
+        self.gps_samples = self._sanitize_gps_samples(samples)
+        self.has_gps = bool(self.gps_samples)
+
+    def _extract_gpmf_data(self, video_path, stream_index):
+        samples = []
+        for pts, duration, data in self._metadata_packets(video_path, stream_index):
+            packet_samples = GPMFParser().parse(data)
+            if len(packet_samples) > 1 and duration <= 0:
+                raise ValueError('GPMF packet has no duration; GPS sample timing cannot be established')
+            for index, sample in enumerate(packet_samples):
+                sample['timestamp'] = pts + index * duration / len(packet_samples)
+                sample['time_source'] = 'packet_pts_interpolated'
+            samples.extend(packet_samples)
+        self.gps_samples = self._sanitize_gps_samples(samples)
+        self.has_gps = bool(self.gps_samples)
 
     def _extract_srt_data(self, video_path: str, stream_index: int):
         """
@@ -219,8 +229,7 @@ class TelemetryHandler:
                 '-f', 'srt',
                 '-'
             ]
-            result = subprocess.run(cmd, capture_output=True, check=True)
-            raw_data = result.stdout
+            raw_data = capture(cmd, self.cancelled)
             
             self.gps_samples = self._sanitize_gps_samples(parse_srt_data(raw_data, self.altitude_mode))
 
@@ -263,11 +272,19 @@ class TelemetryHandler:
         if not self.has_gps or not self.gps_samples:
             return None
             
-        times = [s['timestamp'] for s in self.gps_samples]
+        if self._indexed_samples is not self.gps_samples or len(self._times) != len(self.gps_samples):
+            self._times = [s['timestamp'] for s in self.gps_samples]
+            self._indexed_samples = self.gps_samples
+        times = self._times
+        if timestamp < times[0] or timestamp > times[-1]:
+            return None
         
         # Find insertion point
         idx = bisect.bisect_left(times, timestamp)
         
+        if idx < len(times) and times[idx] == timestamp:
+            sample = self.gps_samples[idx]
+            return sample['lat'], sample['lon'], sample['alt']
         if idx == 0:
             return (self.gps_samples[0]['lat'], self.gps_samples[0]['lon'], self.gps_samples[0]['alt'])
         if idx >= len(self.gps_samples):
@@ -277,6 +294,8 @@ class TelemetryHandler:
         t1 = times[idx-1]
         t2 = times[idx]
         
+        if t2 - t1 > self.max_gap_seconds:
+            return None
         if t2 == t1:
             return (self.gps_samples[idx]['lat'], self.gps_samples[idx]['lon'], self.gps_samples[idx]['alt'])
             
@@ -286,7 +305,8 @@ class TelemetryHandler:
         p2 = self.gps_samples[idx]
         
         lat = p1['lat'] + (p2['lat'] - p1['lat']) * ratio
-        lon = p1['lon'] + (p2['lon'] - p1['lon']) * ratio
+        delta_lon = (p2['lon'] - p1['lon'] + 180) % 360 - 180
+        lon = (p1['lon'] + delta_lon * ratio + 180) % 360 - 180
         alt = p1['alt'] + (p2['alt'] - p1['alt']) * ratio
         
         return (lat, lon, alt)

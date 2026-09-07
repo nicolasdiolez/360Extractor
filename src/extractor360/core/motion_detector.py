@@ -12,12 +12,14 @@ class MotionDetector:
         Returns the mean magnitude of the flow.
         """
         if frame1 is None or frame2 is None:
-            return 0.0
+            raise ValueError("Motion comparison requires two images")
 
         # Resize and convert to grayscale for performance
         try:
-            gray1 = cv2.cvtColor(cv2.resize(frame1, self.target_size), cv2.COLOR_BGR2GRAY)
-            gray2 = cv2.cvtColor(cv2.resize(frame2, self.target_size), cv2.COLOR_BGR2GRAY)
+            width = self.target_size[0]
+            size = (width, max(1, round(width * frame1.shape[0] / frame1.shape[1])))
+            gray1 = cv2.cvtColor(cv2.resize(frame1, size), cv2.COLOR_BGR2GRAY)
+            gray2 = cv2.cvtColor(cv2.resize(frame2, size), cv2.COLOR_BGR2GRAY)
 
             # Calculate Optical Flow (Farneback)
             flow = cv2.calcOpticalFlowFarneback(
@@ -41,4 +43,4 @@ class MotionDetector:
             
         except Exception as e:
             logger.error(f"Error calculating motion score: {e}")
-            return 0.0
+            raise RuntimeError("Could not compare motion") from e
