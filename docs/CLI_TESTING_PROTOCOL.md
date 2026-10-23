@@ -65,7 +65,7 @@ Compare masks against the real subjects, including limbs and tripod boundaries. 
 ### Failure paths
 
 - Try a nonexistent input: expect nonzero exit and an explicit error.
-- Try `--resolution 0` with an existing input: expect exit 2 and no exported images (the parent destination may exist).
+- Try `--resolution 0` with an existing input: expect exit 2 and no output folder created.
 - Try a custom multi-view video name without `{camera}` or `{frame}`: expect a naming failure before image writes.
 - Interrupt a long run: expect handled CLI interruption to return 130 and partial output to remain identifiable. In Bash read `echo $?` immediately; in PowerShell read `$LASTEXITCODE` immediately.
 - Check that missing GPS is reported separately: overall extraction can succeed without geotags. Never infer GPS success from exit 0 alone.

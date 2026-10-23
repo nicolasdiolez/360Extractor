@@ -4,7 +4,22 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ## [Unreleased]
 
-No changes recorded after the 4.0.1 candidate.
+### Fixed
+
+- Keep longitude periodic without wrapping between the poles, including Lanczos interpolation; share the projection between extraction, preview and blur analysis.
+- Drain and index confirmed writes before finalizing cancellation. Preserve timestamp fallback provenance, report premature decoder stops and validate output names before creating a run folder.
+- Apply workflow preset fields to every selected job while retaining custom model trust and unrelated settings. Preserve numeric precision, refresh mask controls and discard blur analyses after settings change.
+- Reject detection-only models and missing segmentation masks in Generate Mask mode. Cancel preview work cooperatively, release model references and suspend preview inference during extraction.
+- Preserve missing/relative altitude provenance, encode high-altitude EXIF rationals safely, report embedded SRT status and select sidecars deterministically. Read container capture dates independently of GPS export.
+- Read JSON as UTF-8 and reject malformed camera/face lists. Validate the COLMAP index and rig before staging, confine source paths and prevent duplicate or raced destinations from overwriting original hardlinks.
+- Provide a Windows console launcher sharing the GUI bundle. Verify visible version/help output and decode frozen smoke-test output explicitly.
+
+### Dependencies and validation
+
+- Require Python 3.11 or later for Pillow 13 security fixes. Refresh the macOS arm64/Python 3.13 dependency lock and build tools; raise certifi and urllib3 security floors.
+- Add regression coverage for geometry, interruption, Studio settings, metadata, adaptive motion and reconstruction safety. Require an installed-wheel smoke outside the checkout in CI on Linux/macOS/Windows.
+- Resolve the project-wide type diagnostics and make that CI check blocking, while retaining the stricter checks on critical modules.
+- See [October correction validation](docs/implementation-2026-10-23/VALIDATION.md) for local evidence and remaining platform, GPU and real-media qualification. No new release is published by these changes.
 
 ## [4.0.1] - 2026-09-07
 

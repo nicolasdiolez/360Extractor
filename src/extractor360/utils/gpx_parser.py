@@ -50,7 +50,7 @@ def parse_gpx_data(gpx_content: str) -> list[dict]:
                 
                 # Elevation
                 ele_elem = next((e for e in pt if e.tag.rsplit('}', 1)[-1] == 'ele'), None)
-                alt = float(ele_elem.text) if ele_elem is not None else 0.0
+                alt = float(ele_elem.text) if ele_elem is not None and ele_elem.text else None
                 
                 # Time
                 time_elem = next((e for e in pt if e.tag.rsplit('}', 1)[-1] == 'time'), None)
@@ -72,7 +72,9 @@ def parse_gpx_data(gpx_content: str) -> list[dict]:
                         'time_source': 'gpx_track_relative',
                         'lat': lat,
                         'lon': lon,
-                        'alt': alt
+                        'alt': alt,
+                        'altitude_source': 'gpx_ele' if alt is not None else 'missing',
+                        'altitude_reference': 'absolute' if alt is not None else 'unknown',
                     })
             except (ValueError, TypeError):
                 continue

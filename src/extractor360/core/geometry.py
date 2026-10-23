@@ -6,6 +6,45 @@ class GeometryProcessor:
     to Rectilinear (Pinhole) views.
     """
 
+    # Lanczos4 reads up to four neighbouring rows. Padding the latitude axis
+    # independently keeps those taps at the same pole while longitude wraps.
+    _LATITUDE_PADDING = 4
+
+    @staticmethod
+    def prepare_equirectangular_maps(map_x, map_y):
+        """Compile maps for :meth:`remap_equirectangular` (linear or Lanczos4).
+
+        These maps address a vertically edge-extended source. Keep the pair
+        together with the matching remapper; ordinary cv2.remap would read the
+        wrong latitude from the original source.
+        """
+        import cv2
+
+        return cv2.convertMaps(
+            map_x, map_y + GeometryProcessor._LATITUDE_PADDING, cv2.CV_16SC2
+        )
+
+    @staticmethod
+    def prepare_equirectangular_source(frame):
+        """Extend latitude once per source frame, reusable across all views."""
+        import cv2
+
+        padding = GeometryProcessor._LATITUDE_PADDING
+        return cv2.copyMakeBorder(frame, padding, padding, 0, 0, cv2.BORDER_REPLICATE)
+
+    @staticmethod
+    def remap_equirectangular(frame, map1, map2, interpolation, *, source_is_prepared=False):
+        """Sample periodic longitude and edge-extended latitude separately.
+
+        Merely clamping map_y is insufficient: Lanczos still samples outside
+        the first/last row. Replicate four rows on either pole so BORDER_WRAP
+        applies only to the longitude taps for every generated latitude.
+        """
+        import cv2
+
+        extended = frame if source_is_prepared else GeometryProcessor.prepare_equirectangular_source(frame)
+        return cv2.remap(extended, map1, map2, interpolation, borderMode=cv2.BORDER_WRAP)
+
     @staticmethod
     def generate_views(n, pitch_offset=0, layout_mode='ring'):
         """

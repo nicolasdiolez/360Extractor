@@ -190,3 +190,171 @@ def test_preferences_persist_without_touching_user_config(qapp):
     window.close()
     SettingsManager._instance=None
     assert SettingsManager().get('quality')==81
+
+
+@pytest.fixture
+def settings_window(qapp, tmp_path, monkeypatch):
+    """Exercise settings without scheduling unrelated model/preview work."""
+    import cv2
+    import numpy as np
+    monkeypatch.setattr(MainWindow, 'update_preview_display', lambda self: None)
+    window = MainWindow()
+    paths = []
+    for name in ('first.png', 'second.png'):
+        path = tmp_path / name
+        assert cv2.imwrite(str(path), np.zeros((16, 32, 3), np.uint8))
+        paths.append(str(path))
+    window.add_videos_from_paths(paths)
+    return window
+
+
+def test_preset_applies_explicit_fields_to_every_selected_job(settings_window):
+    window = settings_window
+    first, second = window.jobs
+    first.settings.update(output_format='jpg', ai_model='trusted-custom.pt', trust_custom_model=True, quality=83)
+    second.settings.update(output_format='png', layout_mode='ring', camera_count=8, active_cameras=[7], quality=65)
+    window.select_card(window._video_cards[1])
+    window.toggle_card_selection(window._video_cards[0])
+    window.apply_preset('RealityScan / Metashape')
+    for job in window.jobs:
+        assert job.settings['output_format'] == 'jpg'
+        assert job.settings['layout_mode'] == 'cube'
+        assert job.settings['active_cameras'] is None
+        assert job.settings['ai_mask_cameras'] == ['Down']
+    assert first.settings['ai_model'] == 'trusted-custom.pt'
+    assert first.settings['trust_custom_model'] is True
+    assert (first.settings['quality'], second.settings['quality']) == (83, 65)
+
+
+def test_unrelated_edit_preserves_valid_values_and_precision(settings_window):
+    window = settings_window
+    unusual = dict(fov=160.123456, blur_threshold=5000.12345, sharpening_strength=3.12345,
+                   ai_confidence=0.000123, adaptive_threshold=500.12345, interval_value=0.00123,
+                   nadir_mask_radius=0.0)
+    window.jobs[0].settings.update(unusual)
+    window.jobs[1].settings.update(blur_threshold=9000.54321, fov=175.54321)
+    window.select_card(window._video_cards[1])
+    window.toggle_card_selection(window._video_cards[0])
+    assert {key: window.get_settings_from_ui()[key] for key in unusual} == unusual
+    window.quality_spin.setValue(81)
+    assert {key: window.jobs[0].settings[key] for key in unusual} == unusual
+    assert window.jobs[1].settings['blur_threshold'] == 9000.54321
+    assert window.jobs[1].settings['fov'] == 175.54321
+    assert all(job.settings['quality'] == 81 for job in window.jobs)
+
+
+def test_utf8_preferences_and_valid_values_survive_window_startup(qapp, tmp_path, monkeypatch):
+    import json
+    from extractor360.core.settings_manager import SettingsManager
+    config = tmp_path / 'preferences' / 'config.json'
+    config.parent.mkdir(parents=True, exist_ok=True)
+    values = dict(fov=160.123456, blur_threshold=5000.12345, sharpening_strength=3.12345,
+                  custom_output_dir=str(tmp_path / 'Vidéos été'))
+    config.write_text(json.dumps(values, ensure_ascii=False), encoding='utf-8')
+    SettingsManager._instance = None
+    monkeypatch.setattr(MainWindow, 'update_preview_display', lambda self: None)
+    window = MainWindow()
+    assert {key: window.default_settings[key] for key in values} == values
+    window.quality_spin.setValue(81)
+    saved = json.loads(config.read_text(encoding='utf-8'))
+    assert {key: saved[key] for key in values} == values
+
+
+def test_bad_mask_face_preferences_fall_back_without_crashing_studio(qapp, tmp_path):
+    from extractor360.core.settings_manager import SettingsManager
+    config = tmp_path / 'preferences' / 'config.json'
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text('{"ai_mask_cameras": [1], "ai_mode": "None"}', encoding='utf-8')
+    SettingsManager._instance = None
+    window = MainWindow()
+    assert window.default_settings['ai_mask_cameras'] == []
+
+
+def test_mask_face_controls_follow_camera_count_without_broadening_scope(settings_window):
+    window = settings_window
+    window.jobs[1].settings.update(layout_mode='ring', camera_count=6, ai_mask_cameras=['View_1'])
+    window.select_card(window._video_cards[1])
+    window.cam_count_spin.setValue(8)
+    assert set(window.mask_face_checks) == {f'View_{i}' for i in range(8)}
+    assert window.jobs[1].settings['ai_mask_cameras'] == ['View_1']
+    window.mask_face_checks['View_7'].setChecked(True)
+    window.cam_count_spin.setValue(4)
+    assert 'View_6' not in window.mask_face_checks
+    assert 'unavailable' in window.mask_face_checks['View_7'].text()
+    assert window.mask_face_checks['View_7'].isChecked()
+
+
+@pytest.mark.parametrize('field,value', [('fov', 120), ('blur_threshold', 321)])
+def test_late_blur_analysis_does_not_overwrite_an_edited_job(settings_window, field, value):
+    import copy
+    window = settings_window
+    job = window.jobs[1]
+    window._blur_job = job
+    window._blur_settings = copy.deepcopy(job.settings)
+    window._blur_revision = window._job_settings_revisions.get(id(job), 0)
+    widget = window.fov_spin if field == 'fov' else window.blur_threshold_spin
+    widget.setValue(value)
+    expected = copy.deepcopy(job.settings)
+    window._on_blur_analysis_finished({'average': 5000})
+    assert job.settings == expected
+
+
+def test_frame_count_estimate_includes_zero_and_last_frame(settings_window):
+    window = settings_window
+    for job in window.jobs:
+        job.settings.update(is_360=False, interval_unit='Frames', interval_value=10.9)
+        key = (job.file_path, os.path.getmtime(job.file_path))
+        window._media_info[key] = (101, 10.0)
+    window.update_estimate()
+    assert 'Estimated 22 pinhole images' in window.estimation_label.text()
+
+
+@pytest.mark.parametrize('action', ['start', 'cancel', 'close'])
+def test_extraction_waits_for_preview_without_blocking_ui(settings_window, qapp, monkeypatch, action):
+    import threading
+    import time
+    from PySide6.QtCore import QRunnable
+    from extractor360.ui import main_window
+    window = settings_window
+    for job in window.jobs:
+        job.settings.update(is_360=False)
+    entered, release = threading.Event(), threading.Event()
+    class NativePreview(QRunnable):
+        def run(self):
+            entered.set()
+            assert release.wait(10)
+    window.preview_widget.threadpool.start(NativePreview())
+    assert entered.wait(5)
+    controller = main_window.ProcessingController
+    started = []
+    def create_controller(*args, **kwargs):
+        assert window.preview_widget.threadpool.activeThreadCount() == 0
+        started.append(True)
+        return controller(*args, **kwargs)
+    monkeypatch.setattr(main_window, 'ProcessingController', create_controller)
+    try:
+        window.start_processing()
+        assert window.is_processing and window._waiting_for_preview
+        assert not started
+        assert window.preview_widget._suspended
+        qapp.processEvents()
+        if action == 'cancel':
+            window.cancel_processing()
+        elif action == 'close':
+            window.close()
+    finally:
+        release.set()
+    assert window.preview_widget.threadpool.waitForDone(5000)
+    deadline = time.monotonic() + 10
+    while window.is_processing or (action == 'start' and not started):
+        qapp.processEvents()
+        assert time.monotonic() < deadline
+        time.sleep(.005)
+    qapp.processEvents()
+    if action == 'start':
+        assert started == [True]
+        assert all(job.status == 'Done' for job in window.jobs)
+        assert not window.preview_widget._suspended
+    else:
+        assert not started
+        assert all(job.status == 'Pending' for job in window.jobs)

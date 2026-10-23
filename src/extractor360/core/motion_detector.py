@@ -22,10 +22,11 @@ class MotionDetector:
             gray2 = cv2.cvtColor(cv2.resize(frame2, size), cv2.COLOR_BGR2GRAY)
 
             # Calculate Optical Flow (Farneback)
+            flow_buffer = np.empty((*gray1.shape, 2), dtype=np.float32)
             flow = cv2.calcOpticalFlowFarneback(
                 prev=gray1,
                 next=gray2,
-                flow=None,
+                flow=flow_buffer,
                 pyr_scale=0.5,
                 levels=3,
                 winsize=15,

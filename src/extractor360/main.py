@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import sys
+import signal
+import threading
 import os
 import argparse
 import json
@@ -69,7 +71,7 @@ def load_config(config_path):
         sys.exit(1)
     
     try:
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             if not isinstance(data, dict):
                 raise ValueError("Configuration must be a JSON object")
@@ -108,15 +110,6 @@ def run_cli(args):
         output_path = os.path.join(os.getcwd(), "output")
         logger.warning(f"No output path specified. Using default: {output_path}")
 
-    # Ensure output directory exists
-    if not os.path.exists(output_path):
-        try:
-            os.makedirs(output_path)
-            logger.info(f"Created output directory: {output_path}")
-        except OSError as e:
-            logger.error(f"Error creating output directory {output_path}: {e}")
-            sys.exit(1)
-            
     # Prepare jobs
     files_to_process = discover_media([input_path], exclude=[output_path] if os.path.realpath(input_path) != os.path.realpath(output_path) else [])
 
@@ -127,18 +120,16 @@ def run_cli(args):
     logger.info(f"Found {len(files_to_process)} file(s) to process.")
 
     # Parse Active Cameras
-    active_cameras_str = args.active_cameras or config.get('active_cameras')
-    active_cameras = None
-    if active_cameras_str is not None:
+    # Preserve JSON types for the shared validator. Only the explicit CLI
+    # option uses comma-separated text; coercing JSON would turn true or 1.9
+    # into a valid camera index before validation could reject them.
+    active_cameras = config.get('active_cameras')
+    if args.active_cameras is not None:
         try:
-            # Handle list from JSON or string from CLI
-            if isinstance(active_cameras_str, list):
-                active_cameras = [int(x) for x in active_cameras_str]
-            else:
-                active_cameras = [int(x.strip()) for x in active_cameras_str.split(',')]
+            active_cameras = [int(x.strip()) for x in args.active_cameras.split(',')]
         except ValueError:
-            logger.error(f"Error: Invalid format for active-cameras: {active_cameras_str}")
-            sys.exit(1)
+            logger.error(f"Error: Invalid format for active-cameras: {args.active_cameras}")
+            sys.exit(2)
 
     # Build the settings dict the processor consumes.
     # Precedence: DEFAULT_SETTINGS < config file < explicit CLI arguments.
@@ -152,6 +143,8 @@ def run_cli(args):
 
     # The core is Qt-free: its events are plain callbacks, so no
     # QCoreApplication is needed in CLI mode anymore.
+    # The worker allocates output only after settings, views and names pass
+    # validation, so a rejected launch leaves the destination untouched.
     worker = ProcessingWorker(jobs)
     
     # Progress Bar Handling
@@ -190,7 +183,20 @@ def run_cli(args):
         worker.error_occurred.connect(lambda err: logger.error(f"ERROR: {err}"))
         worker.finished.connect(lambda: logger.info("All jobs finished."))
     
-    # Run processing synchronously
+    # Cooperative SIGINT keeps a signal from splitting publication of an
+    # already-confirmed image, its index entry, and the terminal manifest.
+    # Repeated Ctrl-C remains cooperative while native writers finish.
+    interrupted = False
+    previous_sigint_handler = None
+    handles_sigint = threading.current_thread() is threading.main_thread()
+
+    def request_interrupt(signum, frame):
+        nonlocal interrupted
+        interrupted = True
+        worker.stop()
+
+    if handles_sigint:
+        previous_sigint_handler = signal.signal(signal.SIGINT, request_interrupt)
     try:
         worker.run()
     except KeyboardInterrupt:
@@ -202,6 +208,13 @@ def run_cli(args):
         if TQDM_AVAILABLE: pbar.close()
         logger.error(f"An unexpected error occurred: {e}")
         sys.exit(1)
+    finally:
+        if handles_sigint:
+            signal.signal(signal.SIGINT, previous_sigint_handler)
+
+    if interrupted:
+        logger.info("\nProcess interrupted by user; submitted writes have finished.")
+        sys.exit(130)
 
     # Propagate job failures to the shell so batch automation can detect them.
     if worker.error_count > 0:

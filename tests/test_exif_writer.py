@@ -8,6 +8,7 @@ from datetime import datetime
 
 import numpy as np
 import piexif
+import pytest
 
 from extractor360.core import exif_writer
 from extractor360.core.telemetry import TelemetryHandler
@@ -117,3 +118,24 @@ class TestHeadingFromTrack(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
+
+
+@pytest.mark.parametrize('altitude', [5000.123456, -5000.123456, 8848.86, -12000.25])
+def test_large_signed_altitude_roundtrip(tmp_path, altitude):
+    from extractor360.core.exif_writer import build_exif_bytes, save_image_with_exif
+    path = tmp_path / 'high.jpg'
+    image = np.full((8, 8, 3), 100, dtype=np.uint8)
+    save_image_with_exif(str(path), image, [], build_exif_bytes(gps=(48, 2, altitude)))
+    gps = piexif.load(str(path))['GPS']
+    numerator, denominator = gps[piexif.GPSIFD.GPSAltitude]
+    assert 0 <= numerator <= (1 << 32) - 1
+    assert 1 <= denominator <= (1 << 32) - 1
+    result = numerator / denominator * (-1 if gps[piexif.GPSIFD.GPSAltitudeRef] else 1)
+    assert result == pytest.approx(altitude, abs=0.00001)
+
+
+@pytest.mark.parametrize('altitude', [float('nan'), float('inf'), -float('inf')])
+def test_nonfinite_altitude_rejected_before_exif_serialization(altitude):
+    from extractor360.core.exif_writer import build_exif_bytes
+    with pytest.raises(ValueError, match='finite'):
+        build_exif_bytes(gps=(48, 2, altitude))

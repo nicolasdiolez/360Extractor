@@ -1,6 +1,8 @@
 # Command-line guide
 
-This guide describes the Studio 4.0.1 preview. Install the project using the [README](../README.md#install-from-source). Commands below run from the repository root with that environment activated. `python -m extractor360`, `360extractor` and the development launcher `python src/main.py` use the same entry point.
+This guide describes current development sources, including the unreleased October corrections. Install the project using the [README](../README.md#install-from-source). Commands below run from the repository root with that environment activated. `python -m extractor360`, `360extractor` and the development launcher `python src/main.py` use the same entry point.
+
+New Windows builds provide `360 Extractor CLI.exe` for console use alongside `360 Extractor.exe` for Studio; both share the same application files. In PowerShell, invoke `& '.\360 Extractor CLI.exe' --help`. This launcher is not included in the previously published v4.0.1 assets.
 
 ## Starting a job
 

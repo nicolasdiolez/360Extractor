@@ -1,0 +1,6 @@
+src/extractor360/utils/gpmf_parser.py:15: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/extractor360/utils/gpmf_parser.py:16: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/extractor360/ui/main_window.py:67: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/extractor360/ui/main_window.py:74: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/extractor360/ui/main_window.py:75: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+Success: no issues found in 43 source files

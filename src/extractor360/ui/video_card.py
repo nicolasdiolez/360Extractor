@@ -248,10 +248,10 @@ class VideoCard(QWidget):
         pixmap = QPixmap.fromImage(image)
         if not pixmap.isNull():
             rounded = QPixmap(pixmap.size())
-            rounded.fill(Qt.transparent)
+            rounded.fill(Qt.GlobalColor.transparent)
 
             painter = QPainter(rounded)
-            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             path = QPainterPath()
             path.addRoundedRect(0, 0, pixmap.width(), pixmap.height(), 4, 4)
             painter.setClipPath(path)

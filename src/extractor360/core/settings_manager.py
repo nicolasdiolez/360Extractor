@@ -76,7 +76,7 @@ class SettingsManager:
             return
 
         try:
-            with open(self.config_file, 'r') as f:
+            with open(self.config_file, 'r', encoding='utf-8-sig') as f:
                 loaded_settings = json.load(f)
                 if not isinstance(loaded_settings, dict):
                     raise ValueError("Settings must be a JSON object")

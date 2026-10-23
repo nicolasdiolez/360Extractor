@@ -65,3 +65,73 @@ def test_missing_metadata_clears_previous_samples(tmp_path):
         assert not handler.extract_metadata(str(tmp_path/'video.mp4'))
     assert not handler.has_gps and handler.gps_samples==[]
     assert handler.metadata['status']=='failed'
+
+
+def _srt(altitude='[rel_alt: 12.5]'):
+    return ('1\n00:00:00,000 --> 00:00:01,000\n'
+            f'[latitude: 48] [longitude: 2] {altitude}\n').encode()
+
+
+def test_relative_only_srt_never_becomes_orthometric_altitude():
+    from extractor360.utils.srt_parser import parse_srt_data
+    handler = TelemetryHandler(altitude_mode='absolute')
+    handler.gps_samples = handler._sanitize_gps_samples(parse_srt_data(_srt()))
+    handler.has_gps = True
+    assert handler.gps_samples[0]['altitude_reference'] == 'relative'
+    assert handler.gps_samples[0]['altitude_source'] == 'rel_alt'
+    assert handler.get_gps_at_time(0) == (48, 2, 12.5)
+    assert handler.get_gps_at_time(0, orthometric=True) == (48, 2, None)
+
+
+def test_missing_gpx_elevation_and_interpolation_preserve_horizontal_fix():
+    content = '<gpx><trk><trkseg><trkpt lat="48" lon="2"><time>2026-01-01T00:00:00Z</time></trkpt><trkpt lat="49" lon="3"><ele>100</ele><time>2026-01-01T00:00:02Z</time></trkpt></trkseg></trk></gpx>'
+    handler = TelemetryHandler()
+    handler.gps_samples = handler._sanitize_gps_samples(parse_gpx_data(content))
+    handler.has_gps = True
+    assert handler.gps_samples[0]['alt'] is None
+    assert handler.gps_samples[0]['altitude_source'] == 'missing'
+    assert handler.get_gps_at_time(0, orthometric=True) == (48, 2, None)
+    assert handler.get_gps_at_time(1, orthometric=True) == (48.5, 2.5, None)
+
+
+def test_altitude_interpolation_does_not_mix_references():
+    handler = TelemetryHandler()
+    handler.gps_samples = [dict(timestamp=0, lat=48, lon=2, alt=10, altitude_reference='relative'),
+                           dict(timestamp=2, lat=49, lon=3, alt=100, altitude_reference='absolute')]
+    handler.has_gps = True
+    assert handler.get_gps_at_time(1) == (48.5, 2.5, None)
+
+
+def test_embedded_srt_metadata_reports_success(tmp_path):
+    handler = TelemetryHandler()
+    probe = {'streams': [{'index': 1, 'codec_type': 'subtitle'}]}
+    with patch('extractor360.core.telemetry.capture', side_effect=[json.dumps(probe).encode(), _srt()]):
+        assert handler.extract_metadata(str(tmp_path / 'clip.mp4'))
+    assert handler.metadata['status'] == 'valid'
+    assert handler.metadata['source'] == 'embedded_srt'
+    assert handler.metadata['time_source'] == 'subtitle_pts'
+
+
+def test_sidecar_priority_and_capture_date_are_independent(tmp_path):
+    # Create SRT first: filesystem iteration order must not determine priority.
+    (tmp_path / 'Clip.SRT').write_bytes(_srt())
+    gpx = tmp_path / 'clip.GPX'
+    gpx.write_text('<gpx><trk><trkseg><trkpt lat="50" lon="3"><ele>123</ele><time>2026-01-01T00:00:00Z</time></trkpt></trkseg></trk></gpx>')
+    probe = {'format': {'tags': {'creation_time': '2026-10-23T00:00:00Z'}}}
+    handler = TelemetryHandler()
+    with patch('extractor360.core.telemetry.capture', return_value=json.dumps(probe).encode()):
+        assert handler.extract_metadata(str(tmp_path / 'CLIP.mp4'))
+        assert handler.metadata['source'] == 'clip.GPX'
+        assert handler.metadata['format_tags']['creation_time'] == '2026-10-23T00:00:00Z'
+        gpx.write_text('invalid xml')
+        assert handler.extract_metadata(str(tmp_path / 'CLIP.mp4'))
+        assert handler.metadata['source'] == 'Clip.SRT'
+
+
+def test_sidecar_gps_works_without_ffprobe(tmp_path):
+    (tmp_path / 'clip.srt').write_bytes(_srt())
+    handler = TelemetryHandler()
+    with patch('extractor360.core.telemetry.capture', side_effect=FileNotFoundError('ffprobe')):
+        assert handler.extract_metadata(str(tmp_path / 'clip.mp4'))
+    assert handler.metadata['status'] == 'valid'
+    assert handler.metadata['container_status'] == 'unavailable'

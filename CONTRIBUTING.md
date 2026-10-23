@@ -8,7 +8,7 @@ The run's `manifest.json` and relevant log messages help explain settings, state
 
 ## Development setup
 
-The correction profile has been tested locally on macOS arm64 with Python 3.13; CI uses Python 3.11. The package declares Python >=3.10, but that declaration does not qualify every interpreter/platform combination. Start from the branch under review rather than assuming the default branch contains it.
+The correction profile is tested locally on macOS arm64 with Python 3.13; CI uses Python 3.11. The package requires Python >=3.11 because Pillow 13 security fixes no longer support Python 3.10. This does not qualify every interpreter/platform combination. Start from the branch under review rather than assuming the default branch contains it.
 
 ```sh
 git clone https://github.com/nicolasdiolez/360Extractor.git
@@ -52,7 +52,7 @@ python scripts/check_release.py
 
 For offscreen Qt tests, prefix pytest with `QT_QPA_PLATFORM=offscreen` on macOS/Linux; in PowerShell set `$env:QT_QPA_PLATFORM="offscreen"` first. Tests isolate application preferences and library configuration. AI contract tests can skip when the AI dependencies are missing, so a lightweight run is not full AI validation.
 
-CI runs core tests on Ubuntu/macOS/Windows and Qt tests on macOS/Windows. Ruff and the four critical type checks are blocking; whole-project mypy remains informational. The release workflow additionally tests its full installed environment, checks dependency advisories and exercises the frozen executable after building. The build-tool profile is pinned in `packaging/requirements-build.txt`. A green CI result does not qualify physical cameras, GPU inference or the distributed binary.
+CI runs core tests and installed-wheel smoke tests on Ubuntu/macOS/Windows, and Qt tests on macOS/Windows. Ruff and whole-project mypy are blocking; the four critical modules additionally check untyped function bodies. The wheel smoke runs in an isolated interpreter outside the checkout and checks the actual site-packages import, resources, CLI, extraction and standalone reconstruction staging. The release workflow additionally tests its full environment, checks dependency advisories and exercises the frozen executable after building. The build-tool profile is pinned in `packaging/requirements-build.txt`. A green CI result does not qualify physical cameras, GPU inference or the distributed binary.
 
 Use a focused branch and a pull request against the intended integration branch. The established development flow targets `dev`; a direct promotion to `main` must be an explicit maintainer decision. Use Conventional Commit prefixes such as `fix:`, `feat:`, `docs:` and `test:`. Add meaningful regression coverage for behavior changes and update [CHANGELOG.md](CHANGELOG.md).
 

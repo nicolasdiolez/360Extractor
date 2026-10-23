@@ -15,6 +15,8 @@ Earlier candidates reproduced an intermittent Windows native crash (`0xC0000005`
 
 ## Capabilities
 
+The source branch also contains the [October audit corrections](docs/implementation-2026-10-23/VALIDATION.md), currently unreleased. Their updated dependencies require Python 3.11 or later. Published v4.0.1 binaries remain unchanged.
+
 - Cube, Ring and Fibonacci layouts, selectable views, FOV, pitch and output resolution.
 - Flat media passthrough at native resolution with the same filtering and masking options.
 - GUI and Qt-free CLI execution; settings saved separately from each job's configuration.
@@ -35,7 +37,7 @@ git clone --branch v4.0.1 https://github.com/nicolasdiolez/360Extractor.git
 cd 360Extractor
 ```
 
-Use a supported Python interpreter with its own environment. The local correction tests use Python 3.13; CI targets Python 3.11. Wider Python compatibility is not yet qualified.
+Use a supported Python interpreter with its own environment. Current development sources require Python 3.11 or later. The local correction tests use Python 3.13; CI targets Python 3.11. Wider Python compatibility is not yet qualified.
 
 ```sh
 python3.13 -m venv .venv

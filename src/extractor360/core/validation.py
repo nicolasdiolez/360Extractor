@@ -68,6 +68,9 @@ def validate_settings(settings: dict[str, Any]) -> dict[str, Any]:
     faces = result.get('ai_mask_cameras')
     if not isinstance(faces, (list, str, type(None))):
         raise ValueError('ai_mask_cameras must be a list or comma-separated string')
+    if isinstance(faces, list) and any(not isinstance(face, str) for face in faces):
+        raise ValueError('ai_mask_cameras must contain only face names (strings)')
+    result['ai_mask_cameras'] = [face.strip() for face in (faces.split(',') if isinstance(faces, str) else faces or []) if face.strip()]
     selected = normalize_mask_faces(faces)
     if result['ai_mode'] != 'None' and result['is_360'] and selected:
         available = {v[0].lower() for v in views}

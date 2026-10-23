@@ -46,3 +46,42 @@ def test_incomplete_inference_batch_is_error():
     service.device='cpu'
     with pytest.raises(RuntimeError,match='incomplete'):
         service.process_batch([np.zeros((10,10,3),np.uint8)],mode='generate_mask')
+
+
+def _service_with_result(result, task=None):
+    from types import SimpleNamespace
+    class Model:
+        def __call__(self, images, **kwargs):
+            return [result for _ in images]
+    model = Model()
+    model.task = task
+    service = AIService.__new__(AIService)
+    service.model = model
+    service.target_classes = [0]
+    service.device = 'cpu'
+    return service, SimpleNamespace
+
+
+def test_detection_only_custom_model_cannot_generate_a_keep_everything_mask():
+    from types import SimpleNamespace
+    service, _ = _service_with_result(SimpleNamespace(boxes=[object()], masks=None), task='detect')
+    image = np.zeros((10, 10, 3), np.uint8)
+    with pytest.raises(RuntimeError, match='segmentation model'):
+        service.process_batch([image], mode='generate_mask')
+    assert service.process_batch([image], mode='skip_frame') == [(None, True)]
+
+
+def test_missing_masks_with_detections_is_an_error_even_without_model_task():
+    from types import SimpleNamespace
+    service, _ = _service_with_result(SimpleNamespace(boxes=[object()], masks=None))
+    with pytest.raises(RuntimeError, match='no segmentation masks'):
+        service.process_batch([np.zeros((10, 10, 3), np.uint8)], mode='generate_mask')
+
+
+def test_no_detections_still_returns_a_valid_empty_segmentation_mask():
+    from types import SimpleNamespace
+    service, _ = _service_with_result(SimpleNamespace(boxes=[], masks=None), task='segment')
+    image = np.zeros((10, 10, 3), np.uint8)
+    output, mask = service.process_batch([image], mode='generate_mask')[0]
+    assert output is image
+    assert np.all(mask == 255)

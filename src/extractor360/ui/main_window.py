@@ -10,6 +10,7 @@ Unified 3-column Studio architecture with:
 from __future__ import annotations
 
 import copy
+import math
 import os
 from pathlib import Path
 
@@ -60,12 +61,15 @@ class MainWindow(QMainWindow):
 
         self._loading_settings = True
         self._loaded_settings = {}
+        self._displayed_settings = {}
+        self._job_settings_revisions = {}
         self._media_info = {}
         self.jobs: list[Job] = []
         self.default_settings = {}
         self.custom_output_dir = ""
         self.is_processing = False
         self._controller = None
+        self._waiting_for_preview = False
         self._closing = False
         self._video_cards: list[VideoCard] = []
         self._selected_cards: list[VideoCard] = []
@@ -93,7 +97,7 @@ class MainWindow(QMainWindow):
     def load_stylesheet(self, filename: str):
         qss_path = os.path.join(os.path.dirname(__file__), filename)
         file = QFile(qss_path)
-        if file.open(QFile.ReadOnly | QFile.Text):
+        if file.open(QFile.OpenModeFlag.ReadOnly | QFile.OpenModeFlag.Text):
             stream = QTextStream(file)
             self.setStyleSheet(stream.readAll())
             file.close()
@@ -152,7 +156,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(title_label)
 
         v_sep = QFrame()
-        v_sep.setFrameShape(QFrame.VLine)
+        v_sep.setFrameShape(QFrame.Shape.VLine)
         v_sep.setFixedHeight(16)
         v_sep.setStyleSheet("color: #2E2E3C;")
         layout.addWidget(v_sep)
@@ -212,7 +216,7 @@ class MainWindow(QMainWindow):
 
         add_btn = QPushButton("+ Add Media")
         add_btn.setObjectName("toolBtn")
-        add_btn.setCursor(Qt.PointingHandCursor)
+        add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         add_btn.clicked.connect(self.on_add_video_clicked)
         hdr_layout.addWidget(add_btn)
         layout.addLayout(hdr_layout)
@@ -226,7 +230,7 @@ class MainWindow(QMainWindow):
         # Scrollable Cards Area
         self.cards_scroll = QScrollArea()
         self.cards_scroll.setWidgetResizable(True)
-        self.cards_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.cards_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.cards_scroll.setStyleSheet("QScrollArea, QScrollArea > QWidget { border: none; background-color: transparent; }")
 
         self.cards_container = QWidget()
@@ -282,7 +286,7 @@ class MainWindow(QMainWindow):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea, QScrollArea > QWidget { border: none; background-color: transparent; }")
 
         container = QWidget()
@@ -340,15 +344,16 @@ class MainWindow(QMainWindow):
 
         grid.addWidget(QLabel("FOV:"), 2, 0)
         fov_layout = QHBoxLayout()
-        self.fov_slider = QSlider(Qt.Horizontal)
-        self.fov_slider.setRange(45, 140)
+        self.fov_slider = QSlider(Qt.Orientation.Horizontal)
+        self.fov_slider.setRange(1, 179)
         self.fov_slider.setValue(90)
-        self.fov_spin = QSpinBox()
-        self.fov_spin.setRange(45, 140)
+        self.fov_spin = QDoubleSpinBox()
+        self.fov_spin.setDecimals(3)
+        self.fov_spin.setRange(1, 179)
         self.fov_spin.setValue(90)
-        self.fov_spin.setFixedWidth(50)
+        self.fov_spin.setMinimumWidth(75)
         self.fov_slider.valueChanged.connect(self.fov_spin.setValue)
-        self.fov_spin.valueChanged.connect(self.fov_slider.setValue)
+        self.fov_spin.valueChanged.connect(self._sync_fov_slider)
         self.fov_spin.valueChanged.connect(self.on_setting_changed)
         fov_layout.addWidget(self.fov_slider)
         fov_layout.addWidget(self.fov_spin)
@@ -420,7 +425,7 @@ class MainWindow(QMainWindow):
 
         blur_row.addWidget(QLabel("Min:"))
         self.blur_threshold_spin = QDoubleSpinBox()
-        self.blur_threshold_spin.setRange(0.0, 1000.0)
+        self.blur_threshold_spin.setRange(0.0, 1e9)
         self.blur_threshold_spin.setValue(100.0)
         self.blur_threshold_spin.setFixedWidth(65)
         self.blur_threshold_spin.valueChanged.connect(self.on_setting_changed)
@@ -446,7 +451,7 @@ class MainWindow(QMainWindow):
         sharp_row.addWidget(self.sharpen_toggle)
 
         self.sharpen_slider = QDoubleSpinBox()
-        self.sharpen_slider.setRange(0.0, 2.0)
+        self.sharpen_slider.setRange(0.0, 5.0)
         self.sharpen_slider.setSingleStep(0.1)
         self.sharpen_slider.setValue(0.5)
         self.sharpen_slider.setFixedWidth(55)
@@ -461,7 +466,7 @@ class MainWindow(QMainWindow):
         flow_row.addWidget(self.adaptive_toggle)
 
         self.motion_threshold_spin = QDoubleSpinBox()
-        self.motion_threshold_spin.setRange(0.1, 10.0)
+        self.motion_threshold_spin.setRange(0.0, 1e6)
         self.motion_threshold_spin.setSingleStep(0.1)
         self.motion_threshold_spin.setValue(0.5)
         self.motion_threshold_spin.setFixedWidth(55)
@@ -507,7 +512,7 @@ class MainWindow(QMainWindow):
         nadir_row.addWidget(self.nadir_toggle)
 
         self.nadir_radius_spin = QDoubleSpinBox()
-        self.nadir_radius_spin.setRange(1.0, 100.0)
+        self.nadir_radius_spin.setRange(0.0, 100.0)
         self.nadir_radius_spin.setValue(40.0)
         self.nadir_radius_spin.setSuffix("%")
         self.nadir_radius_spin.setFixedWidth(65)
@@ -532,7 +537,7 @@ class MainWindow(QMainWindow):
 
         adv_grid.addWidget(QLabel("Confidence:"), 1, 0)
         self.ai_conf_spin = QDoubleSpinBox()
-        self.ai_conf_spin.setRange(0.05, 1.0)
+        self.ai_conf_spin.setRange(0.0, 1.0)
         self.ai_conf_spin.setSingleStep(0.05)
         self.ai_conf_spin.setValue(0.25)
         self.ai_conf_spin.valueChanged.connect(self.on_setting_changed)
@@ -620,7 +625,8 @@ class MainWindow(QMainWindow):
         grid.addWidget(QLabel("Interval:"), 1, 0)
         int_row = QHBoxLayout()
         self.interval_spin = QDoubleSpinBox()
-        self.interval_spin.setRange(0.01, 1000.0)
+        self.interval_spin.setDecimals(3)
+        self.interval_spin.setRange(0.001, 86400.0)
         self.interval_spin.setValue(1.0)
         self.interval_spin.setFixedWidth(55)
         self.interval_spin.valueChanged.connect(self.on_setting_changed)
@@ -731,7 +737,7 @@ class MainWindow(QMainWindow):
 
         self.extract_btn = QPushButton("Extract Dataset")
         self.extract_btn.setObjectName("primaryActionBtn")
-        self.extract_btn.setCursor(Qt.PointingHandCursor)
+        self.extract_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.extract_btn.clicked.connect(self.start_processing)
         layout.addWidget(self.extract_btn)
 
@@ -744,19 +750,22 @@ class MainWindow(QMainWindow):
     def apply_preset(self, preset_name):
         if self.is_processing or self._loading_settings or preset_name == "Custom Workflow":
             return
-        settings = copy.deepcopy(SettingsManager.DEFAULT_SETTINGS)
-        settings.update(is_360=True, layout_mode='cube', camera_count=6,
+        # A preset is an explicit patch for every selected job. Comparing only
+        # with the active card loses fields already equal to the preset there.
+        changes = dict(is_360=True, layout_mode='cube', camera_count=6,
                         ai_mode='Generate Mask', ai_mask_cameras=['Down'],
                         export_colmap=True, nadir_mask_enabled=True,
-                        custom_output_dir=self.custom_output_dir, active_cameras=None)
+                        active_cameras=None, fov=90, pitch_offset=0,
+                        resolution=2048, interpolation_mode='linear', output_format='jpg',
+                        interval_value=1.0, interval_unit='Seconds', feather_mask=False,
+                        nadir_mask_radius=40.0, naming_mode='realityscan', ai_invert_mask=True)
         if "Postshot" in preset_name:
-            settings.update(feather_mask=True, nadir_mask_radius=35.0)
+            changes.update(feather_mask=True, nadir_mask_radius=35.0)
         elif "COLMAP" in preset_name:
-            settings.update(resolution=3072, interpolation_mode='lanczos', output_format='png', interval_value=0.5)
-        previous = copy.deepcopy(self._loaded_settings)
+            changes.update(resolution=3072, interpolation_mode='lanczos', output_format='png', interval_value=0.5)
+        settings = {**self.get_settings_from_ui(), **changes}
         self.set_ui_from_settings(settings)
-        self._loaded_settings = previous
-        self.on_setting_changed()
+        self._commit_ui_settings(settings, changes)
         with QSignalBlocker(self.preset_combo):
             self.preset_combo.setCurrentText(preset_name)
 
@@ -768,6 +777,15 @@ class MainWindow(QMainWindow):
     # =========================================================================
 
     def get_settings_from_ui(self) -> dict:
+        settings = self._read_settings_from_widgets()
+        # Widgets may round a valid value. An unrelated edit must not silently
+        # replace its original precision, including in a multiple selection.
+        for key, value in self._loaded_settings.items():
+            if key in self._displayed_settings and settings.get(key) == self._displayed_settings[key]:
+                settings[key] = copy.deepcopy(value)
+        return settings
+
+    def _read_settings_from_widgets(self) -> dict:
         return {
             **copy.deepcopy(self._loaded_settings),
             'quality': self.quality_spin.value(),
@@ -844,7 +862,7 @@ class MainWindow(QMainWindow):
         self.interval_unit.setCurrentText(settings.get('interval_unit', 'Seconds'))
         self.res_spin.setValue(settings.get('resolution', 2048))
         self.fov_spin.setValue(settings.get('fov', 90))
-        self.fov_slider.setValue(self.fov_spin.value())
+        self.fov_slider.setValue(round(self.fov_spin.value()))
         self.cam_count_spin.setValue(settings.get('camera_count', 6))
 
         layout_val = settings.get('layout_mode', 'cube')
@@ -919,7 +937,12 @@ class MainWindow(QMainWindow):
         self._apply_360_state(self.input_360_toggle.isChecked())
         self.preset_combo.setCurrentText("Custom Workflow")
         del blockers
+        self._displayed_settings = self._read_settings_from_widgets()
         self._loading_settings = False
+
+    def _sync_fov_slider(self, value):
+        with QSignalBlocker(self.fov_slider):
+            self.fov_slider.setValue(round(value))
 
     def _rebuild_mask_faces(self, settings):
         for checkbox in self.mask_face_checks.values():
@@ -948,10 +971,18 @@ class MainWindow(QMainWindow):
             return
 
         current_settings = self.get_settings_from_ui()
+        changes = {k: v for k, v in current_settings.items() if self._loaded_settings.get(k) != v}
+        if set(changes) & {'is_360', 'camera_count', 'layout_mode', 'pitch_offset', 'active_cameras'}:
+            self._rebuild_mask_faces(current_settings)
+        self._commit_ui_settings(current_settings, changes)
+
+    def _commit_ui_settings(self, current_settings, changes):
         if self._selected_cards:
             for card in self._selected_cards:
-                changes = {k: v for k, v in current_settings.items() if self._loaded_settings.get(k) != v}
                 card.job.settings.update(copy.deepcopy(changes))
+                if changes:
+                    key = id(card.job)
+                    self._job_settings_revisions[key] = self._job_settings_revisions.get(key, 0) + 1
                 card.refresh()
         else:
             self.default_settings = current_settings
@@ -960,6 +991,7 @@ class MainWindow(QMainWindow):
             self.settings_manager.save_settings()
 
         self._loaded_settings = copy.deepcopy(current_settings)
+        self._displayed_settings = self._read_settings_from_widgets()
         with QSignalBlocker(self.preset_combo):
             self.preset_combo.setCurrentText("Custom Workflow")
         self.update_preview_display()
@@ -974,7 +1006,6 @@ class MainWindow(QMainWindow):
             self.cam_count_spin.setEnabled(False)
         else:
             self.cam_count_spin.setEnabled(True)
-        self._rebuild_mask_faces(self.get_settings_from_ui())
         self.on_setting_changed()
 
     def on_360_toggled(self, checked: bool):
@@ -1166,9 +1197,12 @@ class MainWindow(QMainWindow):
                 cams = len(s['active_cameras'])
 
             if interval_unit == 'Frames':
-                extracted_frames = max(1, int(frame_count / max(1.0, interval_val)))
+                from extractor360.core.frame_timing import frame_step
+                step = frame_step(interval_val)
+                extracted_frames = max(1, math.ceil(frame_count / step))
             else:
-                extracted_frames = max(1, int((frame_count / fps) / max(0.1, interval_val)))
+                # PTS sampling cannot be inferred exactly from nominal FPS.
+                extracted_frames = max(1, min(frame_count, math.ceil((frame_count / fps) / max(0.001, interval_val))))
 
             job_images = extracted_frames * cams
             total_images += job_images
@@ -1181,7 +1215,7 @@ class MainWindow(QMainWindow):
 
         gb_size = total_size_mb / 1024.0
         self.estimation_label.setText(
-            f"Up to {total_images:,} pinhole images ({len(self.jobs)} media) • ~{gb_size:.1f} GB before masks • filters may reduce count"
+            f"Estimated {total_images:,} pinhole images ({len(self.jobs)} media) • ~{gb_size:.1f} GB before masks • filters may reduce count"
         )
         self.extract_btn.setText(f"Extract Dataset ({len(self.jobs)} video{'s' if len(self.jobs) > 1 else ''})")
         self.extract_btn.setEnabled(not self.is_processing and not self._closing)
@@ -1202,8 +1236,10 @@ class MainWindow(QMainWindow):
         self.btn_analyze.setEnabled(False)
 
         self._blur_job = card.job
+        self._blur_settings = copy.deepcopy(card.job.settings or self.default_settings)
+        self._blur_revision = self._job_settings_revisions.get(id(card.job), 0)
         self._blur_thread = QThread(self)
-        self._blur_worker = BlurAnalysisWorker(card.job.file_path, copy.deepcopy(card.job.settings or self.default_settings))
+        self._blur_worker = BlurAnalysisWorker(card.job.file_path, copy.deepcopy(self._blur_settings))
         self._blur_worker.moveToThread(self._blur_thread)
 
         self._blur_thread.started.connect(self._blur_worker.run)
@@ -1226,8 +1262,12 @@ class MainWindow(QMainWindow):
     def _on_blur_analysis_finished(self, result: dict):
         if self._closing or self._blur_job not in self.jobs:
             return
+        if (self._job_settings_revisions.get(id(self._blur_job), 0) != self._blur_revision
+                or (self._blur_job.settings or self.default_settings) != self._blur_settings):
+            self.log_panel.log("Blur analysis discarded because the job settings changed. Run Analyze again.")
+            return
         # A conservative suggestion from one sample, never a calibrated guarantee.
-        threshold = max(0.0, float(result['average']) * 0.6)
+        threshold = min(1e9, max(0.0, float(result['average']) * 0.6))
         self._blur_job.settings.update(blur_threshold=threshold, blur_filter_enabled=True)
         if self._selected_cards and self._selected_cards[-1].job is self._blur_job:
             self.set_ui_from_settings(self._blur_job.settings)
@@ -1242,6 +1282,28 @@ class MainWindow(QMainWindow):
             return
         self._processing_jobs = [j for j in self.jobs if j.status in ("Pending", "Error", "Cancelled")] or list(self.jobs)
         self._active_job_index = 0
+        # A native preview call may still hold its model after cancellation.
+        # Drain it asynchronously before extraction loads another AI service.
+        self.preview_widget.suspend()
+        self._waiting_for_preview = True
+        self.is_processing = True
+        self.left_panel.setEnabled(False)
+        self.right_panel.setEnabled(False)
+        self.top_nav.setEnabled(False)
+        self.extract_btn.setEnabled(False)
+        self.cancel_btn.setEnabled(True)
+        self.hud_progress.show()
+        self.hud_progress.setValue(0)
+        self._start_when_preview_idle()
+
+    def _start_when_preview_idle(self):
+        if not self._waiting_for_preview or self._closing:
+            return
+        if self.preview_widget.threadpool.activeThreadCount():
+            self.estimation_label.setText("Waiting for the current preview to stop…")
+            QTimer.singleShot(50, self._start_when_preview_idle)
+            return
+        self._waiting_for_preview = False
         try:
             self._controller = ProcessingController(self._processing_jobs, self)
             self.worker = self._controller.worker
@@ -1252,20 +1314,17 @@ class MainWindow(QMainWindow):
             bridge.job_error.connect(self._on_job_error)
             bridge.job_cancelled.connect(self._on_job_cancelled)
             self._controller.finished.connect(self._on_processing_finished)
-            self.is_processing = True
-            self.left_panel.setEnabled(False)
-            self.right_panel.setEnabled(False)
-            self.top_nav.setEnabled(False)
-            self.extract_btn.setEnabled(False)
-            self.cancel_btn.setEnabled(True)
-            self.hud_progress.show()
-            self.hud_progress.setValue(0)
             self._controller.start()
         except Exception as exc:
             self.log_panel.log(f"Could not start extraction: {exc}", "ERROR")
             self._on_processing_finished()
 
     def cancel_processing(self):
+        if self._waiting_for_preview:
+            self._waiting_for_preview = False
+            self.log_panel.log("Extraction cancelled before starting.")
+            self._on_processing_finished()
+            return
         if self._controller:
             self._controller.stop()
             self.cancel_btn.setEnabled(False)
@@ -1317,11 +1376,16 @@ class MainWindow(QMainWindow):
         if self._controller:
             self._controller.deleteLater()
             self._controller = None
+        if not self._closing:
+            self.preview_widget.resume()
         self.update_estimate()
         self.log_panel.log("Extraction stopped." if getattr(self, "worker", None) is None or not self.worker.is_running else "Extraction complete. Check job results for errors.")
 
     def closeEvent(self, event):
         self._closing = True
+        if self._waiting_for_preview:
+            self._waiting_for_preview = False
+            self.is_processing = False
         if self._controller:
             self._controller.stop()
         if self._blur_worker:
