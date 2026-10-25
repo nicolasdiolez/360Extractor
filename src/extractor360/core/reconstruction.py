@@ -10,10 +10,12 @@ import os
 from pathlib import Path, PureWindowsPath
 import re
 import shutil
+import struct
 import subprocess
 import sys
 from typing import TypeGuard
 import unicodedata
+import zlib
 
 
 def _camera_name(value):
@@ -88,7 +90,44 @@ def _copy_exclusive(source, target):
     shutil.copystat(source, target)
 
 
+def _white_mask_for_mixed_export(entries):
+    """Fill unmasked views only when COLMAP must load per-image PNG masks.
+
+    A 360 export uses the same resolution for every view. Read that size from
+    its existing masks, rather than adding Pillow to this standalone runner.
+    Validate all headers before staging any files; do not guess dimensions.
+    """
+    masks = [mask for _, _, mask in entries if mask is not None]
+    if not masks or len(masks) == len(entries):
+        return None
+    sizes = set()
+    for mask in masks:
+        with mask.open('rb') as file:
+            header = file.read(24)
+        if len(header) != 24 or header[:16] != b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR':
+            raise ValueError('Mixed exports require PNG masks with valid dimensions')
+        size = struct.unpack('>II', header[16:24])
+        if not all(16 <= dimension <= 8192 for dimension in size):
+            raise ValueError('Mask dimensions exceed supported export resolution (16..8192)')
+        sizes.add(size)
+    if len(sizes) != 1:
+        raise ValueError('Mixed export masks must share the same dimensions')
+    width, height = sizes.pop()
+
+    def chunk(kind, data):
+        return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
+
+    # Compress one row at a time instead of allocating an entire 8K image.
+    compressor = zlib.compressobj()
+    row = b'\x00' + b'\xff' * width
+    pixels = b''.join(compressor.compress(row) for _ in range(height)) + compressor.flush()
+    return (b'\x89PNG\r\n\x1a\n'
+            + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 0, 0, 0, 0))
+            + chunk(b'IDAT', pixels) + chunk(b'IEND', b''))
+
+
 def _stage(entries, destination):
+    white_mask = _white_mask_for_mixed_export(entries)
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=False)
     names = []
@@ -102,10 +141,14 @@ def _stage(entries, destination):
                 raise
             _copy_exclusive(source, target)
         names.append(relative.as_posix())
-        if mask_source is not None:
+        if mask_source is not None or white_mask is not None:
             mask = destination / 'masks' / (relative.as_posix() + '.png')
             mask.parent.mkdir(parents=True, exist_ok=True)
-            _copy_exclusive(mask_source, mask)
+            if mask_source is not None:
+                _copy_exclusive(mask_source, mask)
+            else:
+                with mask.open('xb') as file:
+                    file.write(white_mask)
     (destination / 'images.txt').write_text('\n'.join(names) + '\n', encoding='utf-8')
     (destination / 'masks').mkdir(exist_ok=True)
     return destination
@@ -181,12 +224,14 @@ def main():
     _stage(entries, destination)
     database = str(destination / 'database.db')
     images = str(destination / 'images')
-    subprocess.run([colmap, 'feature_extractor', '--database_path', database,
+    feature_command = [colmap, 'feature_extractor', '--database_path', database,
                     '--image_path', images, '--image_list_path', str(destination / 'images.txt'),
-                    '--ImageReader.mask_path', str(destination / 'masks'),
                     '--ImageReader.camera_model', 'PINHOLE',
                     '--ImageReader.camera_params', ','.join(str(p) for p in params),
-                    '--ImageReader.single_camera_per_folder', '1'], check=True)
+                    '--ImageReader.single_camera_per_folder', '1']
+    if any(mask is not None for _, _, mask in entries):
+        feature_command += ['--ImageReader.mask_path', str(destination / 'masks')]
+    subprocess.run(feature_command, check=True)
     subprocess.run([colmap, 'rig_configurator', '--database_path', database,
                     '--rig_config_path', str(calibration / 'rig_config.json')], check=True)
     subprocess.run([colmap, 'sequential_matcher', '--database_path', database], check=True)
