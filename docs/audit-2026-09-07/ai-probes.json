@@ -1,0 +1,22 @@
+{
+  "failed_model_silent_passthrough": {
+    "model_is_none": true,
+    "output_image_present": true,
+    "mask_is_none": true
+  },
+  "soft_mask_values": [
+    0,
+    255
+  ],
+  "local_model_loaded": true,
+  "blank_cpu_inference": {
+    "mask_shape": [
+      64,
+      64
+    ],
+    "unique_values": [
+      255
+    ]
+  },
+  "elapsed_seconds": 0.1583958330011228
+}

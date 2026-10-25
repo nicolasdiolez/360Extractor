@@ -9,6 +9,7 @@ is available, the absolute view direction (GPSImgDirection).
 
 All builders are pure; the only I/O is in :func:`save_image_with_exif`.
 """
+from fractions import Fraction
 import math
 import os
 
@@ -38,7 +39,15 @@ def focal_px_from_fov(fov_deg: float, width_px: int) -> float:
 
 
 def _rational(value: float, den: int = 1000):
-    return (int(round(value * den)), den)
+    value = float(value)
+    maximum = (1 << 32) - 1
+    if not math.isfinite(value) or not 0 <= value <= maximum:
+        raise ValueError("EXIF unsigned rational must be finite and within uint32 range")
+    # Bound numerator as well as denominator; reducing a fixed-denominator
+    # fraction alone cannot guarantee that its numerator fits EXIF LONG.
+    safe_den = min(den, max(1, int(maximum / max(1.0, value))))
+    fraction = Fraction(value).limit_denominator(safe_den)
+    return fraction.numerator, fraction.denominator
 
 
 def _deg_min_sec(value: float):
@@ -69,7 +78,8 @@ def build_exif_bytes(fov_deg=None, capture_dt=None, gps=None, heading_deg=None,
         camera_model: EXIF Model string. Keep it identical for all views that
             share intrinsics so tools group them under one calibration.
     """
-    zeroth, exif_ifd, gps_ifd = {}, {}, {}
+    zeroth, exif_ifd = {}, {}
+    gps_ifd: dict[int, bytes | int | tuple[int, int] | tuple[tuple[int, int], ...]] = {}
 
     zeroth[piexif.ImageIFD.Software] = f"{APP_NAME} {VERSION}".encode()
     if camera_model:
@@ -95,8 +105,9 @@ def build_exif_bytes(fov_deg=None, capture_dt=None, gps=None, heading_deg=None,
         gps_ifd[piexif.GPSIFD.GPSLongitude] = _deg_min_sec(lon)
         # GPSAltitude is an UNSIGNED rational; the sign lives in GPSAltitudeRef
         # (0 = above sea level, 1 = below).
-        gps_ifd[piexif.GPSIFD.GPSAltitudeRef] = 0 if alt >= 0 else 1
-        gps_ifd[piexif.GPSIFD.GPSAltitude] = _rational(abs(alt), 1000000)
+        if alt is not None:
+            gps_ifd[piexif.GPSIFD.GPSAltitudeRef] = 0 if alt >= 0 else 1
+            gps_ifd[piexif.GPSIFD.GPSAltitude] = _rational(abs(alt), 1000000)
 
     if heading_deg is not None:
         # Round to the stored precision BEFORE the final wrap so 359.999…
@@ -116,8 +127,7 @@ def save_image_with_exif(path: str, image, params, exif_bytes: bytes) -> bool:
     - PNG/TIFF: build the image with Pillow directly from the array (lossless)
       and save once with EXIF.
 
-    Falls back to a plain write (no EXIF) if anything goes wrong, so an EXIF
-    problem can never lose the image itself.
+    Raises on image or metadata failure so the caller can report a partial run.
     """
     ext = os.path.splitext(path)[1].lower()
     try:
@@ -132,8 +142,4 @@ def save_image_with_exif(path: str, image, params, exif_bytes: bytes) -> bool:
         return True
     except Exception as e:
         logger.error(f"Error writing {path} with EXIF: {type(e).__name__} - {e}")
-        try:
-            cv2.imwrite(path, image, params or [])
-        except Exception:
-            pass
-        return False
+        raise OSError(f"Could not write image and EXIF to {path}") from e

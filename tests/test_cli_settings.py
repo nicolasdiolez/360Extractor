@@ -7,10 +7,15 @@ where, e.g., ``blur_threshold`` from the JSON never reached the processor and a
 hard-coded default of 100.0 was used instead.
 """
 import argparse
+import builtins
+import json
 import os
 import re
 import sys
 import unittest
+from unittest.mock import MagicMock
+
+import pytest
 
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -207,3 +212,72 @@ class TestNormalizeMaskFaces(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_load_config_reads_real_utf8_under_non_utf8_default(tmp_path, monkeypatch):
+    from extractor360 import main as cli
+
+    value = {'input': str(tmp_path / 'Vidéos' / 'été.mp4')}
+    config = tmp_path / 'réglages.json'
+    config.write_text(json.dumps(value, ensure_ascii=False), encoding='utf-8')
+    encodings = []
+
+    def legacy_locale_open(path, mode='r', *args, encoding=None, **kwargs):
+        encodings.append(encoding)
+        return builtins.open(path, mode, *args, encoding=encoding or 'cp1252', **kwargs)
+
+    monkeypatch.setattr(cli, 'open', legacy_locale_open, raising=False)
+    assert cli.load_config(config) == value
+    assert encodings == ['utf-8']
+
+
+@pytest.mark.parametrize('active', [[True], [1.9], {}, 1, True, [], '0,1'])
+def test_run_cli_rejects_invalid_json_camera_types_before_work(tmp_path, monkeypatch, active):
+    from extractor360 import main as cli
+
+    source = tmp_path / 'source.png'
+    source.write_bytes(b'not decoded during validation')
+    destination = tmp_path / 'new' / 'output'
+    config = tmp_path / 'settings.json'
+    config.write_text(json.dumps({'input': str(source), 'output': str(destination),
+                                 'active_cameras': active}), encoding='utf-8')
+    worker = MagicMock()
+    monkeypatch.setattr(cli, 'ProcessingWorker', worker)
+    with pytest.raises(SystemExit) as rejected:
+        cli.run_cli(make_args(config=str(config)))
+    assert rejected.value.code == 2
+    worker.assert_not_called()
+    assert not destination.parent.exists()
+
+
+@pytest.mark.parametrize('active', ['true', '1.9', '', '0,'])
+def test_run_cli_rejects_invalid_camera_option_without_output(tmp_path, monkeypatch, active):
+    from extractor360 import main as cli
+
+    source = tmp_path / 'source.png'
+    source.write_bytes(b'fixture')
+    destination = tmp_path / 'new' / 'output'
+    worker = MagicMock()
+    monkeypatch.setattr(cli, 'ProcessingWorker', worker)
+    with pytest.raises(SystemExit) as rejected:
+        cli.run_cli(make_args(input=str(source), output=str(destination), active_cameras=active))
+    assert rejected.value.code == 2
+    worker.assert_not_called()
+    assert not destination.parent.exists()
+
+
+def test_run_cli_camera_option_overrides_json_without_coercing_it(tmp_path, monkeypatch):
+    from extractor360 import main as cli
+
+    source = tmp_path / 'source.png'
+    source.write_bytes(b'fixture')
+    config = tmp_path / 'settings.json'
+    config.write_text(json.dumps({'input': str(source), 'active_cameras': [True]}), encoding='utf-8')
+    worker = MagicMock()
+    worker.return_value.error_count = 0
+    monkeypatch.setattr(cli, 'ProcessingWorker', worker)
+    monkeypatch.setattr(cli, 'TQDM_AVAILABLE', False)
+    cli.run_cli(make_args(config=str(config), output=str(tmp_path / 'output'), active_cameras=' 0, 2 '))
+    jobs = worker.call_args.args[0]
+    assert jobs[0].settings['active_cameras'] == [0, 2]
+    worker.return_value.run.assert_called_once_with()

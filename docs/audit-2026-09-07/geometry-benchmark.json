@@ -1,0 +1,20 @@
+[
+  {
+    "resolution": 512,
+    "seconds": 0.0141,
+    "peak_rss_mib": 82.4,
+    "fixed_map_mib": 1.5
+  },
+  {
+    "resolution": 1024,
+    "seconds": 0.0516,
+    "peak_rss_mib": 184.4,
+    "fixed_map_mib": 6.0
+  },
+  {
+    "resolution": 2048,
+    "seconds": 0.1751,
+    "peak_rss_mib": 592.5,
+    "fixed_map_mib": 24.0
+  }
+]

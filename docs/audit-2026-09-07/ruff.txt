@@ -1,0 +1,25 @@
+F401 [*] `os` imported but unused
+  --> scripts/make_screenshot.py:15:8
+   |
+14 | import argparse
+15 | import os
+   |        ^^
+16 | import sys
+17 | import tempfile
+   |
+help: Remove unused import: `os`
+
+F401 [*] `PySide6.QtWidgets.QSpinBox` imported but unused
+  --> scripts/mockup_studio_ui.py:37:40
+   |
+35 |     QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFrame,
+36 |     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
+37 |     QPushButton, QScrollArea, QSlider, QSpinBox,
+   |                                        ^^^^^^^^
+38 |     QSplitter, QVBoxLayout, QWidget
+39 | )
+   |
+help: Remove unused import: `PySide6.QtWidgets.QSpinBox`
+
+Found 2 errors.
+[*] 2 fixable with the `--fix` option.

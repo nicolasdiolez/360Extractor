@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, Slot, QObject
 from PySide6.QtGui import QTextCursor
 import logging
+import html
 from datetime import datetime
 
 
@@ -107,6 +108,7 @@ class LogPanel(QWidget):
         
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
+        self.log_text.document().setMaximumBlockCount(self._max_lines)
         self.log_text.setObjectName("logText")
         self.log_text.setStyleSheet("""
             QTextEdit#logText {
@@ -147,7 +149,7 @@ class LogPanel(QWidget):
         
         # Add to root logger and Application360 logger
         logging.getLogger().addHandler(self.log_handler)
-        logging.getLogger("Application360").addHandler(self.log_handler)
+
         
     @Slot(str, str)
     def _append_log(self, message, level):
@@ -155,11 +157,13 @@ class LogPanel(QWidget):
         color = self.LEVEL_COLORS.get(level, "#A1A1AA")
         timestamp = datetime.now().strftime("%H:%M:%S")
         
-        html = f'<span style="color: #52525B;">{timestamp}</span> <span style="color: {color};">{message}</span><br>'
+        markup = f'<span style="color: #52525B;">{timestamp}</span> <span style="color: {color};">{html.escape(message)}</span>'
         
         cursor = self.log_text.textCursor()
         cursor.movePosition(QTextCursor.End)
-        cursor.insertHtml(html)
+        if not self.log_text.document().isEmpty():
+            cursor.insertBlock()
+        cursor.insertHtml(markup)
         
         # Auto-scroll to bottom
         self.log_text.setTextCursor(cursor)
@@ -196,6 +200,10 @@ class LogPanel(QWidget):
         self.log_text.clear()
         self.title_label.setText("📋 Logs")
         
+    def shutdown(self):
+        logging.getLogger().removeHandler(self.log_handler)
+        self.log_handler.close()
+
     def log(self, message, level="INFO"):
         """Manually add a log message."""
         self._append_log(f"[{level}] {message}", level)

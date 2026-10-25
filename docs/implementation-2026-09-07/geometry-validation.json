@@ -1,0 +1,48 @@
+{
+  "comparisons": [
+    {
+      "angles": [
+        0,
+        0,
+        0
+      ],
+      "max_error": 0.0
+    },
+    {
+      "angles": [
+        90,
+        -20,
+        0
+      ],
+      "max_error": 0.0
+    },
+    {
+      "angles": [
+        180,
+        90,
+        0
+      ],
+      "max_error": 0.0
+    },
+    {
+      "angles": [
+        250,
+        -60,
+        20
+      ],
+      "max_error": 0.0
+    }
+  ],
+  "2048_elapsed_seconds": 0.16467633299907902,
+  "2048_peak_mib": 100.005126953125,
+  "same_process_comparison": {
+    "before": {
+      "elapsed_seconds": 0.16760641699511325,
+      "peak_mib": 544.0031909942627
+    },
+    "after": {
+      "elapsed_seconds": 0.1688902079986292,
+      "peak_mib": 100.00539970397949
+    }
+  }
+}

@@ -1,0 +1,40 @@
+Name                                         Stmts   Miss  Cover   Missing
+--------------------------------------------------------------------------
+src/extractor360/__init__.py                     1      0   100%
+src/extractor360/__main__.py                     3      3     0%   2-5
+src/extractor360/core/__init__.py                0      0   100%
+src/extractor360/core/ai_classes.py             25     11    56%   33, 37, 41, 74-83
+src/extractor360/core/ai_model.py               91     91     0%   1-181
+src/extractor360/core/analyzer.py               43     43     0%   1-87
+src/extractor360/core/colmap_export.py          85     13    85%   50-54, 62-66, 239-241
+src/extractor360/core/events.py                 15      6    60%   21-27
+src/extractor360/core/exif_writer.py            67      8    88%   127, 133-139
+src/extractor360/core/geometry.py               62      0   100%
+src/extractor360/core/job.py                    66      9    86%   29, 50, 54, 58, 70, 78-79, 87, 89
+src/extractor360/core/motion_detector.py        18     11    39%   14-44
+src/extractor360/core/processor.py             397    122    69%   64-72, 75-76, 101, 107-117, 128-131, 144, 151-153, 158, 162, 168-171, 185, 192, 203, 216, 227, 229, 247-251, 253, 263, 265, 269, 273, 305-307, 326-327, 335, 346, 367, 375, 397, 410-411, 439-447, 458, 470-504, 508-509, 524-546, 559, 564, 581, 587-588, 599-611, 628, 639, 647-650, 663, 668-673, 715-716
+src/extractor360/core/settings_manager.py      100     19    81%   72, 81-82, 86-94, 106, 176, 180, 189, 201, 203, 207, 230
+src/extractor360/core/telemetry.py             212    121    43%   75-149, 155-179, 185-207, 213-238, 244-256, 264, 272, 274, 281, 316, 350-365
+src/extractor360/core/version.py                 4      0   100%
+src/extractor360/main.py                       162    162     0%   3-237
+src/extractor360/ui/__init__.py                  0      0   100%
+src/extractor360/ui/collapsible_section.py      78     78     0%   5-146
+src/extractor360/ui/icons.py                    61     61     0%   5-116
+src/extractor360/ui/log_panel.py                97     97     0%   4-201
+src/extractor360/ui/main_window.py             877    877     0%   10-1237
+src/extractor360/ui/preview_widget.py          307    307     0%   9-439
+src/extractor360/ui/sidebar.py                  94     94     0%   1-182
+src/extractor360/ui/toggle_switch.py            97     97     0%   5-150
+src/extractor360/ui/video_card.py              189    189     0%   5-300
+src/extractor360/ui/widgets.py                  55     55     0%   1-73
+src/extractor360/ui/workers.py                  28     28     0%   2-49
+src/extractor360/utils/__init__.py               0      0   100%
+src/extractor360/utils/camm_parser.py           68     31    54%   28, 33-34, 47-59, 63, 75-76, 84-102
+src/extractor360/utils/file_manager.py          32     14    56%   16-18, 23-31, 39-41
+src/extractor360/utils/gpmf_parser.py           90     14    84%   35, 72-73, 126, 146, 152, 170-171, 185, 200, 208, 211, 234-235
+src/extractor360/utils/gpx_parser.py            44      5    89%   75-76, 84-86
+src/extractor360/utils/image_utils.py           11      0   100%
+src/extractor360/utils/logger.py                12      0   100%
+src/extractor360/utils/srt_parser.py            75     12    84%   38-40, 77, 83, 90, 97-98, 127-128, 137-138
+--------------------------------------------------------------------------
+TOTAL                                         3566   2578    28%

@@ -1,0 +1,396 @@
+{
+  "commit": "eef3edac24f4334180955848679137c123fa3e66",
+  "files": [
+    {
+      "path": ".claude/settings.local.json",
+      "bytes": 1139,
+      "sha256": "a80fcc8f224084684f1795790559fd8a3dfb87b84eb2b2ca75b590e497fcda39"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug_report.yml",
+      "bytes": 2708,
+      "sha256": "caef71f546640b01929abf4b67efd2531025314784592627f865b52990b5d02e"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/feature_request.yml",
+      "bytes": 1863,
+      "sha256": "e1177387c8f86f420be78ddcf079367921b7de872a94545743016928565f82cb"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "bytes": 1949,
+      "sha256": "3f2ff9f64cb50ea5a8ba6323bd7304099f181a50d32a5ca552c3f8437b0e96a0"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "bytes": 4368,
+      "sha256": "8a976884d31bd5f3d35f06b4370aec530b9985b16800eee96bbf9d03a7ece91a"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 740,
+      "sha256": "0981eedd1cd9f1260f8c0eaf73cbcc0a38a11053bcac0de7b9b36af4cd5a9c75"
+    },
+    {
+      "path": "360Extractor.spec",
+      "bytes": 3641,
+      "sha256": "7f69b3e89b75946f35694f0a6e9402f38a66880634a3de23ccddb3065a9d8daa"
+    },
+    {
+      "path": "ARCHITECTURE.md",
+      "bytes": 7743,
+      "sha256": "be41c056100f63b75e254083fc2ba132b3cc57c49578f28d7c5f87e2e0f831f7"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "bytes": 23353,
+      "sha256": "50ffa81fa75614036e31af8603de290428b44abca1c5f2a6994fa03191e10b2b"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "bytes": 3811,
+      "sha256": "46f59d689a8e1f1f7962e5699a1d04fe377e823454d0d0a3f7f613fe9f535c2c"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 34524,
+      "sha256": "8c4ff5a772608da167fe236f8352ba9136bf0083f1c3e220ed4b4002260b1d26"
+    },
+    {
+      "path": "README.md",
+      "bytes": 7212,
+      "sha256": "c5703f30bcf3d728e739c541fbee8cb6db16e57daa01ac0618f624ec37ac8e4f"
+    },
+    {
+      "path": "check_env.py",
+      "bytes": 3493,
+      "sha256": "160b81b933e87cbb5980d46ca0c37e9845b8f3b4993e30b0a11b37e85aabe312"
+    },
+    {
+      "path": "docs/CLI.md",
+      "bytes": 5379,
+      "sha256": "977de697525099edf74567bd76094e3507eac74190d8ea801e6662fb7808821a"
+    },
+    {
+      "path": "docs/SETTINGS.md",
+      "bytes": 8263,
+      "sha256": "03689b9fd70f6280b9516c6b7cdcaac8a09071098240baa123bd40ed32f368c6"
+    },
+    {
+      "path": "docs/images/mockup-studio-gui.png",
+      "bytes": 367110,
+      "sha256": "5e1796adda6d43322b9521337eae726f143451ce5b50c7949f8275f6d30a6d95"
+    },
+    {
+      "path": "docs/images/mockup-theme-a-amber.png",
+      "bytes": 364603,
+      "sha256": "868df2d2c1c0b778ede56dab9af28505695a84daf20fba4d24dcd79c85b0d464"
+    },
+    {
+      "path": "docs/images/mockup-theme-b-titanium.png",
+      "bytes": 364955,
+      "sha256": "d8a4dbca62c17dcfff70d10b6867bf3563e03eae14954332e7b41944660c2911"
+    },
+    {
+      "path": "docs/images/mockup-theme-c-sage.png",
+      "bytes": 367074,
+      "sha256": "1e63fb4417a8e1f3f7d8ef2f56c7023b5270b94e006326baf013e52dd8922e44"
+    },
+    {
+      "path": "docs/images/screenshot-cli.png",
+      "bytes": 175869,
+      "sha256": "8d3c7084042efbfb195dc7193e0f1d80d9e5092189d7f59cac30885f09005ce9"
+    },
+    {
+      "path": "docs/images/screenshot-gui.png",
+      "bytes": 631595,
+      "sha256": "95a2423790393408eb88a434cb1f9f30dc4ee59771ea5db3ba13c2fd60be4149"
+    },
+    {
+      "path": "docs/images/showcase-pipeline.png",
+      "bytes": 353876,
+      "sha256": "746a6f9f9f2a286aec16d31fa4b81dd6c427a951ac2b34977c541210e465d13b"
+    },
+    {
+      "path": "packaging/entrypoint.py",
+      "bytes": 606,
+      "sha256": "78f27f350ee0f20ff1f558850dc3e31ee1c05c45f646c94093677f7251297d34"
+    },
+    {
+      "path": "pyproject.toml",
+      "bytes": 2576,
+      "sha256": "4e2d711254aaffb1147d0643382e17d14f6adbd779fc94fd4f41caf27ac48986"
+    },
+    {
+      "path": "requirements.txt",
+      "bytes": 130,
+      "sha256": "658ab951ddc3d7300a4cf5f599ab39b1fd5e493058273265c7eb943a0c00a702"
+    },
+    {
+      "path": "scripts/check_release.py",
+      "bytes": 5640,
+      "sha256": "74d4f520de08ced03c3768ed07422a84c1c14c7ee121dbc82889d78bc5e9661c"
+    },
+    {
+      "path": "scripts/make_screenshot.py",
+      "bytes": 12665,
+      "sha256": "78970009a6053ef0daa6987d5193617a0ce2f28d642cbb63f64aaf9b2a4d3b8e"
+    },
+    {
+      "path": "scripts/mockup_studio_ui.py",
+      "bytes": 39019,
+      "sha256": "5bb2c201fae17c55407b1cbc0be4a5b098456777a4ac656eb12cf283fda1b823"
+    },
+    {
+      "path": "scripts/release_notes.py",
+      "bytes": 4301,
+      "sha256": "653be76f792d52def3b92309a5517e7e4010d609bfb701766503f70e4c1f6ce3"
+    },
+    {
+      "path": "setup_cuda.py",
+      "bytes": 8118,
+      "sha256": "3a5003fe515e269bfa6cd0599d4a83917ce0ea36c1f92dc5122f5ddb66f333c2"
+    },
+    {
+      "path": "src/extractor360/__init__.py",
+      "bytes": 177,
+      "sha256": "74cd7c36461b4de25987fc491657dcfe7d2c6455abf6fd144f71fd8ca1de8051"
+    },
+    {
+      "path": "src/extractor360/__main__.py",
+      "bytes": 139,
+      "sha256": "c67167c58a561186c7297ec760a6c10d71167341b69319196b7a7add1cd10cfd"
+    },
+    {
+      "path": "src/extractor360/core/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "src/extractor360/core/ai_classes.py",
+      "bytes": 3389,
+      "sha256": "b10f526d4a699ca7f7cfed5b36805c97a0350c7cd58c887058ae93d116e8f24c"
+    },
+    {
+      "path": "src/extractor360/core/ai_model.py",
+      "bytes": 7337,
+      "sha256": "f3c958e530f78e27d14d193954ddf60bf2169538f873f9f690006ded6305cc08"
+    },
+    {
+      "path": "src/extractor360/core/analyzer.py",
+      "bytes": 3699,
+      "sha256": "a36b4c938a87e9c5564156359e9b8795d092d53e0ed2206d241c1402a2bd7eeb"
+    },
+    {
+      "path": "src/extractor360/core/colmap_export.py",
+      "bytes": 9189,
+      "sha256": "f140a8409b6003c0d47ba0de9054d88b83fe21a0e100c93ba3729d67a97c2a05"
+    },
+    {
+      "path": "src/extractor360/core/events.py",
+      "bytes": 1049,
+      "sha256": "0539c32531adbd8551747a3f1d04e0f51599c1de79a36eeef5e327420c2b7165"
+    },
+    {
+      "path": "src/extractor360/core/exif_writer.py",
+      "bytes": 5723,
+      "sha256": "d76824c8cd059fce69b888e16d805b2f4eb1ac9bcb36c494e54f1b5eaa0fb05e"
+    },
+    {
+      "path": "src/extractor360/core/geometry.py",
+      "bytes": 7059,
+      "sha256": "d5970a43893e29af02552c9ffc82b1f7bf3e766e41fa028d7508c9be53e433b5"
+    },
+    {
+      "path": "src/extractor360/core/job.py",
+      "bytes": 2973,
+      "sha256": "29fffd50623dae1711597dd9093098487016c5af2f09cdb15265120f95af3e40"
+    },
+    {
+      "path": "src/extractor360/core/motion_detector.py",
+      "bytes": 1457,
+      "sha256": "d47d291ae01e8182cdc579e1d6b4d83d38fb524f7d6efd5355e49c04b7d23c24"
+    },
+    {
+      "path": "src/extractor360/core/processor.py",
+      "bytes": 34617,
+      "sha256": "647996a0ad95f67e0617f7e2989dbc6246cc7d94b8e01027628ceb3682261d73"
+    },
+    {
+      "path": "src/extractor360/core/settings_manager.py",
+      "bytes": 9075,
+      "sha256": "6677539e842e096f36ec9fe68dcbdd8c986fdd8395ae7bb8d789464b81d4a04d"
+    },
+    {
+      "path": "src/extractor360/core/telemetry.py",
+      "bytes": 15245,
+      "sha256": "74cd7976dcafd8b54d7967713d8813e049f0b66432991f56b7171c5c66e423c6"
+    },
+    {
+      "path": "src/extractor360/core/version.py",
+      "bytes": 91,
+      "sha256": "2b17289da368dc606563806bacd7e4a8c029753b91f1b6944ab158976ae39250"
+    },
+    {
+      "path": "src/extractor360/main.py",
+      "bytes": 11110,
+      "sha256": "1b2cd1b9ffcd80a8d3c92a1a38f23913f5d1f01b874cd3f7ec15a1871cf4a252"
+    },
+    {
+      "path": "src/extractor360/ui/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "src/extractor360/ui/collapsible_section.py",
+      "bytes": 5043,
+      "sha256": "16d542e6354b151db23dddd7af77d9e23fe98adec6a514a21843818a57468aec"
+    },
+    {
+      "path": "src/extractor360/ui/icons.py",
+      "bytes": 7406,
+      "sha256": "9154351ad146d7bd22a16216a10eb4100f24f80f919bf5ec63eeb63eb2e2a843"
+    },
+    {
+      "path": "src/extractor360/ui/log_panel.py",
+      "bytes": 6595,
+      "sha256": "a4061a680ba85aaea5f617c7e2db01189f3e82c0ff61118a254946011abd4ad5"
+    },
+    {
+      "path": "src/extractor360/ui/main_window.py",
+      "bytes": 51957,
+      "sha256": "3f17501d9aeef55f2d74bd6a8ce2618d737ba8874a7794cc57549e9ecbba2c26"
+    },
+    {
+      "path": "src/extractor360/ui/preview_widget.py",
+      "bytes": 17118,
+      "sha256": "07fdc38d4976fea6a8fb92cbfc0d7b0dce9c8dfd78f227993214a83ccc2ad859"
+    },
+    {
+      "path": "src/extractor360/ui/sidebar.py",
+      "bytes": 6157,
+      "sha256": "727532ff268dbbf8cfe0cdf492fda0347cccced880f13e9b736a572c6ba1afbd"
+    },
+    {
+      "path": "src/extractor360/ui/styles.qss",
+      "bytes": 7332,
+      "sha256": "f5788480762466211e07906da51cf4039702b0f3b6b7547ef6f9fc194aaa189e"
+    },
+    {
+      "path": "src/extractor360/ui/toggle_switch.py",
+      "bytes": 4852,
+      "sha256": "17d90e1f9026e49cdc1ae40c3f652116fd764648b1168d1dc0ad2e218c82b3ec"
+    },
+    {
+      "path": "src/extractor360/ui/video_card.py",
+      "bytes": 9987,
+      "sha256": "becae1a86f7ed9f562299853c561f100a0f6be9de6d5a21304379b6c0488c789"
+    },
+    {
+      "path": "src/extractor360/ui/widgets.py",
+      "bytes": 2897,
+      "sha256": "f5fc2e47c10193878f51d47bf172bd144a8b46213e439c5ddbc73cdc4a72fb01"
+    },
+    {
+      "path": "src/extractor360/ui/workers.py",
+      "bytes": 1672,
+      "sha256": "b4299a2d964f934fd56403c8a43d4d4b8c86341d807082c84a9cd9c434d711ea"
+    },
+    {
+      "path": "src/extractor360/utils/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "src/extractor360/utils/camm_parser.py",
+      "bytes": 4560,
+      "sha256": "6ad6b1118a089170de89aace1b709e6687550ed33c190af90f4bf52ee78b2da0"
+    },
+    {
+      "path": "src/extractor360/utils/file_manager.py",
+      "bytes": 1184,
+      "sha256": "bd2389db4b9f5cefc699726817f8a833b924a19d86cebb25547f1be1cc0eef7c"
+    },
+    {
+      "path": "src/extractor360/utils/gpmf_parser.py",
+      "bytes": 9228,
+      "sha256": "3b89755587ba84fcb0e68187483b9f975dfa6fc4dafd80a546861a3bef9d6d20"
+    },
+    {
+      "path": "src/extractor360/utils/gpx_parser.py",
+      "bytes": 2966,
+      "sha256": "d5a516007c86a875eb10fb562068275b6abaf15171bdeb2b6a2c2ba4c0946ff9"
+    },
+    {
+      "path": "src/extractor360/utils/image_utils.py",
+      "bytes": 830,
+      "sha256": "6da66ec7392d5eed133f1b8746e76962c904622031f019c172e76f2fb73fa8a6"
+    },
+    {
+      "path": "src/extractor360/utils/logger.py",
+      "bytes": 606,
+      "sha256": "43ced6d5594b226d521fc19783b8d703dd811e83cfcd55e147ebb9a5493f0318"
+    },
+    {
+      "path": "src/extractor360/utils/srt_parser.py",
+      "bytes": 5438,
+      "sha256": "8a7da2494b90f1865b5add64e79e127e2eda8b444397a6e3787a0a71a2a32d27"
+    },
+    {
+      "path": "src/main.py",
+      "bytes": 499,
+      "sha256": "4f0b6feda7712cf27bddf9f8e5c5761d33f241fdb8c43115f414db3a571840a3"
+    },
+    {
+      "path": "tests/test_cli_settings.py",
+      "bytes": 9566,
+      "sha256": "cd20a900c0f1322b8c3f889e92671007f8a90cd1f0827d6f97cabb86aecdac71"
+    },
+    {
+      "path": "tests/test_colmap_export.py",
+      "bytes": 3509,
+      "sha256": "26f8aa696eea646e7107465bceea17fdb2cbb7a2824a85fcb630b73c08c13cae"
+    },
+    {
+      "path": "tests/test_core.py",
+      "bytes": 9361,
+      "sha256": "0b59684efbe14a415994a0d6aa3dd720b830ecedab79da04f287f049a3539679"
+    },
+    {
+      "path": "tests/test_exif_writer.py",
+      "bytes": 5073,
+      "sha256": "7d2d5a602b9627d9b3807bd033f0950505346e603bd289b7d16cf7e542ee9688"
+    },
+    {
+      "path": "tests/test_gpmf_parser.py",
+      "bytes": 3878,
+      "sha256": "9af059205a0837a6d5cdb98db874c981bb0eae0e6d042dbfe4292fca5c6631b5"
+    },
+    {
+      "path": "tests/test_parsers.py",
+      "bytes": 5220,
+      "sha256": "6e44320ff709039718e31e969059d559772304e10414e2bccad9ed84d6e595f6"
+    },
+    {
+      "path": "tests/test_processor_e2e.py",
+      "bytes": 5218,
+      "sha256": "6158ff7526904625a6b34c68b52ec788b7ebaf31ee092df2ac1f440ca15fd5bd"
+    },
+    {
+      "path": "tests/test_release_tooling.py",
+      "bytes": 5365,
+      "sha256": "a2cf7748809649c2d81527e8567b8fc83002a6e8c503ff20c953f27e09ead239"
+    },
+    {
+      "path": "tests/test_studio_ui.py",
+      "bytes": 4979,
+      "sha256": "69ef331c6055ee6bc5d8bbc577aceca0d6c8e54525054250888a8132c7b915be"
+    },
+    {
+      "path": "tests/test_telemetry.py",
+      "bytes": 5518,
+      "sha256": "3e54dc4faafb0e2258253170edaa69de6eb864b23b3ea74e43aeacc9551f3bc4"
+    }
+  ],
+  "secret_pattern_matches": []
+}

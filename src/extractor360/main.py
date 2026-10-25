@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import sys
+import signal
+import threading
 import os
 import argparse
 import json
@@ -9,6 +11,8 @@ import json
 # without display libraries). The GUI stack is imported lazily in main().
 from extractor360.core.settings_manager import SettingsManager, build_settings
 from extractor360.core.job import Job
+from extractor360.core.output_plan import discover_media
+from extractor360.core.validation import validate_settings
 from extractor360.core.processor import ProcessingWorker
 from extractor360.core.version import APP_NAME, VERSION
 from extractor360.utils.logger import logger
@@ -32,6 +36,7 @@ def parse_arguments():
     parser.add_argument("--ai-mask", action="store_true", help="Enable AI masking (Generate Mask)")
     parser.add_argument("--ai-skip", action="store_true", help="Enable AI frame skipping (Skip Frame)")
     parser.add_argument("--ai-model", type=str, help="Segmentation model: size letter (n/s/m/l/x), a model name, or a path to a custom .pt (default: yolo26n-seg.pt)")
+    parser.add_argument("--trust-custom-model", action="store_true", help="Allow loading a trusted custom .pt model (can execute code)")
     parser.add_argument("--nadir-mask", action="store_true", help="Add a disc mask over the pole/tripod on the Down face (Cube layout, no AI needed)")
     parser.add_argument("--nadir-radius", type=float, help="Nadir mask radius as a percentage of the Down face (default: 40)")
     parser.add_argument("--camera-count", type=int, help="Number of virtual cameras (default: 6)")
@@ -42,7 +47,7 @@ def parse_arguments():
     parser.add_argument("--flat", action="store_true", help="Treat input as standard (non-360) media; disables equirectangular reprojection")
     parser.add_argument("--adaptive", action="store_true", help="Enable adaptive interval (motion-based)")
     parser.add_argument("--motion-threshold", type=float, help="Motion threshold for adaptive interval (default: 0.5)")
-    parser.add_argument("--export-telemetry", action="store_true", help="Export GPS/IMU metadata (if available)")
+    parser.add_argument("--export-telemetry", action="store_true", help="Export GPS metadata (if available; IMU orientation is not exported)")
     parser.add_argument("--no-exif-intrinsics", action="store_true", help="Do not embed calibration EXIF (focal from FOV, Make/Model, capture time, view direction) into output images")
     parser.add_argument("--export-colmap", action="store_true", help="Write a colmap/ folder with the exact camera intrinsics, rig rotations and a turnkey reconstruction script (360 input only)")
     parser.add_argument("--altitude-mode", type=str, choices=['absolute', 'relative'], help="EXIF altitude source for DJI clips: 'absolute' (above sea level, default) or 'relative' (above takeoff)")
@@ -66,8 +71,11 @@ def load_config(config_path):
         sys.exit(1)
     
     try:
-        with open(config_path, 'r') as f:
-            return json.load(f)
+        with open(config_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError("Configuration must be a JSON object")
+            return data
     except json.JSONDecodeError as e:
         logger.error(f"Error parsing configuration file: {e}")
         sys.exit(1)
@@ -102,28 +110,8 @@ def run_cli(args):
         output_path = os.path.join(os.getcwd(), "output")
         logger.warning(f"No output path specified. Using default: {output_path}")
 
-    # Ensure output directory exists
-    if not os.path.exists(output_path):
-        try:
-            os.makedirs(output_path)
-            logger.info(f"Created output directory: {output_path}")
-        except OSError as e:
-            logger.error(f"Error creating output directory {output_path}: {e}")
-            sys.exit(1)
-            
     # Prepare jobs
-    files_to_process = []
-    supported_exts = (
-        '.mp4', '.avi', '.mov', '.mkv',          # video
-        '.jpg', '.jpeg', '.png', '.tiff', '.tif' # image
-    )
-    if os.path.isdir(input_path):
-        for root, dirs, files in os.walk(input_path):
-            for f in files:
-                if f.lower().endswith(supported_exts):
-                    files_to_process.append(os.path.join(root, f))
-    else:
-        files_to_process.append(input_path)
+    files_to_process = discover_media([input_path], exclude=[output_path] if os.path.realpath(input_path) != os.path.realpath(output_path) else [])
 
     if not files_to_process:
         logger.error("No supported video/image files found.")
@@ -132,27 +120,31 @@ def run_cli(args):
     logger.info(f"Found {len(files_to_process)} file(s) to process.")
 
     # Parse Active Cameras
-    active_cameras_str = args.active_cameras or config.get('active_cameras')
-    active_cameras = None
-    if active_cameras_str:
+    # Preserve JSON types for the shared validator. Only the explicit CLI
+    # option uses comma-separated text; coercing JSON would turn true or 1.9
+    # into a valid camera index before validation could reject them.
+    active_cameras = config.get('active_cameras')
+    if args.active_cameras is not None:
         try:
-            # Handle list from JSON or string from CLI
-            if isinstance(active_cameras_str, list):
-                active_cameras = [int(x) for x in active_cameras_str]
-            else:
-                active_cameras = [int(x.strip()) for x in active_cameras_str.split(',')]
+            active_cameras = [int(x.strip()) for x in args.active_cameras.split(',')]
         except ValueError:
-            logger.error(f"Error: Invalid format for active-cameras: {active_cameras_str}")
-            sys.exit(1)
+            logger.error(f"Error: Invalid format for active-cameras: {args.active_cameras}")
+            sys.exit(2)
 
     # Build the settings dict the processor consumes.
     # Precedence: DEFAULT_SETTINGS < config file < explicit CLI arguments.
-    settings = build_settings(args, config, active_cameras, output_path)
+    try:
+        settings = validate_settings(build_settings(args, config, active_cameras, output_path))
+    except ValueError as exc:
+        logger.error(f"Invalid settings: {exc}")
+        sys.exit(2)
 
     jobs = [Job(file_path=f, settings=settings) for f in files_to_process]
 
     # The core is Qt-free: its events are plain callbacks, so no
     # QCoreApplication is needed in CLI mode anymore.
+    # The worker allocates output only after settings, views and names pass
+    # validation, so a rejected launch leaves the destination untouched.
     worker = ProcessingWorker(jobs)
     
     # Progress Bar Handling
@@ -171,7 +163,8 @@ def run_cli(args):
             current_job_idx[0] = idx
             
         def on_finished():
-            pbar.n = 100
+            if worker.is_running and worker.error_count == 0:
+                pbar.n = 100
             pbar.refresh()
             pbar.close()
             logger.info("All jobs finished.")
@@ -190,18 +183,38 @@ def run_cli(args):
         worker.error_occurred.connect(lambda err: logger.error(f"ERROR: {err}"))
         worker.finished.connect(lambda: logger.info("All jobs finished."))
     
-    # Run processing synchronously
+    # Cooperative SIGINT keeps a signal from splitting publication of an
+    # already-confirmed image, its index entry, and the terminal manifest.
+    # Repeated Ctrl-C remains cooperative while native writers finish.
+    interrupted = False
+    previous_sigint_handler = None
+    handles_sigint = threading.current_thread() is threading.main_thread()
+
+    def request_interrupt(signum, frame):
+        nonlocal interrupted
+        interrupted = True
+        worker.stop()
+
+    if handles_sigint:
+        previous_sigint_handler = signal.signal(signal.SIGINT, request_interrupt)
     try:
         worker.run()
     except KeyboardInterrupt:
         if TQDM_AVAILABLE: pbar.close()
         logger.info("\nProcess interrupted by user.")
         worker.stop()
-        sys.exit(1)
+        sys.exit(130)
     except Exception as e:
         if TQDM_AVAILABLE: pbar.close()
         logger.error(f"An unexpected error occurred: {e}")
         sys.exit(1)
+    finally:
+        if handles_sigint:
+            signal.signal(signal.SIGINT, previous_sigint_handler)
+
+    if interrupted:
+        logger.info("\nProcess interrupted by user; submitted writes have finished.")
+        sys.exit(130)
 
     # Propagate job failures to the shell so batch automation can detect them.
     if worker.error_count > 0:
@@ -220,8 +233,10 @@ def main():
         # GUI Mode — import Qt lazily so headless/CLI environments never load it.
         from PySide6.QtWidgets import QApplication
         from extractor360.ui.main_window import MainWindow
+        from extractor360.ui.icons import get_app_icon
 
         app = QApplication(sys.argv)
+        app.setWindowIcon(get_app_icon())
 
         # Initialize settings
         SettingsManager()

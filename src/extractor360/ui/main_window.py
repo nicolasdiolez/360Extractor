@@ -1,626 +1,552 @@
 """
-360 Extractor - Modern Main Window
-Redesigned UI with sidebar navigation and modern components.
+360 Extractor Studio — Pro Main Window.
+Unified 3-column Studio architecture with:
+- Top Navbar: Workflow Presets and Hardware status
+- Left Column: Media Queue with metadata chips and dropzone
+- Center Column: Interactive Viewport with 6-face switcher, live overlays, and timeline scrubber
+- Right Column: Complete 4-Card Inspector with Progressive Disclosure
+- Bottom HUD: Real-time dataset estimation and extraction controls
 """
-import os
-import copy
-import threading
-import cv2
-from PIL import Image
-from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QSpinBox,
-    QComboBox, QFileDialog, QProgressBar, QMessageBox,
-    QDoubleSpinBox, QCheckBox, QSplitter, QScrollArea, QStackedWidget,
-    QLineEdit, QGridLayout
-)
-from PySide6.QtCore import Qt, QFile, QTextStream, QThread, QEvent, QObject, QSize, QUrl
-from PySide6.QtGui import QDesktopServices
+from __future__ import annotations
 
-from extractor360.ui.widgets import DropZone
-from extractor360.ui.preview_widget import PreviewWidget
-from extractor360.ui.sidebar import Sidebar
-from extractor360.ui.video_card import VideoCard
-from extractor360.ui.toggle_switch import ToggleSwitchWithDescription
-from extractor360.ui.collapsible_section import CollapsibleSection
-from extractor360.ui.log_panel import LogPanel
-from extractor360.ui.icons import get_icon
-from extractor360.core.processor import ProcessingWorker
-from extractor360.ui.workers import ProcessingBridge, BlurAnalysisWorker
+import copy
+import math
+import os
+from pathlib import Path
+
+import cv2
+from PySide6.QtCore import (
+    QEvent, QFile, QObject, Qt, QTextStream, QThread, QUrl, QTimer, QThreadPool, QSignalBlocker, Slot
+)
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import (
+    QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame,
+    QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
+    QMessageBox, QProgressBar, QPushButton, QScrollArea, QSlider,
+    QSpinBox, QSplitter, QVBoxLayout, QWidget
+)
+
 from extractor360.core.job import Job
+from extractor360.core.output_plan import discover_media
+from extractor360.core.geometry import GeometryProcessor
 from extractor360.core.settings_manager import SettingsManager
 from extractor360.core.version import APP_NAME
-from extractor360.core.ai_classes import COCO_CLASSES
-from extractor360.utils.logger import logger
+from extractor360.ui.collapsible_section import CollapsibleDrawer
+from extractor360.ui.icons import get_app_icon
+from extractor360.ui.log_panel import LogPanel
+from extractor360.ui.preview_widget import PreviewWidget
+from extractor360.ui.video_card import VideoCard
+from extractor360.ui.widgets import DropZone
+from extractor360.ui.workers import BlurAnalysisWorker, ProcessingController
 
 
 class ScrollBlocker(QObject):
-    """Event filter to block scroll events on widgets unless they have focus."""
+    """Event filter to block scroll events on spinboxes/combos unless focused."""
     def eventFilter(self, obj, event):
-        if event.type() == QEvent.Wheel:
-            if not obj.hasFocus():
-                event.ignore()
-                return True
+        if event.type() == QEvent.Wheel and not obj.hasFocus():
+            event.ignore()
+            return True
         return False
 
 
 class MainWindow(QMainWindow):
+    """Studio Main Window."""
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(APP_NAME)
-        self.setMinimumSize(1200, 800)
-        
-        # Internal State
-        self.jobs = []
+        self.setWindowTitle(f"{APP_NAME} Studio")
+        self.setWindowIcon(get_app_icon())
+        self.setMinimumSize(1100, 700)
+        self.resize(1520, 920)
+
+        self._loading_settings = True
+        self._loaded_settings = {}
+        self._displayed_settings = {}
+        self._job_settings_revisions = {}
+        self._media_info = {}
+        self.jobs: list[Job] = []
         self.default_settings = {}
         self.custom_output_dir = ""
         self.is_processing = False
-        self._video_cards = []
-        self._selected_cards = []  # Changed to list for multi-selection
+        self._controller = None
+        self._waiting_for_preview = False
+        self._closing = False
+        self._video_cards: list[VideoCard] = []
+        self._selected_cards: list[VideoCard] = []
 
-        # Scroll Blocker
         self.scroll_blocker = ScrollBlocker(self)
-        
-        # Load Stylesheet
+
+        # Load stylesheet
         self.load_stylesheet("styles.qss")
 
-        # Central Widget
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        
-        # Main horizontal layout: Sidebar | Content
-        main_layout = QHBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-        
-        # Sidebar Navigation
-        self.sidebar = Sidebar()
-        self.sidebar.page_changed.connect(self.on_page_changed)
-        main_layout.addWidget(self.sidebar)
-        
-        # =====================================================================
-        # NEW LAYOUT: [Queue] | [Preview + Settings]
-        # =====================================================================
-        
-        # Content Splitter (Queue vs Right Panel)
-        self.content_splitter = QSplitter(Qt.Horizontal)
-        self.content_splitter.setHandleWidth(1)
-        self.content_splitter.setStyleSheet("QSplitter::handle { background: #121214; }")
-        
-        # 1. Left: Persistent Queue
-        self.queue_section = self.create_queue_section()
-        self.content_splitter.addWidget(self.queue_section)
-        
-        # 2. Right: Preview + Dynamic Pages
-        right_panel = QWidget()
-        right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(0)
-        
-        # Vertical Splitter for Preview vs Page Content
-        self.right_splitter = QSplitter(Qt.Vertical)
-        self.right_splitter.setHandleWidth(1)
-        self.right_splitter.setStyleSheet("QSplitter::handle { background: #121214; }")
-        
-        # Top: Persistent Preview
-        self.preview_section = self.create_preview_section()
-        self.right_splitter.addWidget(self.preview_section)
-        
-        # Bottom: Stacked Pages (Settings, Export, Advanced)
-        self.pages_container = QWidget()
-        pages_layout = QVBoxLayout(self.pages_container)
-        pages_layout.setContentsMargins(24, 16, 24, 0) # Add padding for pages
-        
-        self.pages = QStackedWidget()
-        
-        # Create pages (Videos page is no longer needed in stack)
-        self.settings_page = self.create_settings_page()
-        self.export_page = self.create_export_page()
-        self.advanced_page = self.create_advanced_page()
-        
-        self.pages.addWidget(self.settings_page)
-        self.pages.addWidget(self.export_page)
-        self.pages.addWidget(self.advanced_page)
-        
-        pages_layout.addWidget(self.pages)
-        self.right_splitter.addWidget(self.pages_container)
-        
-        # Add splitter to right panel
-        right_layout.addWidget(self.right_splitter, 1)
-        
-        # Action Bar (Always visible at bottom right)
-        right_content_margins = QWidget()
-        right_margins_layout = QVBoxLayout(right_content_margins)
-        right_margins_layout.setContentsMargins(24, 0, 24, 0) # Align with pages padding
-        
-        self.action_bar = self.create_action_bar()
-        right_margins_layout.addWidget(self.action_bar)
-        
-        # Log Panel
-        self.log_panel = LogPanel()
-        right_margins_layout.addWidget(self.log_panel)
-        
-        right_layout.addWidget(right_content_margins)
+        # Build Studio 3-Column Layout
+        self._build_studio_layout()
 
-        self.content_splitter.addWidget(right_panel)
-        
-        # Set initial splitter sizes (Queue roughly 1/3, Preview vs Settings dynamic)
-        self.content_splitter.setStretchFactor(0, 1) # Queue
-        self.content_splitter.setStretchFactor(1, 3) # Right Panel
-        self.right_splitter.setStretchFactor(0, 1)   # Preview
-        self.right_splitter.setStretchFactor(1, 0)   # Pages (Hidden initially if starting on Videos)
-        
-        main_layout.addWidget(self.content_splitter)
-        
-        # Initialize Settings
+        # Initialize Settings Manager
         self.settings_manager = SettingsManager()
         self.set_ui_from_settings(self.settings_manager.get_all())
         self.update_default_settings_from_ui()
-        
-        # Initial Page State
-        self.on_page_changed("videos")
-        
-        # Setup Keyboard Shortcuts
-        self._setup_shortcuts()
+        for widget in self.findChildren(QWidget):
+            if isinstance(widget, (QComboBox, QSpinBox, QDoubleSpinBox)):
+                widget.installEventFilter(self.scroll_blocker)
 
-    def load_stylesheet(self, filename):
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        path = os.path.join(base_dir, filename)
-        
-        file = QFile(path)
-        if file.open(QFile.ReadOnly | QFile.Text):
+        # Blur analysis worker thread
+        self._blur_thread = None
+        self._blur_worker = None
+
+    def load_stylesheet(self, filename: str):
+        qss_path = os.path.join(os.path.dirname(__file__), filename)
+        file = QFile(qss_path)
+        if file.open(QFile.OpenModeFlag.ReadOnly | QFile.OpenModeFlag.Text):
             stream = QTextStream(file)
             self.setStyleSheet(stream.readAll())
             file.close()
 
-    def _setup_shortcuts(self):
-        """Setup keyboard shortcuts for common actions."""
-        from PySide6.QtGui import QShortcut, QKeySequence
-        
-        # Del - Remove selected job
-        delete_shortcut = QShortcut(QKeySequence.Delete, self)
-        delete_shortcut.activated.connect(self.remove_selected_jobs)
-        
-        # Backspace - Also remove selected (Mac style)
-        backspace_shortcut = QShortcut(QKeySequence(Qt.Key_Backspace), self)
-        backspace_shortcut.activated.connect(self.remove_selected_jobs)
-        
-        # Ctrl+O - Open file dialog
-        open_shortcut = QShortcut(QKeySequence.Open, self)
-        open_shortcut.activated.connect(self.open_file_dialog)
-        
-        # Space - Update preview for selected
-        space_shortcut = QShortcut(QKeySequence(Qt.Key_Space), self)
-        space_shortcut.activated.connect(self.update_preview_display)
-        
-        # Ctrl+Return / Cmd+Return - Start processing
-        process_shortcut = QShortcut(QKeySequence(Qt.CTRL | Qt.Key_Return), self)
-        process_shortcut.activated.connect(self._shortcut_start_processing)
-        
-        # Escape - Cancel processing
-        escape_shortcut = QShortcut(QKeySequence(Qt.Key_Escape), self)
-        escape_shortcut.activated.connect(self.cancel_processing)
-        
-    def _shortcut_start_processing(self):
-        """Start processing if not already running."""
-        if not self.is_processing and self.jobs:
-            self.start_processing()
-
     # =========================================================================
-    # PAGE CREATION
+    # UI CONSTRUCTION (Studio 3-Column Layout)
     # =========================================================================
 
-    def create_queue_section(self):
-        """Create the persistent video queue section (Left Left)."""
-        widget = QWidget()
-        widget.setMinimumWidth(300)
-        # Background slightly darker to distinguish from sidebar and content
-        widget.setObjectName("queueSection") 
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(16, 24, 16, 16)
-        layout.setSpacing(12)
-        
+    def _build_studio_layout(self):
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        root_layout = QVBoxLayout(central_widget)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        # 1. Top Navbar
+        self.top_nav = self._create_top_nav()
+        root_layout.addWidget(self.top_nav)
+
+        # 2. Main 3-Column Splitter
+        self.content_splitter = QSplitter(Qt.Horizontal)
+        self.content_splitter.setHandleWidth(1)
+        self.content_splitter.setStyleSheet("QSplitter::handle { background: #262630; }")
+
+        # Left Column: Media Queue (260px)
+        self.left_panel = self._create_queue_panel()
+        self.content_splitter.addWidget(self.left_panel)
+
+        # Center Column: Viewport & Preview (Flex)
+        self.center_panel = self._create_viewport_panel()
+        self.content_splitter.addWidget(self.center_panel)
+
+        # Right Column: Inspector Settings (360px)
+        self.right_panel = self._create_inspector_panel()
+        self.content_splitter.addWidget(self.right_panel)
+
+        self.content_splitter.setStretchFactor(0, 0)
+        self.content_splitter.setStretchFactor(1, 1)
+        self.content_splitter.setStretchFactor(2, 0)
+        root_layout.addWidget(self.content_splitter, 1)
+
+        # 3. Bottom HUD Action Bar
+        self.hud_bar = self._create_hud_bar()
+        root_layout.addWidget(self.hud_bar)
+
+    def _create_top_nav(self) -> QWidget:
+        nav = QFrame()
+        nav.setObjectName("topNav")
+        nav.setFixedHeight(48)
+        layout = QHBoxLayout(nav)
+        layout.setContentsMargins(16, 0, 16, 0)
+        layout.setSpacing(14)
+
+        title_label = QLabel("360 Extractor")
+        title_label.setStyleSheet("font-weight: 700; font-size: 13px; letter-spacing: -0.2px; color: #FFFFFF;")
+        layout.addWidget(title_label)
+
+        v_sep = QFrame()
+        v_sep.setFrameShape(QFrame.Shape.VLine)
+        v_sep.setFixedHeight(16)
+        v_sep.setStyleSheet("color: #2E2E3C;")
+        layout.addWidget(v_sep)
+
+        wf_lbl = QLabel("Workflow Preset:")
+        wf_lbl.setStyleSheet("color: #8E8E98; font-size: 11px;")
+        layout.addWidget(wf_lbl)
+
+        self.preset_combo = QComboBox()
+        self.preset_combo.addItems([
+            "Postshot (3D Gaussian Splatting)",
+            "RealityScan / Metashape",
+            "COLMAP Calibrated Rig",
+            "Custom Workflow"
+        ])
+        self.preset_combo.setFixedWidth(230)
+        self.preset_combo.currentIndexChanged.connect(self._on_preset_selected)
+        layout.addWidget(self.preset_combo)
+
+        layout.addStretch()
+
+        # Hardware GPU Status Chip
+        gpu_chip = QFrame()
+        gpu_chip.setStyleSheet("background-color: #212129; border: 1px solid #30303D; border-radius: 4px; padding: 2px 8px;")
+        gpu_lay = QHBoxLayout(gpu_chip)
+        gpu_lay.setContentsMargins(4, 2, 4, 2)
+        gpu_lay.setSpacing(5)
+        dot = QLabel("●")
+        dot.setStyleSheet("color: #F59E0B; font-size: 10px;")
+        gpu_lay.addWidget(dot)
+        gpu_txt = QLabel("Device selected when AI starts")
+        gpu_txt.setStyleSheet("color: #D4D4D8; font-size: 10px; font-weight: 500;")
+        gpu_lay.addWidget(gpu_txt)
+        layout.addWidget(gpu_chip)
+
+        return nav
+
+    def _create_queue_panel(self) -> QWidget:
+        col = QFrame()
+        col.setObjectName("leftSidebar")
+        col.setMinimumWidth(230)
+        col.setMaximumWidth(350)
+        layout = QVBoxLayout(col)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
         # Header
-        header = QLabel("Video Queue")
-        header.setObjectName("headerLabelSmall")
-        header.setStyleSheet("color: #E4E4E7; font-weight: 600; font-size: 14px;")
-        layout.addWidget(header)
-        
+        hdr_layout = QHBoxLayout()
+        self.queue_title = QLabel("Queue")
+        self.queue_title.setObjectName("sectionHeader")
+        hdr_layout.addWidget(self.queue_title)
+
+        self.queue_count_badge = QLabel("0 files")
+        self.queue_count_badge.setStyleSheet("color: #71717A; font-size: 11px;")
+        hdr_layout.addWidget(self.queue_count_badge)
+        hdr_layout.addStretch()
+
+        add_btn = QPushButton("+ Add Media")
+        add_btn.setObjectName("toolBtn")
+        add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_btn.clicked.connect(self.on_add_video_clicked)
+        hdr_layout.addWidget(add_btn)
+        layout.addLayout(hdr_layout)
+
         # Drop Zone
         self.drop_zone = DropZone()
-        self.drop_zone.files_dropped.connect(self.handle_files_dropped)
-        self.drop_zone.clicked.connect(self.open_file_dialog)
-        self.drop_zone.setMinimumHeight(100)
+        self.drop_zone.files_dropped.connect(self.add_videos_from_paths)
+        self.drop_zone.clicked.connect(self.on_add_video_clicked)
         layout.addWidget(self.drop_zone)
-        
-        # Queue container with scroll
-        queue_scroll = QScrollArea()
-        queue_scroll.setWidgetResizable(True)
-        queue_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        queue_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
-        
-        self.queue_container = QWidget()
-        self.queue_container.setObjectName("queueContainer")
-        self.queue_layout = QVBoxLayout(self.queue_container)
-        self.queue_layout.setContentsMargins(0, 0, 4, 0) # Small right margin for scrollbar
-        self.queue_layout.setSpacing(8)
-        self.queue_layout.addStretch()
-        
-        queue_scroll.setWidget(self.queue_container)
-        layout.addWidget(queue_scroll, 1)
-        
-        # Queue controls
-        controls = QHBoxLayout()
-        
-        self.btn_remove = QPushButton("Remove")
-        self.btn_remove.setProperty("secondary", True)
-        self.btn_remove.clicked.connect(self.remove_selected_jobs)
-        
-        self.btn_clear = QPushButton("Clear")
-        self.btn_clear.setProperty("secondary", True)
-        self.btn_clear.clicked.connect(self.clear_queue)
-        
-        controls.addWidget(self.btn_remove)
-        controls.addWidget(self.btn_clear)
-        layout.addLayout(controls)
-        
-        return widget
 
-    def create_preview_section(self):
-        """Create the persistent preview section (Top Right)."""
-        widget = QWidget()
-        widget.setObjectName("previewSection")
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(24, 24, 24, 0)
-        layout.setSpacing(12)
-        
-        header = QLabel("Preview")
-        header.setStyleSheet("color: #E4E4E7; font-weight: 600; font-size: 14px;")
-        layout.addWidget(header)
-        
+        # Scrollable Cards Area
+        self.cards_scroll = QScrollArea()
+        self.cards_scroll.setWidgetResizable(True)
+        self.cards_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.cards_scroll.setStyleSheet("QScrollArea, QScrollArea > QWidget { border: none; background-color: transparent; }")
+
+        self.cards_container = QWidget()
+        self.cards_container.setObjectName("cardsContainer")
+        self.cards_container.setStyleSheet("background-color: transparent;")
+        self.cards_layout = QVBoxLayout(self.cards_container)
+        self.cards_layout.setContentsMargins(0, 0, 0, 0)
+        self.cards_layout.setSpacing(6)
+        self.cards_layout.addStretch()
+
+        self.cards_scroll.setWidget(self.cards_container)
+        layout.addWidget(self.cards_scroll, 1)
+
+        # Clear All Button
+        self.clear_btn = QPushButton("Clear Completed")
+        self.clear_btn.setObjectName("toolBtn")
+        self.clear_btn.clicked.connect(self.clear_completed_jobs)
+        layout.addWidget(self.clear_btn)
+
+        return col
+
+    def _create_viewport_panel(self) -> QWidget:
+        col = QFrame()
+        col.setObjectName("centerArea")
+        layout = QVBoxLayout(col)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(8)
+
+        # Studio Interactive Viewport
         self.preview_widget = PreviewWidget()
+        self.preview_widget.face_changed.connect(lambda _: self.update_preview_display())
         layout.addWidget(self.preview_widget, 1)
-        
-        return widget
 
-    def create_settings_page(self):
-        """Create the camera/extraction settings page."""
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
-        
-        # Header
-        header = QLabel("Camera Settings")
-        header.setObjectName("headerLabel")
-        layout.addWidget(header)
-        
-        # Scroll area for settings
+        # Embedded Log Panel (collapsible at bottom)
+        self.log_panel = LogPanel()
+        self.log_panel.setMaximumHeight(210)
+        layout.addWidget(self.log_panel)
+
+        return col
+
+    def _create_inspector_panel(self) -> QWidget:
+        col = QFrame()
+        col.setObjectName("rightInspector")
+        col.setMinimumWidth(350)
+        col.setMaximumWidth(560)
+        layout = QVBoxLayout(col)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        hdr = QLabel("Processing Settings")
+        hdr.setObjectName("sectionHeader")
+        layout.addWidget(hdr)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
-        content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 0, 16, 16)
-        content_layout.setSpacing(16)
-        
-        # Camera Settings Section
-        camera_section = CollapsibleSection("Camera Configuration")
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea, QScrollArea > QWidget { border: none; background-color: transparent; }")
 
-        # 360 vs flat input
-        self.input_360_toggle = ToggleSwitchWithDescription(
-            "360° Input", "Reproject equirectangular media to pinhole views"
-        )
+        container = QWidget()
+        container.setObjectName("inspectorContainer")
+        container.setStyleSheet("background-color: transparent;")
+        c_layout = QVBoxLayout(container)
+        c_layout.setContentsMargins(0, 0, 4, 0)
+        c_layout.setSpacing(8)
+
+        # 4 Cards with Progressive Disclosure
+        c_layout.addWidget(self._build_camera_card())
+        c_layout.addWidget(self._build_quality_card())
+        c_layout.addWidget(self._build_ai_card())
+        c_layout.addWidget(self._build_export_card())
+
+        c_layout.addStretch()
+        scroll.setWidget(container)
+        layout.addWidget(scroll, 1)
+
+        return col
+
+    # -------------------------------------------------------------------------
+    # Card 1: Camera & Optics
+    # -------------------------------------------------------------------------
+    def _build_camera_card(self) -> QWidget:
+        card = QFrame()
+        card.setObjectName("inspectorCard")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
+
+        title = QLabel("1. Camera & Optics")
+        title.setObjectName("cardTitle")
+        layout.addWidget(title)
+
+        grid = QGridLayout()
+        grid.setSpacing(6)
+
+        # Essentials
+        grid.addWidget(QLabel("Layout:"), 0, 0)
+        self.layout_combo = QComboBox()
+        self.layout_combo.addItem("Cube Map (6 Views)", "cube")
+        self.layout_combo.addItem("Ring (Horizon 360°)", "ring")
+        self.layout_combo.addItem("Fibonacci Sphere", "fibonacci")
+        self.layout_combo.currentIndexChanged.connect(self.on_layout_changed)
+        grid.addWidget(self.layout_combo, 0, 1)
+
+        grid.addWidget(QLabel("Resolution:"), 1, 0)
+        self.res_spin = QSpinBox()
+        self.res_spin.setRange(16, 8192)
+        self.res_spin.setSingleStep(512)
+        self.res_spin.setValue(2048)
+        self.res_spin.valueChanged.connect(self.on_setting_changed)
+        grid.addWidget(self.res_spin, 1, 1)
+
+        grid.addWidget(QLabel("FOV:"), 2, 0)
+        fov_layout = QHBoxLayout()
+        self.fov_slider = QSlider(Qt.Orientation.Horizontal)
+        self.fov_slider.setRange(1, 179)
+        self.fov_slider.setValue(90)
+        self.fov_spin = QDoubleSpinBox()
+        self.fov_spin.setDecimals(3)
+        self.fov_spin.setRange(1, 179)
+        self.fov_spin.setValue(90)
+        self.fov_spin.setMinimumWidth(75)
+        self.fov_slider.valueChanged.connect(self.fov_spin.setValue)
+        self.fov_spin.valueChanged.connect(self._sync_fov_slider)
+        self.fov_spin.valueChanged.connect(self.on_setting_changed)
+        fov_layout.addWidget(self.fov_slider)
+        fov_layout.addWidget(self.fov_spin)
+        grid.addLayout(fov_layout, 2, 1)
+
+        layout.addLayout(grid)
+
+        # Advanced Camera Drawer
+        self.adv_camera = CollapsibleDrawer("Advanced Camera Options")
+        adv_grid = QGridLayout()
+        adv_grid.setSpacing(5)
+
+        adv_grid.addWidget(QLabel("Media Type:"), 0, 0)
+        self.input_360_toggle = QCheckBox("Stitched 360° panorama")
         self.input_360_toggle.setChecked(True)
         self.input_360_toggle.toggled.connect(self.on_360_toggled)
-        camera_section.addWidget(self.input_360_toggle)
+        adv_grid.addWidget(self.input_360_toggle, 0, 1)
 
-        # FOV
-        fov_row = QHBoxLayout()
-        fov_row.addWidget(QLabel("Field of View"))
-        fov_row.addStretch()
-        self.fov_spin = QSpinBox()
-        self.fov_spin.setRange(60, 120)
-        self.fov_spin.setValue(90)
-        self.fov_spin.setSuffix("°")
-        self.fov_spin.setFixedWidth(100)
-        self.fov_spin.valueChanged.connect(self.on_setting_changed)
-        self.fov_spin.installEventFilter(self.scroll_blocker)
-        fov_row.addWidget(self.fov_spin)
-        camera_section.addLayout(fov_row)
-        
-        # Camera Count
-        count_row = QHBoxLayout()
-        count_row.addWidget(QLabel("Virtual Cameras"))
-        count_row.addStretch()
-        self.cam_count_spin = QSpinBox()
-        self.cam_count_spin.setRange(2, 36)
-        self.cam_count_spin.setValue(6)
-        self.cam_count_spin.setFixedWidth(100)
-        self.cam_count_spin.valueChanged.connect(self.on_setting_changed)
-        self.cam_count_spin.installEventFilter(self.scroll_blocker)
-        count_row.addWidget(self.cam_count_spin)
-        camera_section.addLayout(count_row)
-        
-        # Layout Mode
-        layout_row = QHBoxLayout()
-        layout_row.addWidget(QLabel("Layout Mode"))
-        layout_row.addStretch()
-        self.layout_combo = QComboBox()
-        self.layout_combo.addItem("Ring", "ring")
-        self.layout_combo.addItem("Cube Map", "cube")
-        self.layout_combo.addItem("Fibonacci Sphere", "fibonacci")
-        self.layout_combo.setFixedWidth(160)
-        self.layout_combo.currentIndexChanged.connect(self.on_layout_changed)
-        self.layout_combo.installEventFilter(self.scroll_blocker)
-        layout_row.addWidget(self.layout_combo)
-        camera_section.addLayout(layout_row)
-        
-        # Pitch/Inclination
-        pitch_row = QHBoxLayout()
-        pitch_row.addWidget(QLabel("Camera Inclination"))
-        pitch_row.addStretch()
+        adv_grid.addWidget(QLabel("Pitch Tilt:"), 1, 0)
         self.pitch_combo = QComboBox()
-        self.pitch_combo.addItem("Top Down (-90°)", -90)
-        self.pitch_combo.addItem("High (-45°)", -45)
-        self.pitch_combo.addItem("Perch (-20°)", -20)
-        self.pitch_combo.addItem("Standard (0°)", 0)
-        self.pitch_combo.addItem("Low (+20°)", 20)
-        self.pitch_combo.addItem("Ground (+45°)", 45)
-        self.pitch_combo.setFixedWidth(160)
+        self.pitch_combo.addItem("0° (Horizon Level)", 0)
+        self.pitch_combo.addItem("-20° (High / Perch Mode)", -20)
+        self.pitch_combo.addItem("+20° (Low / Ground Mode)", 20)
         self.pitch_combo.currentIndexChanged.connect(self.on_setting_changed)
-        self.pitch_combo.installEventFilter(self.scroll_blocker)
-        pitch_row.addWidget(self.pitch_combo)
-        camera_section.addLayout(pitch_row)
-        
-        content_layout.addWidget(camera_section)
-        
-        # Extraction Section
-        extraction_section = CollapsibleSection("Extraction Settings")
-        
-        # Interval
-        interval_row = QHBoxLayout()
-        interval_row.addWidget(QLabel("Extraction Interval"))
-        interval_row.addStretch()
-        
-        self.interval_spin = QDoubleSpinBox()
-        self.interval_spin.setRange(0.1, 3600.0)
-        self.interval_spin.setValue(1.0)
-        self.interval_spin.setSingleStep(0.5)
-        self.interval_spin.setFixedWidth(80)
-        self.interval_spin.valueChanged.connect(self.on_setting_changed)
-        self.interval_spin.installEventFilter(self.scroll_blocker)
-        interval_row.addWidget(self.interval_spin)
-        
-        self.interval_unit = QComboBox()
-        self.interval_unit.addItems(["Seconds", "Frames"])
-        self.interval_unit.setFixedWidth(100)
-        self.interval_unit.currentTextChanged.connect(self.on_setting_changed)
-        self.interval_unit.installEventFilter(self.scroll_blocker)
-        interval_row.addWidget(self.interval_unit)
-        
-        extraction_section.addLayout(interval_row)
-        
-        # Resolution
-        res_row = QHBoxLayout()
-        res_row.addWidget(QLabel("Output Resolution"))
-        res_row.addStretch()
-        self.res_spin = QSpinBox()
-        self.res_spin.setRange(512, 8192)
-        self.res_spin.setValue(2048)
-        self.res_spin.setSingleStep(256)
-        self.res_spin.setSuffix(" px")
-        self.res_spin.setFixedWidth(120)
-        self.res_spin.valueChanged.connect(self.on_setting_changed)
-        self.res_spin.installEventFilter(self.scroll_blocker)
-        res_row.addWidget(self.res_spin)
-        extraction_section.addLayout(res_row)
-        
-        content_layout.addWidget(extraction_section)
-        content_layout.addStretch()
-        
-        scroll.setWidget(content)
-        layout.addWidget(scroll, 1)
-        
-        return page
+        adv_grid.addWidget(self.pitch_combo, 1, 1)
 
-    def create_export_page(self):
-        """Create the export settings page."""
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
-        
-        # Header
-        header = QLabel("Export Settings")
-        header.setObjectName("headerLabel")
-        layout.addWidget(header)
-        
-        # Scroll area
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
-        content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 0, 16, 16)
-        content_layout.setSpacing(16)
-        
-        # Output Section
-        output_section = CollapsibleSection("Output Configuration")
-        
-        # Format
-        format_row = QHBoxLayout()
-        format_row.addWidget(QLabel("Image Format"))
-        format_row.addStretch()
-        self.format_combo = QComboBox()
-        self.format_combo.addItems(["jpg", "png", "tiff"])
-        self.format_combo.setFixedWidth(100)
-        self.format_combo.currentTextChanged.connect(self.on_setting_changed)
-        self.format_combo.installEventFilter(self.scroll_blocker)
-        format_row.addWidget(self.format_combo)
-        output_section.addLayout(format_row)
-        
-        # Output Directory
-        dir_row = QHBoxLayout()
-        dir_row.addWidget(QLabel("Output Folder"))
-        dir_row.addStretch()
-        
-        self.output_dir_label = QLabel("Source Folder")
-        self.output_dir_label.setStyleSheet("color: #52525B; font-style: italic;")
-        dir_row.addWidget(self.output_dir_label)
-        
-        self.btn_select_output = QPushButton("Browse...")
-        self.btn_select_output.setProperty("secondary", True)
-        self.btn_select_output.setFixedWidth(100)
-        self.btn_select_output.clicked.connect(self.select_output_directory)
-        dir_row.addWidget(self.btn_select_output)
-        output_section.addLayout(dir_row)
-        
-        content_layout.addWidget(output_section)
-        
-        # Naming Section
-        naming_section = CollapsibleSection("File Naming")
-        
-        # Naming Mode
-        naming_row = QHBoxLayout()
-        naming_row.addWidget(QLabel("Naming Convention"))
-        naming_row.addStretch()
-        self.naming_mode_combo = QComboBox()
-        self.naming_mode_combo.addItem("RealityScan (Standard)", "realityscan")
-        self.naming_mode_combo.addItem("Simple Suffix", "simple")
-        self.naming_mode_combo.addItem("Custom Pattern", "custom")
-        self.naming_mode_combo.setFixedWidth(180)
-        self.naming_mode_combo.currentIndexChanged.connect(self.on_naming_mode_changed)
-        self.naming_mode_combo.installEventFilter(self.scroll_blocker)
-        naming_row.addWidget(self.naming_mode_combo)
-        naming_section.addLayout(naming_row)
-        
-        # Custom patterns (hidden by default)
-        self.custom_naming_widget = QWidget()
-        custom_layout = QVBoxLayout(self.custom_naming_widget)
-        custom_layout.setContentsMargins(0, 8, 0, 0)
-        custom_layout.setSpacing(8)
-        
-        img_pattern_row = QHBoxLayout()
-        img_pattern_row.addWidget(QLabel("Image Pattern"))
-        img_pattern_row.addStretch()
-        self.image_pattern_input = QLineEdit()
-        self.image_pattern_input.setPlaceholderText("{filename}_frame{frame}_{camera}")
-        self.image_pattern_input.setFixedWidth(250)
-        self.image_pattern_input.textChanged.connect(self.on_setting_changed)
-        img_pattern_row.addWidget(self.image_pattern_input)
-        custom_layout.addLayout(img_pattern_row)
-        
-        mask_pattern_row = QHBoxLayout()
-        mask_pattern_row.addWidget(QLabel("Mask Pattern"))
-        mask_pattern_row.addStretch()
-        self.mask_pattern_input = QLineEdit()
-        self.mask_pattern_input.setPlaceholderText("{filename}_frame{frame}_{camera}_mask")
-        self.mask_pattern_input.setFixedWidth(250)
-        self.mask_pattern_input.textChanged.connect(self.on_setting_changed)
-        mask_pattern_row.addWidget(self.mask_pattern_input)
-        custom_layout.addLayout(mask_pattern_row)
-        
-        self.custom_naming_widget.hide()
-        naming_section.addWidget(self.custom_naming_widget)
-        
-        content_layout.addWidget(naming_section)
-        content_layout.addStretch()
-        
-        scroll.setWidget(content)
-        layout.addWidget(scroll, 1)
-        
-        return page
+        adv_grid.addWidget(QLabel("Cam Count:"), 2, 0)
+        self.cam_count_spin = QSpinBox()
+        self.cam_count_spin.setRange(1, 64)
+        self.cam_count_spin.setValue(6)
+        self.cam_count_spin.setEnabled(False)
+        self.cam_count_spin.valueChanged.connect(self.on_setting_changed)
+        adv_grid.addWidget(self.cam_count_spin, 2, 1)
 
-    def create_advanced_page(self):
-        """Create the advanced/experimental settings page."""
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
-        
-        # Header
-        header = QLabel("Advanced Settings")
-        header.setObjectName("headerLabel")
-        layout.addWidget(header)
-        
-        # Scroll area
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
-        content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 0, 16, 16)
-        content_layout.setSpacing(16)
-        
-        # AI Section
-        ai_section = CollapsibleSection("AI Processing")
-        
+        self.active_cameras_input = QLineEdit()
+        self.active_cameras_input.setPlaceholderText("All views (or indices: 0,1,4)")
+        self.active_cameras_input.editingFinished.connect(self.on_setting_changed)
+        adv_grid.addWidget(QLabel("Active views:"), 3, 0)
+        adv_grid.addWidget(self.active_cameras_input, 3, 1)
+        self.adv_camera.addLayout(adv_grid)
+
+        self.lanczos_toggle = QCheckBox("Lanczos-4 interpolation")
+        self.lanczos_toggle.toggled.connect(self.on_setting_changed)
+        self.adv_camera.addWidget(self.lanczos_toggle)
+
+        layout.addWidget(self.adv_camera)
+        return card
+
+    # -------------------------------------------------------------------------
+    # Card 2: Quality & Motion Filters
+    # -------------------------------------------------------------------------
+    def _build_quality_card(self) -> QWidget:
+        card = QFrame()
+        card.setObjectName("inspectorCard")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
+
+        title = QLabel("2. Quality & Motion Filters")
+        title.setObjectName("cardTitle")
+        layout.addWidget(title)
+
+        # Blur Rejection Row
+        blur_row = QHBoxLayout()
+        self.blur_toggle = QCheckBox("Reject Blurry Views")
+        self.blur_toggle.setChecked(False)
+        self.blur_toggle.toggled.connect(self.on_setting_changed)
+        blur_row.addWidget(self.blur_toggle)
+
+        blur_row.addWidget(QLabel("Min:"))
+        self.blur_threshold_spin = QDoubleSpinBox()
+        self.blur_threshold_spin.setRange(0.0, 1e9)
+        self.blur_threshold_spin.setValue(100.0)
+        self.blur_threshold_spin.setFixedWidth(65)
+        self.blur_threshold_spin.valueChanged.connect(self.on_setting_changed)
+        blur_row.addWidget(self.blur_threshold_spin)
+
+        self.btn_analyze = QPushButton("🔍 Analyze")
+        self.btn_analyze.setObjectName("toolBtn")
+        self.btn_analyze.clicked.connect(self.analyze_blur_for_selected)
+        blur_row.addWidget(self.btn_analyze)
+        layout.addLayout(blur_row)
+
+        # Advanced Quality Drawer
+        self.adv_quality = CollapsibleDrawer("Advanced Quality Controls")
+
+        self.smart_blur_toggle = QCheckBox("Smart Adaptive Blur (Moving Average)")
+        self.smart_blur_toggle.toggled.connect(self.on_setting_changed)
+        self.adv_quality.addWidget(self.smart_blur_toggle)
+
+        # Sharpening
+        sharp_row = QHBoxLayout()
+        self.sharpen_toggle = QCheckBox("Sharpening Recovery")
+        self.sharpen_toggle.toggled.connect(self.on_setting_changed)
+        sharp_row.addWidget(self.sharpen_toggle)
+
+        self.sharpen_slider = QDoubleSpinBox()
+        self.sharpen_slider.setRange(0.0, 5.0)
+        self.sharpen_slider.setSingleStep(0.1)
+        self.sharpen_slider.setValue(0.5)
+        self.sharpen_slider.setFixedWidth(55)
+        self.sharpen_slider.valueChanged.connect(self.on_setting_changed)
+        sharp_row.addWidget(self.sharpen_slider)
+        self.adv_quality.addLayout(sharp_row)
+
+        # Adaptive Optical Flow Motion
+        flow_row = QHBoxLayout()
+        self.adaptive_toggle = QCheckBox("Optical Flow Motion Keyframing")
+        self.adaptive_toggle.toggled.connect(self.on_setting_changed)
+        flow_row.addWidget(self.adaptive_toggle)
+
+        self.motion_threshold_spin = QDoubleSpinBox()
+        self.motion_threshold_spin.setRange(0.0, 1e6)
+        self.motion_threshold_spin.setSingleStep(0.1)
+        self.motion_threshold_spin.setValue(0.5)
+        self.motion_threshold_spin.setFixedWidth(55)
+        self.motion_threshold_spin.valueChanged.connect(self.on_setting_changed)
+        flow_row.addWidget(self.motion_threshold_spin)
+        self.adv_quality.addLayout(flow_row)
+
+        layout.addWidget(self.adv_quality)
+        return card
+
+    # -------------------------------------------------------------------------
+    # Card 3: Operator & Nadir Masking
+    # -------------------------------------------------------------------------
+    def _build_ai_card(self) -> QWidget:
+        card = QFrame()
+        card.setObjectName("inspectorCard")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
+
+        title = QLabel("3. Operator & Nadir Masking")
+        title.setObjectName("cardTitle")
+        layout.addWidget(title)
+
+        grid = QGridLayout()
+        grid.setSpacing(5)
+
         # AI Mode
-        ai_row = QHBoxLayout()
-        ai_row.addWidget(QLabel("Operator Removal"))
-        ai_row.addStretch()
+        grid.addWidget(QLabel("AI Mode:"), 0, 0)
         self.ai_combo = QComboBox()
-        self.ai_combo.addItems(["None", "Skip Frame", "Generate Mask"])
-        self.ai_combo.setFixedWidth(160)
-        self.ai_combo.currentTextChanged.connect(self.on_setting_changed)
-        self.ai_combo.installEventFilter(self.scroll_blocker)
-        ai_row.addWidget(self.ai_combo)
-        ai_section.addLayout(ai_row)
+        self.ai_combo.addItem("None", "None")
+        self.ai_combo.addItem("Generate Mask", "Generate Mask")
+        self.ai_combo.addItem("Skip Frame", "Skip Frame")
+        self.ai_combo.currentIndexChanged.connect(self.on_setting_changed)
+        grid.addWidget(self.ai_combo, 0, 1)
 
-        # Segmentation model (I3). Larger models catch partial operators (arm,
-        # pole) that nano misses, at the cost of speed. Nano is bundled; the
-        # others are auto-downloaded by Ultralytics on first use.
-        model_row = QHBoxLayout()
-        model_row.addWidget(QLabel("Model"))
-        model_row.addStretch()
+        # Nadir Disc
+        grid.addWidget(QLabel("Nadir Disc:"), 1, 0)
+        nadir_row = QHBoxLayout()
+        self.nadir_toggle = QCheckBox("Enable")
+        self.nadir_toggle.setChecked(False)
+        self.nadir_toggle.toggled.connect(self.on_setting_changed)
+        nadir_row.addWidget(self.nadir_toggle)
+
+        self.nadir_radius_spin = QDoubleSpinBox()
+        self.nadir_radius_spin.setRange(0.0, 100.0)
+        self.nadir_radius_spin.setValue(40.0)
+        self.nadir_radius_spin.setSuffix("%")
+        self.nadir_radius_spin.setFixedWidth(65)
+        self.nadir_radius_spin.valueChanged.connect(self.on_setting_changed)
+        nadir_row.addWidget(self.nadir_radius_spin)
+        grid.addLayout(nadir_row, 1, 1)
+
+        layout.addLayout(grid)
+
+        # Advanced AI Drawer
+        self.adv_ai = CollapsibleDrawer("Advanced AI & Target Classes")
+        adv_grid = QGridLayout()
+        adv_grid.setSpacing(5)
+
+        adv_grid.addWidget(QLabel("Model:"), 0, 0)
         self.ai_model_combo = QComboBox()
-        self.ai_model_combo.setFixedWidth(160)
-        for _label, _value in [
-            ("Nano (fastest)", "yolo26n-seg.pt"),
-            ("Small", "yolo26s-seg.pt"),
-            ("Medium", "yolo26m-seg.pt"),
-            ("Large", "yolo26l-seg.pt"),
-            ("XLarge (best)", "yolo26x-seg.pt"),
-        ]:
-            self.ai_model_combo.addItem(_label, _value)
+        self.ai_model_combo.addItem("YOLO26-N Seg (Fast Nano)", "yolo26n-seg.pt")
+        self.ai_model_combo.addItem("YOLO26-S Seg (Balanced Small)", "yolo26s-seg.pt")
+        self.ai_model_combo.addItem("YOLO26-M Seg (High Precision)", "yolo26m-seg.pt")
         self.ai_model_combo.currentIndexChanged.connect(self.on_setting_changed)
-        self.ai_model_combo.installEventFilter(self.scroll_blocker)
-        model_row.addWidget(self.ai_model_combo)
-        ai_section.addLayout(model_row)
+        adv_grid.addWidget(self.ai_model_combo, 0, 1)
 
-        # Invert Masks
-        self.ai_invert_toggle = ToggleSwitchWithDescription("Invert Masks", "Black=Target, White=Keep")
-        self.ai_invert_toggle.setChecked(True)
-        self.ai_invert_toggle.toggled.connect(self.on_setting_changed)
-        ai_section.addWidget(self.ai_invert_toggle)
-        
-        # Soft Mask (Feathering)
-        self.ai_feather_toggle = ToggleSwitchWithDescription("Soft Mask", "Gaussian blur on mask edges")
-        self.ai_feather_toggle.toggled.connect(self.on_setting_changed)
-        ai_section.addWidget(self.ai_feather_toggle)
-        
-        # Confidence slider
-        conf_row = QHBoxLayout()
-        conf_row.addWidget(QLabel("Confidence Level"))
-        conf_row.addStretch()
+        adv_grid.addWidget(QLabel("Confidence:"), 1, 0)
         self.ai_conf_spin = QDoubleSpinBox()
-        self.ai_conf_spin.setRange(0.01, 1.0)
+        self.ai_conf_spin.setRange(0.0, 1.0)
         self.ai_conf_spin.setSingleStep(0.05)
         self.ai_conf_spin.setValue(0.25)
-        self.ai_conf_spin.setFixedWidth(100)
         self.ai_conf_spin.valueChanged.connect(self.on_setting_changed)
-        self.ai_conf_spin.installEventFilter(self.scroll_blocker)
-        conf_row.addWidget(self.ai_conf_spin)
-        ai_section.addLayout(conf_row)
-        
-        # Targets
-        ai_section.addWidget(QLabel("Detection Targets:"))
-        
-        presets_layout = QHBoxLayout()
+        adv_grid.addWidget(self.ai_conf_spin, 1, 1)
+        self.adv_ai.addLayout(adv_grid)
+
+        # Target classes
+        cls_row = QHBoxLayout()
+        cls_row.addWidget(QLabel("Classes:"))
         self.chk_humans = QCheckBox("Humans")
         self.chk_humans.setChecked(True)
         self.chk_humans.toggled.connect(self.on_setting_changed)
@@ -628,290 +554,242 @@ class MainWindow(QMainWindow):
         self.chk_vehicles.toggled.connect(self.on_setting_changed)
         self.chk_plants = QCheckBox("Plants")
         self.chk_plants.toggled.connect(self.on_setting_changed)
-        
-        presets_layout.addWidget(self.chk_humans)
-        presets_layout.addWidget(self.chk_vehicles)
-        presets_layout.addWidget(self.chk_plants)
-        ai_section.addLayout(presets_layout)
-        
-        custom_row = QHBoxLayout()
-        custom_row.addWidget(QLabel("Custom:"))
+        cls_row.addWidget(self.chk_humans)
+        cls_row.addWidget(self.chk_vehicles)
+        cls_row.addWidget(self.chk_plants)
+        self.adv_ai.addLayout(cls_row)
+
+        cust_row = QHBoxLayout()
+        cust_row.addWidget(QLabel("Custom:"))
         self.txt_custom_classes = QLineEdit()
-        self.txt_custom_classes.setPlaceholderText("e.g. dog, umbrella, cup")
+        self.txt_custom_classes.setPlaceholderText("e.g. dog, backpack")
         self.txt_custom_classes.textChanged.connect(self.on_setting_changed)
-        custom_row.addWidget(self.txt_custom_classes)
-        
-        self.btn_view_classes = QPushButton("?")
-        self.btn_view_classes.setFixedWidth(30)
-        self.btn_view_classes.clicked.connect(self.show_available_classes)
-        custom_row.addWidget(self.btn_view_classes)
-        
-        ai_section.addLayout(custom_row)
+        cust_row.addWidget(self.txt_custom_classes)
+        self.adv_ai.addLayout(cust_row)
 
-        # Per-face masking scope (Cube layout only). When no face is checked,
-        # masking applies to every face (default). Selecting one or more faces
-        # restricts masking to them — e.g. mask the operator on "Down" without
-        # masking people in paintings on the other faces.
-        self.mask_faces_label = QLabel("Mask only on faces (none = all):")
-        ai_section.addWidget(self.mask_faces_label)
-
+        # Scoped Faces Checkboxes
+        face_box = QFrame()
+        face_lay = QGridLayout(face_box)
+        self.mask_faces_layout = face_lay
+        face_lay.setContentsMargins(0, 0, 0, 0)
+        face_lay.addWidget(QLabel("Faces (empty = all):"), 0, 0, 1, 3)
         self.mask_face_checks = {}
-        mask_faces_grid = QGridLayout()
-        cube_faces = ["Front", "Right", "Back", "Left", "Up", "Down"]
-        for i, face in enumerate(cube_faces):
+        for index, face in enumerate(["Front", "Right", "Back", "Left", "Up", "Down"]):
             chk = QCheckBox(face)
+            if face == "Down":
+                chk.setChecked(True)
             chk.toggled.connect(self.on_setting_changed)
             self.mask_face_checks[face] = chk
-            mask_faces_grid.addWidget(chk, i // 3, i % 3)
-        ai_section.addLayout(mask_faces_grid)
+            face_lay.addWidget(chk, 1 + index // 3, index % 3)
+        self.adv_ai.addWidget(face_box)
 
-        # Nadir disc mask (I2): covers the pole/tripod at the bottom of the
-        # capture on the Down face. Needs no AI and combines with the AI mask.
-        self.nadir_toggle = ToggleSwitchWithDescription("Nadir Mask", "Disc over pole/tripod (Down face)")
-        self.nadir_toggle.toggled.connect(self.on_setting_changed)
-        ai_section.addWidget(self.nadir_toggle)
+        self.ai_feather_toggle = QCheckBox("Feather mask edges (smoothed binary mask)")
+        self.ai_feather_toggle.toggled.connect(self.on_setting_changed)
+        self.adv_ai.addWidget(self.ai_feather_toggle)
 
-        nadir_row = QHBoxLayout()
-        nadir_row.addWidget(QLabel("Nadir Radius (%)"))
-        nadir_row.addStretch()
-        self.nadir_radius_spin = QDoubleSpinBox()
-        self.nadir_radius_spin.setRange(0.0, 100.0)
-        self.nadir_radius_spin.setValue(40.0)
-        self.nadir_radius_spin.setSingleStep(5.0)
-        self.nadir_radius_spin.setFixedWidth(100)
-        self.nadir_radius_spin.valueChanged.connect(self.on_setting_changed)
-        self.nadir_radius_spin.installEventFilter(self.scroll_blocker)
-        nadir_row.addWidget(self.nadir_radius_spin)
-        ai_section.addLayout(nadir_row)
+        self.ai_invert_toggle = QCheckBox("Black = ignored subject")
+        self.ai_invert_toggle.setChecked(True)
+        self.ai_invert_toggle.toggled.connect(self.on_setting_changed)
+        self.adv_ai.addWidget(self.ai_invert_toggle)
 
-        content_layout.addWidget(ai_section)
-        
-        # Blur Section
-        blur_section = CollapsibleSection("Blur Detection")
-        
-        # Enable Blur
-        self.blur_toggle = ToggleSwitchWithDescription("Enable Blur Filter", "Skip blurry frames")
-        self.blur_toggle.toggled.connect(self.on_blur_toggled)
-        blur_section.addWidget(self.blur_toggle)
-        
-        # Smart Blur
-        self.smart_blur_toggle = ToggleSwitchWithDescription("Smart Mode", "Adaptive threshold")
-        self.smart_blur_toggle.toggled.connect(self.on_smart_blur_toggled)
-        blur_section.addWidget(self.smart_blur_toggle)
-        
-        # Threshold
-        threshold_row = QHBoxLayout()
-        threshold_row.addWidget(QLabel("Threshold"))
-        threshold_row.addStretch()
-        self.blur_threshold_spin = QDoubleSpinBox()
-        self.blur_threshold_spin.setRange(0.0, 1000.0)
-        self.blur_threshold_spin.setValue(100.0)
-        self.blur_threshold_spin.setSingleStep(10.0)
-        self.blur_threshold_spin.setFixedWidth(100)
-        self.blur_threshold_spin.valueChanged.connect(self.on_setting_changed)
-        self.blur_threshold_spin.installEventFilter(self.scroll_blocker)
-        threshold_row.addWidget(self.blur_threshold_spin)
-        blur_section.addLayout(threshold_row)
-        
-        # Analyze button
-        self.btn_analyze = QPushButton("Analyze Selected Video")
-        self.btn_analyze.setProperty("secondary", True)
-        self.btn_analyze.clicked.connect(self.analyze_blur)
-        blur_section.addWidget(self.btn_analyze)
-        
-        content_layout.addWidget(blur_section)
-        
-        # Post-Processing Section
-        post_section = CollapsibleSection("Post-Processing")
-        
-        # Sharpening
-        self.sharpen_toggle = ToggleSwitchWithDescription("Enable Sharpening", "Enhance details")
-        self.sharpen_toggle.toggled.connect(self.on_sharpen_toggled)
-        post_section.addWidget(self.sharpen_toggle)
-        
-        # Sharpen Strength
-        sharpen_row = QHBoxLayout()
-        sharpen_row.addWidget(QLabel("Strength"))
-        sharpen_row.addStretch()
-        self.sharpen_slider = QDoubleSpinBox()
-        self.sharpen_slider.setRange(0.0, 2.0)
-        self.sharpen_slider.setSingleStep(0.1)
-        self.sharpen_slider.setValue(0.5)
-        self.sharpen_slider.setFixedWidth(100)
-        self.sharpen_slider.valueChanged.connect(self.on_setting_changed)
-        self.sharpen_slider.installEventFilter(self.scroll_blocker)
-        sharpen_row.addWidget(self.sharpen_slider)
-        post_section.addLayout(sharpen_row)
-        
-        # High Quality (Lanczos)
-        self.lanczos_toggle = ToggleSwitchWithDescription("High Quality (Lanczos)", "Superior reprojection sharpness")
-        self.lanczos_toggle.toggled.connect(self.on_setting_changed)
-        post_section.addWidget(self.lanczos_toggle)
-        
-        content_layout.addWidget(post_section)
-        
-        # Experimental Section
-        exp_section = CollapsibleSection("Experimental Features")
-        
-        # Adaptive Mode
-        self.adaptive_toggle = ToggleSwitchWithDescription("Adaptive Interval", "Motion-based extraction")
-        self.adaptive_toggle.toggled.connect(self.on_adaptive_toggled)
-        exp_section.addWidget(self.adaptive_toggle)
-        
-        # Motion Threshold
-        motion_row = QHBoxLayout()
-        motion_row.addWidget(QLabel("Motion Threshold"))
-        motion_row.addStretch()
-        self.motion_threshold_spin = QDoubleSpinBox()
-        self.motion_threshold_spin.setRange(0.0, 10.0)
-        self.motion_threshold_spin.setValue(0.5)
-        self.motion_threshold_spin.setSingleStep(0.1)
-        self.motion_threshold_spin.setFixedWidth(100)
-        self.motion_threshold_spin.setEnabled(False)
-        self.motion_threshold_spin.valueChanged.connect(self.on_setting_changed)
-        self.motion_threshold_spin.installEventFilter(self.scroll_blocker)
-        motion_row.addWidget(self.motion_threshold_spin)
-        exp_section.addLayout(motion_row)
-        
-        # Telemetry
-        self.telemetry_toggle = ToggleSwitchWithDescription("Export GPS/IMU", "Embed metadata in images")
-        self.telemetry_toggle.toggled.connect(self.on_setting_changed)
-        exp_section.addWidget(self.telemetry_toggle)
+        layout.addWidget(self.adv_ai)
+        return card
 
-        # Altitude Source (DJI clips expose both absolute and relative altitude)
-        altitude_row = QHBoxLayout()
-        altitude_row.addWidget(QLabel("Altitude Source"))
-        altitude_row.addStretch()
-        self.altitude_combo = QComboBox()
-        self.altitude_combo.addItem("Absolute (sea level)", "absolute")
-        self.altitude_combo.addItem("Relative (takeoff)", "relative")
-        self.altitude_combo.setFixedWidth(160)
-        self.altitude_combo.setToolTip(
-            "EXIF GPS altitude for DJI clips. Absolute (above sea level) is best for "
-            "RealityScan/COLMAP geo-referencing; Relative is height above takeoff."
-        )
-        self.altitude_combo.currentTextChanged.connect(self.on_setting_changed)
-        self.altitude_combo.installEventFilter(self.scroll_blocker)
-        altitude_row.addWidget(self.altitude_combo)
-        exp_section.addLayout(altitude_row)
+    # -------------------------------------------------------------------------
+    # Card 4: Output & Calibration
+    # -------------------------------------------------------------------------
+    def _build_export_card(self) -> QWidget:
+        card = QFrame()
+        card.setObjectName("inspectorCard")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
 
-        # Calibration EXIF (virtual-camera intrinsics + capture time + direction)
-        self.exif_intrinsics_toggle = ToggleSwitchWithDescription(
-            "Calibration EXIF", "Embed focal (from FOV), camera model and capture time"
-        )
+        title = QLabel("4. Output & Calibration")
+        title.setObjectName("cardTitle")
+        layout.addWidget(title)
+
+        grid = QGridLayout()
+        grid.setSpacing(5)
+
+        # Format
+        grid.addWidget(QLabel("Format:"), 0, 0)
+        self.format_combo = QComboBox()
+        self.format_combo.addItem("jpg")
+        self.format_combo.addItem("png")
+        self.format_combo.addItem("tiff")
+        self.format_combo.currentIndexChanged.connect(self.on_setting_changed)
+        grid.addWidget(self.format_combo, 0, 1)
+
+        # Interval
+        grid.addWidget(QLabel("Interval:"), 1, 0)
+        int_row = QHBoxLayout()
+        self.interval_spin = QDoubleSpinBox()
+        self.interval_spin.setDecimals(3)
+        self.interval_spin.setRange(0.001, 86400.0)
+        self.interval_spin.setValue(1.0)
+        self.interval_spin.setFixedWidth(55)
+        self.interval_spin.valueChanged.connect(self.on_setting_changed)
+        self.interval_unit = QComboBox()
+        self.interval_unit.addItem("Seconds")
+        self.interval_unit.addItem("Frames")
+        self.interval_unit.currentIndexChanged.connect(self.on_setting_changed)
+        int_row.addWidget(self.interval_spin)
+        int_row.addWidget(self.interval_unit)
+        grid.addLayout(int_row, 1, 1)
+
+        layout.addLayout(grid)
+
+        # Essential Export Priors
+        self.colmap_toggle = QCheckBox("Export COLMAP calibration files")
+        self.colmap_toggle.toggled.connect(self.on_setting_changed)
+        layout.addWidget(self.colmap_toggle)
+
+        self.exif_intrinsics_toggle = QCheckBox("Embed optical EXIF (focal, camera model)")
         self.exif_intrinsics_toggle.setChecked(True)
         self.exif_intrinsics_toggle.toggled.connect(self.on_setting_changed)
-        exp_section.addWidget(self.exif_intrinsics_toggle)
+        layout.addWidget(self.exif_intrinsics_toggle)
 
-        # COLMAP priors export (exact intrinsics + rig rotations + script)
-        self.colmap_toggle = ToggleSwitchWithDescription(
-            "COLMAP Priors", "Write colmap/ folder: exact intrinsics, rig rotations, script"
-        )
-        self.colmap_toggle.toggled.connect(self.on_setting_changed)
-        exp_section.addWidget(self.colmap_toggle)
+        # Advanced Export Drawer
+        self.adv_export = CollapsibleDrawer("Advanced Naming & GPS Options")
+        adv_grid = QGridLayout()
+        adv_grid.setSpacing(5)
 
-        content_layout.addWidget(exp_section)
-        content_layout.addStretch()
-        
-        scroll.setWidget(content)
-        layout.addWidget(scroll, 1)
-        
-        return page
+        adv_grid.addWidget(QLabel("Naming:"), 0, 0)
+        self.naming_mode_combo = QComboBox()
+        self.naming_mode_combo.addItem("RealityScan Standard", "realityscan")
+        self.naming_mode_combo.addItem("Simple Sequential", "simple")
+        self.naming_mode_combo.addItem("Custom Pattern", "custom")
+        self.naming_mode_combo.currentIndexChanged.connect(self.on_setting_changed)
+        adv_grid.addWidget(self.naming_mode_combo, 0, 1)
 
-    def create_action_bar(self):
-        """Create the bottom action bar."""
-        bar = QWidget()
-        bar.setObjectName("actionBar")
-        bar.setFixedHeight(100)
-        
-        layout = QVBoxLayout(bar)
-        layout.setContentsMargins(0, 16, 0, 16)
-        layout.setSpacing(12)
-        
-        # Buttons row
-        buttons = QHBoxLayout()
-        
-        self.process_btn = QPushButton("  Start Processing")
-        self.process_btn.setIcon(get_icon("play", color="#FFFFFF", size=20))
-        self.process_btn.setIconSize(QSize(20, 20))
-        self.process_btn.setFixedHeight(48)
-        self.process_btn.clicked.connect(self.start_processing)
-        self.process_btn.setEnabled(False)
-        
-        self.cancel_btn = QPushButton("  Cancel")
-        self.cancel_btn.setIcon(get_icon("x", color="#FFFFFF", size=20))
-        self.cancel_btn.setIconSize(QSize(20, 20))
-        self.cancel_btn.setObjectName("cancelButton")
-        self.cancel_btn.setFixedHeight(48)
-        self.cancel_btn.setFixedWidth(120)
+        adv_grid.addWidget(QLabel("Altitude:"), 1, 0)
+        self.altitude_combo = QComboBox()
+        self.altitude_combo.addItem("Absolute (ASL)", "absolute")
+        self.altitude_combo.addItem("Relative (AGL)", "relative")
+        self.altitude_combo.currentIndexChanged.connect(self.on_setting_changed)
+        adv_grid.addWidget(self.altitude_combo, 1, 1)
+        self.adv_export.addLayout(adv_grid)
+
+        self.telemetry_toggle = QCheckBox("Export Telemetry (GPMF / CAMM / GPX / SRT)")
+        self.telemetry_toggle.toggled.connect(self.on_setting_changed)
+        self.adv_export.addWidget(self.telemetry_toggle)
+
+        # Custom Patterns
+        self.image_pattern_input = QLineEdit("{filename}_frame{frame}_{camera}")
+        self.image_pattern_input.textChanged.connect(self.on_setting_changed)
+        self.mask_pattern_input = QLineEdit("{filename}_frame{frame}_{camera}_mask")
+        self.mask_pattern_input.textChanged.connect(self.on_setting_changed)
+        self.adv_export.addWidget(QLabel("Image filename pattern:"))
+        self.adv_export.addWidget(self.image_pattern_input)
+        self.adv_export.addWidget(QLabel("Mask filename pattern:"))
+        self.adv_export.addWidget(self.mask_pattern_input)
+        self.quality_spin = QSpinBox()
+        self.quality_spin.setRange(1, 100)
+        self.quality_spin.setValue(95)
+        self.quality_spin.valueChanged.connect(self.on_setting_changed)
+        self.adv_export.addWidget(QLabel("JPEG quality:"))
+        self.adv_export.addWidget(self.quality_spin)
+
+        # Output dir row
+        dir_row = QHBoxLayout()
+        self.output_dir_label = QLabel("Auto (Video subfolder)")
+        self.output_dir_label.setStyleSheet("color: #71717A; font-size: 10px;")
+        btn_dir = QPushButton("Browse...")
+        btn_dir.setObjectName("toolBtn")
+        btn_dir.clicked.connect(self.on_choose_output_dir)
+        dir_row.addWidget(self.output_dir_label, 1)
+        dir_row.addWidget(btn_dir)
+        self.adv_export.addLayout(dir_row)
+
+        layout.addWidget(self.adv_export)
+        return card
+
+    # -------------------------------------------------------------------------
+    # Bottom HUD Action Bar
+    # -------------------------------------------------------------------------
+    def _create_hud_bar(self) -> QWidget:
+        hud = QFrame()
+        hud.setObjectName("hudBar")
+        hud.setFixedHeight(54)
+        layout = QHBoxLayout(hud)
+        layout.setContentsMargins(18, 0, 18, 0)
+        layout.setSpacing(14)
+
+        self.estimation_label = QLabel("No media loaded.")
+        self.estimation_label.setStyleSheet("font-weight: 500; font-size: 11px; color: #D4D4D8;")
+        layout.addWidget(self.estimation_label)
+
+        self.hud_progress = QProgressBar()
+        self.hud_progress.setFixedWidth(180)
+        self.hud_progress.setFixedHeight(6)
+        self.hud_progress.setTextVisible(False)
+        self.hud_progress.hide()
+        layout.addWidget(self.hud_progress)
+
+        layout.addStretch()
+
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.setObjectName("secondaryActionBtn")
         self.cancel_btn.clicked.connect(self.cancel_processing)
         self.cancel_btn.setEnabled(False)
-        
-        buttons.addWidget(self.process_btn, 1)
-        buttons.addWidget(self.cancel_btn)
-        layout.addLayout(buttons)
+        layout.addWidget(self.cancel_btn)
 
-        # Pre-launch estimate (U5): rough count/size so a 40k-file export is
-        # never a surprise. Updated on queue/settings changes.
-        self.estimate_label = QLabel("")
-        self.estimate_label.setObjectName("estimateLabel")
-        self.estimate_label.setStyleSheet("color: #71717A; font-size: 11px;")
-        self.estimate_label.setAlignment(Qt.AlignHCenter)
-        layout.addWidget(self.estimate_label)
+        self.extract_btn = QPushButton("Extract Dataset")
+        self.extract_btn.setObjectName("primaryActionBtn")
+        self.extract_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.extract_btn.clicked.connect(self.start_processing)
+        layout.addWidget(self.extract_btn)
 
-        # Progress row
-        progress_layout = QHBoxLayout()
-        
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setValue(0)
-        self.progress_bar.setTextVisible(False)
-        self.progress_bar.setFixedHeight(8)
-        
-        self.status_label = QLabel("Ready")
-        self.status_label.setObjectName("statusLabel")
-        self.status_label.setFixedWidth(200)
-        self.status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        
-        progress_layout.addWidget(self.progress_bar, 1)
-        progress_layout.addWidget(self.status_label)
-        layout.addLayout(progress_layout)
-        
-        return bar
+        return hud
 
     # =========================================================================
-    # PAGE NAVIGATION
+    # PRESETS MANAGEMENT
     # =========================================================================
 
-    def on_page_changed(self, page_id):
-        # In the new layout, "videos" translates to "Hide Settings Panel"
-        # so the Preview can take up more space.
-        
-        if page_id == "videos":
-            self.pages_container.hide()
-            # Reset splitter to give more space to preview
-            self.right_splitter.setStretchFactor(0, 1)
-            self.right_splitter.setStretchFactor(1, 0)
-        else:
-            self.pages_container.show()
-            page_map = {
-                "settings": 0,
-                "export": 1,
-                "advanced": 2,
-            }
-            # Adjust index because we removed the videos page from the stack
-            idx = page_map.get(page_id, 0)
-            self.pages.setCurrentIndex(idx)
-            
-            # Ensure the settings panel is visible (give it some stretch)
-            self.right_splitter.setStretchFactor(0, 3) 
-            self.right_splitter.setStretchFactor(1, 2)
+    def apply_preset(self, preset_name):
+        if self.is_processing or self._loading_settings or preset_name == "Custom Workflow":
+            return
+        # A preset is an explicit patch for every selected job. Comparing only
+        # with the active card loses fields already equal to the preset there.
+        changes = dict(is_360=True, layout_mode='cube', camera_count=6,
+                        ai_mode='Generate Mask', ai_mask_cameras=['Down'],
+                        export_colmap=True, nadir_mask_enabled=True,
+                        active_cameras=None, fov=90, pitch_offset=0,
+                        resolution=2048, interpolation_mode='linear', output_format='jpg',
+                        interval_value=1.0, interval_unit='Seconds', feather_mask=False,
+                        nadir_mask_radius=40.0, naming_mode='realityscan', ai_invert_mask=True)
+        if "Postshot" in preset_name:
+            changes.update(feather_mask=True, nadir_mask_radius=35.0)
+        elif "COLMAP" in preset_name:
+            changes.update(resolution=3072, interpolation_mode='lanczos', output_format='png', interval_value=0.5)
+        settings = {**self.get_settings_from_ui(), **changes}
+        self.set_ui_from_settings(settings)
+        self._commit_ui_settings(settings, changes)
+        with QSignalBlocker(self.preset_combo):
+            self.preset_combo.setCurrentText(preset_name)
+
+    def _on_preset_selected(self, index: int):
+        self.apply_preset(self.preset_combo.currentText())
 
     # =========================================================================
-    # SETTINGS MANAGEMENT
+    # SETTINGS SYNC (SettingsManager <-> UI)
     # =========================================================================
 
-    def get_settings_from_ui(self):
+    def get_settings_from_ui(self) -> dict:
+        settings = self._read_settings_from_widgets()
+        # Widgets may round a valid value. An unrelated edit must not silently
+        # replace its original precision, including in a multiple selection.
+        for key, value in self._loaded_settings.items():
+            if key in self._displayed_settings and settings.get(key) == self._displayed_settings[key]:
+                settings[key] = copy.deepcopy(value)
+        return settings
+
+    def _read_settings_from_widgets(self) -> dict:
         return {
+            **copy.deepcopy(self._loaded_settings),
+            'quality': self.quality_spin.value(),
+            'active_cameras': None if not self.active_cameras_input.text().strip() else [int(v.strip()) if v.strip().isdigit() else v.strip() for v in self.active_cameras_input.text().split(',')],
             'is_360': self.input_360_toggle.isChecked(),
             'output_format': self.format_combo.currentText(),
             'custom_output_dir': self.custom_output_dir,
@@ -938,9 +816,7 @@ class MainWindow(QMainWindow):
             'ai_detect_vehicles': self.chk_vehicles.isChecked(),
             'ai_detect_plants': self.chk_plants.isChecked(),
             'ai_custom_classes': self.txt_custom_classes.text(),
-            'ai_mask_cameras': [
-                name for name, chk in self.mask_face_checks.items() if chk.isChecked()
-            ],
+            'ai_mask_cameras': [name for name, chk in self.mask_face_checks.items() if chk.isChecked()],
             'adaptive_mode': self.adaptive_toggle.isChecked(),
             'adaptive_threshold': self.motion_threshold_spin.value(),
             'blur_filter_enabled': self.blur_toggle.isChecked(),
@@ -950,21 +826,24 @@ class MainWindow(QMainWindow):
             'sharpening_strength': self.sharpen_slider.value(),
             'naming_mode': self.naming_mode_combo.currentData(),
             'image_pattern': self.image_pattern_input.text(),
-            'mask_pattern': self.mask_pattern_input.text()
+            'mask_pattern': self.mask_pattern_input.text(),
         }
 
-    def set_ui_from_settings(self, settings):
-        # Block signals temporarily
+    def set_ui_from_settings(self, settings: dict):
+        self._loading_settings = True
+        self._loaded_settings = copy.deepcopy(settings)
+        blockers = [QSignalBlocker(w) for w in self.findChildren(QWidget)]
+        self.quality_spin.setValue(settings.get("quality", 95))
+        self.active_cameras_input.setText(",".join(str(i) for i in settings.get("active_cameras") or []))
+        self._rebuild_mask_faces(settings)
         widgets = [
             self.format_combo, self.interval_spin, self.interval_unit,
             self.res_spin, self.fov_spin, self.cam_count_spin,
             self.layout_combo, self.pitch_combo, self.ai_combo, self.ai_model_combo,
-            self.ai_invert_toggle,
-            self.ai_conf_spin, self.chk_humans, self.chk_vehicles, self.chk_plants, self.txt_custom_classes,
-            self.nadir_toggle, self.nadir_radius_spin,
-            self.blur_threshold_spin, self.sharpen_slider,
+            self.ai_invert_toggle, self.ai_conf_spin, self.chk_humans,
+            self.chk_vehicles, self.chk_plants, self.nadir_toggle,
+            self.nadir_radius_spin, self.blur_threshold_spin, self.sharpen_slider,
             self.motion_threshold_spin, self.naming_mode_combo,
-            self.image_pattern_input, self.mask_pattern_input,
             self.lanczos_toggle, self.ai_feather_toggle, self.input_360_toggle,
             self.altitude_combo, self.exif_intrinsics_toggle, self.colmap_toggle
         ]
@@ -972,36 +851,42 @@ class MainWindow(QMainWindow):
         for w in widgets:
             w.blockSignals(True)
 
-        # Set values
         self.input_360_toggle.setChecked(settings.get('is_360', True))
         self.format_combo.setCurrentText(settings.get('output_format', 'jpg'))
         self.custom_output_dir = settings.get('custom_output_dir', "")
         if self.custom_output_dir:
             self.output_dir_label.setText(os.path.basename(self.custom_output_dir))
-            self.output_dir_label.setStyleSheet("color: #FFFFFF;")
-        
+            self.output_dir_label.setStyleSheet("color: #E6E6EA;")
+
         self.interval_spin.setValue(settings.get('interval_value', 1.0))
         self.interval_unit.setCurrentText(settings.get('interval_unit', 'Seconds'))
         self.res_spin.setValue(settings.get('resolution', 2048))
         self.fov_spin.setValue(settings.get('fov', 90))
+        self.fov_slider.setValue(round(self.fov_spin.value()))
         self.cam_count_spin.setValue(settings.get('camera_count', 6))
-        
-        layout_val = settings.get('layout_mode', 'ring')
+
+        layout_val = settings.get('layout_mode', 'cube')
         if layout_val == 'adaptive':
             layout_val = 'ring'
         idx = self.layout_combo.findData(layout_val)
         if idx >= 0:
             self.layout_combo.setCurrentIndex(idx)
-            
+
         pitch_val = settings.get('pitch_offset', 0)
         idx = self.pitch_combo.findData(pitch_val)
-        if idx >= 0:
-            self.pitch_combo.setCurrentIndex(idx)
-            
+        if idx < 0:
+            self.pitch_combo.addItem(f"{pitch_val}°", pitch_val)
+            idx = self.pitch_combo.count() - 1
+        self.pitch_combo.setCurrentIndex(idx)
+
         self.ai_combo.setCurrentText(settings.get('ai_mode', 'None'))
         model_idx = self.ai_model_combo.findData(settings.get('ai_model', 'yolo26n-seg.pt'))
-        if model_idx >= 0:
-            self.ai_model_combo.setCurrentIndex(model_idx)
+        if model_idx < 0:
+            model = settings.get("ai_model", "yolo26n-seg.pt")
+            self.ai_model_combo.addItem(model, model)
+            model_idx = self.ai_model_combo.count() - 1
+        self.ai_model_combo.setCurrentIndex(model_idx)
+
         self.ai_invert_toggle.setChecked(settings.get('ai_invert_mask', True))
         self.ai_conf_spin.setValue(settings.get('ai_confidence', 0.25))
         self.nadir_toggle.setChecked(settings.get('nadir_mask_enabled', False))
@@ -1021,14 +906,12 @@ class MainWindow(QMainWindow):
         self.blur_toggle.setChecked(settings.get('blur_filter_enabled', False))
         self.smart_blur_toggle.setChecked(settings.get('smart_blur_enabled', False))
         self.blur_threshold_spin.setValue(settings.get('blur_threshold', 100.0))
-        
         self.sharpen_toggle.setChecked(settings.get('sharpening_enabled', False))
         self.sharpen_slider.setValue(settings.get('sharpening_strength', 0.5))
-        
+
         self.adaptive_toggle.setChecked(settings.get('adaptive_mode', False))
         self.motion_threshold_spin.setValue(settings.get('adaptive_threshold', 0.5))
-        self.motion_threshold_spin.setEnabled(self.adaptive_toggle.isChecked())
-        
+
         self.telemetry_toggle.setChecked(settings.get('export_telemetry', False))
         self.exif_intrinsics_toggle.setChecked(settings.get('exif_intrinsics', True))
         self.colmap_toggle.setChecked(settings.get('export_colmap', False))
@@ -1038,53 +921,85 @@ class MainWindow(QMainWindow):
         if idx >= 0:
             self.altitude_combo.setCurrentIndex(idx)
 
-        # High Quality / Feathering
         self.lanczos_toggle.setChecked(settings.get('interpolation_mode', 'linear') == 'lanczos')
         self.ai_feather_toggle.setChecked(settings.get('feather_mask', False))
-        
+
         naming_mode = settings.get('naming_mode', 'realityscan')
         idx = self.naming_mode_combo.findData(naming_mode)
         if idx >= 0:
             self.naming_mode_combo.setCurrentIndex(idx)
         self.image_pattern_input.setText(settings.get('image_pattern', ''))
         self.mask_pattern_input.setText(settings.get('mask_pattern', ''))
-        self.update_naming_ui_state()
-        
-        # Unblock signals
+
         for w in widgets:
             w.blockSignals(False)
 
-        # Sync enabled-state of 360-only controls (signals were blocked above)
         self._apply_360_state(self.input_360_toggle.isChecked())
+        self.preset_combo.setCurrentText("Custom Workflow")
+        del blockers
+        self._displayed_settings = self._read_settings_from_widgets()
+        self._loading_settings = False
+
+    def _sync_fov_slider(self, value):
+        with QSignalBlocker(self.fov_slider):
+            self.fov_slider.setValue(round(value))
+
+    def _rebuild_mask_faces(self, settings):
+        for checkbox in self.mask_face_checks.values():
+            self.mask_faces_layout.removeWidget(checkbox)
+            checkbox.deleteLater()
+        selected = settings.get('ai_mask_cameras') or []
+        if isinstance(selected, str):
+            selected = [v.strip() for v in selected.split(',') if v.strip()]
+        selected_lower = {v.lower() for v in selected}
+        views = GeometryProcessor.generate_views(max(1, min(64, settings.get('camera_count', 6))), settings.get('pitch_offset', 0), settings.get('layout_mode', 'ring')) if settings.get('is_360', True) else [('flat', 0, 0, 0)]
+        names = [v[0] for v in views]
+        missing = [v for v in selected if v.lower() not in {n.lower() for n in names}]
+        self.mask_face_checks = {}
+        for index, name in enumerate(names + missing):
+            checkbox = QCheckBox(name + (' (unavailable)' if name in missing else ''))
+            checkbox.setChecked(name.lower() in selected_lower)
+            checkbox.toggled.connect(self.on_setting_changed)
+            self.mask_face_checks[name] = checkbox
+            self.mask_faces_layout.addWidget(checkbox, 1 + index // 3, index % 3)
 
     def update_default_settings_from_ui(self):
         self.default_settings = self.get_settings_from_ui()
 
     def on_setting_changed(self):
-        if self.is_processing:
+        if self._loading_settings or self.is_processing:
             return
 
-        self._update_mask_faces_state()
         current_settings = self.get_settings_from_ui()
-        
+        changes = {k: v for k, v in current_settings.items() if self._loaded_settings.get(k) != v}
+        if set(changes) & {'is_360', 'camera_count', 'layout_mode', 'pitch_offset', 'active_cameras'}:
+            self._rebuild_mask_faces(current_settings)
+        self._commit_ui_settings(current_settings, changes)
+
+    def _commit_ui_settings(self, current_settings, changes):
         if self._selected_cards:
-            # Apply settings to all selected cards
             for card in self._selected_cards:
-                card.job.settings = current_settings
+                card.job.settings.update(copy.deepcopy(changes))
+                if changes:
+                    key = id(card.job)
+                    self._job_settings_revisions[key] = self._job_settings_revisions.get(key, 0) + 1
                 card.refresh()
         else:
             self.default_settings = current_settings
             for key, value in current_settings.items():
                 self.settings_manager.set(key, value)
+            self.settings_manager.save_settings()
 
+        self._loaded_settings = copy.deepcopy(current_settings)
+        self._displayed_settings = self._read_settings_from_widgets()
+        with QSignalBlocker(self.preset_combo):
+            self.preset_combo.setCurrentText("Custom Workflow")
         self.update_preview_display()
         self.update_estimate()
 
-    # =========================================================================
-    # UI STATE HANDLERS
-    # =========================================================================
-
-    def on_layout_changed(self, index):
+    def on_layout_changed(self, index: int):
+        if self._loading_settings:
+            return
         mode = self.layout_combo.currentData()
         if mode == 'cube':
             self.cam_count_spin.setValue(6)
@@ -1093,534 +1008,396 @@ class MainWindow(QMainWindow):
             self.cam_count_spin.setEnabled(True)
         self.on_setting_changed()
 
-    def on_360_toggled(self, checked):
+    def on_360_toggled(self, checked: bool):
         self._apply_360_state(checked)
         self.on_setting_changed()
 
-    def _apply_360_state(self, is_360):
-        """Enable/disable 360-only controls when toggling flat (non-360) mode."""
-        self.fov_spin.setEnabled(is_360)
+    def _apply_360_state(self, is_360: bool):
+        self.cam_count_spin.setEnabled(is_360 and self.layout_combo.currentData() != "cube")
         self.layout_combo.setEnabled(is_360)
         self.pitch_combo.setEnabled(is_360)
-        if is_360:
-            # Respect the cube layout which forces exactly 6 cameras.
-            self.cam_count_spin.setEnabled(self.layout_combo.currentData() != 'cube')
-        else:
-            self.cam_count_spin.setEnabled(False)
-        self._update_mask_faces_state()
-
-    def _update_mask_faces_state(self):
-        """Per-face masking is named-face based, so it's GUI-exposed for the Cube
-        layout only, and only meaningful when an AI mode is active on 360 input."""
-        enabled = (
-            self.input_360_toggle.isChecked()
-            and self.layout_combo.currentData() == 'cube'
-            and self.ai_combo.currentText() != 'None'
-        )
-        self.mask_faces_label.setEnabled(enabled)
-        for chk in self.mask_face_checks.values():
-            chk.setEnabled(enabled)
-
-    def on_blur_toggled(self, checked):
-        self.blur_threshold_spin.setEnabled(checked)
-        self.smart_blur_toggle.setChecked(False)
-        self.on_setting_changed()
-
-    def on_smart_blur_toggled(self, checked):
-        self.on_setting_changed()
-
-    def on_sharpen_toggled(self, checked):
-        self.sharpen_slider.setEnabled(checked)
-        self.on_setting_changed()
-
-    def on_adaptive_toggled(self, checked):
-        self.motion_threshold_spin.setEnabled(checked)
-        self.on_setting_changed()
-
-    def on_naming_mode_changed(self, index):
-        self.update_naming_ui_state()
-        self.on_setting_changed()
-
-    def update_naming_ui_state(self):
-        mode = self.naming_mode_combo.currentData()
-        self.custom_naming_widget.setVisible(mode == 'custom')
-
-    def select_output_directory(self):
-        dir_path = QFileDialog.getExistingDirectory(self, "Select Output Directory")
-        if dir_path:
-            self.custom_output_dir = dir_path
-            self.output_dir_label.setText(os.path.basename(dir_path))
-            self.output_dir_label.setStyleSheet("color: #FFFFFF;")
-            self.on_setting_changed()
+        self.fov_slider.setEnabled(is_360)
+        self.fov_spin.setEnabled(is_360)
 
     # =========================================================================
-    # QUEUE MANAGEMENT
+    # QUEUE & MEDIA MANAGEMENT
     # =========================================================================
 
-    def handle_files_dropped(self, files):
-        valid_extensions = ['.mp4', '.mov', '.mkv', '.avi', '.jpg', '.jpeg', '.png', '.tiff', '.tif']
-        valid_files = [f for f in files if os.path.splitext(f)[1].lower() in valid_extensions]
-        
-        if valid_files:
-            for f in valid_files:
-                self.add_job(f)
-            self.process_btn.setEnabled(True)
-        else:
-            QMessageBox.warning(self, "Invalid Files", "Please drop 360° videos or images (.mp4, .mov, .mkv, .avi, .jpg, .png, etc.)")
-
-    def open_file_dialog(self):
+    def on_add_video_clicked(self):
         files, _ = QFileDialog.getOpenFileNames(
-            self, "Select 360° Media", "", "Media Files (*.mp4 *.mov *.mkv *.avi *.jpg *.jpeg *.png *.tiff *.tif)"
+            self,
+            "Select 360° Videos or Images",
+            "",
+            "Media Files (*.mp4 *.mov *.insv *.jpg *.jpeg *.png *.tiff *.tif);;All Files (*)"
         )
         if files:
-            self.handle_files_dropped(files)
+            self.add_videos_from_paths(files)
 
-    def add_job(self, file_path):
-        job = Job(file_path=file_path, settings=copy.deepcopy(self.default_settings))
-        self.jobs.append(job)
-        
-        # Create video card
-        card = VideoCard(job)
-        card.clicked.connect(lambda c=card: self.on_card_clicked(c))
-        card.ctrl_clicked.connect(lambda c=card: self.on_card_ctrl_clicked(c))
-        card.remove_clicked.connect(lambda c=card: self.remove_job_by_card(c))
-        card.open_folder_clicked.connect(lambda c=card: self.open_output_folder(c.job))
+    def add_videos_from_paths(self, paths: list[str]):
+        if self.is_processing or self._closing:
+            return
+        existing = {os.path.realpath(j.file_path) for j in self.jobs}
+        paths = discover_media(paths)
+        new_jobs = [self._create_job_for_path(p) for p in paths if os.path.realpath(p) not in existing]
 
-        # Insert before stretch
-        self.queue_layout.insertWidget(self.queue_layout.count() - 1, card)
-        self._video_cards.append(card)
+        if not new_jobs:
+            return
 
-        # Automatically select the newly added card
-        self.on_card_clicked(card)
+        for job in new_jobs:
+            self.jobs.append(job)
+            card = VideoCard(job)
+            card.clicked.connect(lambda c=card: self.select_card(c))
+            card.ctrl_clicked.connect(lambda c=card: self.toggle_card_selection(c))
+            card.remove_clicked.connect(lambda c=card: self.remove_video(c))
+            card.open_folder_clicked.connect(lambda j=job: self._open_job_output_folder(j))
+
+            self._video_cards.append(card)
+            self.cards_layout.insertWidget(self.cards_layout.count() - 1, card)
+
+        self._update_queue_ui_state()
+
+        if self._video_cards:
+            self.select_card(self._video_cards[-1])
+
         self.update_estimate()
 
+    def _create_job_for_path(self, path: str) -> Job:
+        job = Job(path)
+        job.settings = copy.deepcopy(self.default_settings)
+        return job
 
-    def on_card_clicked(self, card):
-        """Single click: select only this card, deselect others."""
-        # Deselect all previous
+    def remove_video(self, card: VideoCard):
+        if self.is_processing:
+            return
+        if card in self._video_cards:
+            idx = self._video_cards.index(card)
+            self.cards_layout.removeWidget(card)
+            self._video_cards.remove(card)
+            if card.job in self.jobs:
+                self.jobs.remove(card.job)
+            if card in self._selected_cards:
+                self._selected_cards.remove(card)
+            card._cleanup_thread()
+            card.deleteLater()
+
+            self._update_queue_ui_state()
+
+            if self._video_cards:
+                new_idx = min(idx, len(self._video_cards) - 1)
+                self.select_card(self._video_cards[new_idx])
+            else:
+                self.clear_selection()
+
+            self.update_estimate()
+
+    def clear_completed_jobs(self):
+        to_remove = [card for card in self._video_cards if card.job.status == "Done"]
+        for card in to_remove:
+            self.remove_video(card)
+
+    def _update_queue_ui_state(self):
+        count = len(self._video_cards)
+        self.queue_count_badge.setText(f"{count} file{'s' if count != 1 else ''}")
+        self.drop_zone.setVisible(True)
+
+    def select_card(self, card: VideoCard):
         for c in self._selected_cards:
             c.setSelected(False)
-        self._selected_cards.clear()
-        
-        # Select new
+        self._selected_cards = [card]
         card.setSelected(True)
-        self._selected_cards.append(card)
-        
-        # Update settings UI from this card
+
         self.set_ui_from_settings(card.job.settings)
         self.update_preview_display()
-        
-    def on_card_ctrl_clicked(self, card):
-        """Ctrl+click: toggle selection without deselecting others."""
+        self.update_estimate()
+
+    def toggle_card_selection(self, card: VideoCard):
         if card in self._selected_cards:
-            # Deselect this card
             card.setSelected(False)
             self._selected_cards.remove(card)
         else:
-            # Add to selection
             card.setSelected(True)
             self._selected_cards.append(card)
-        
-        # Update preview to last selected
+
         if self._selected_cards:
             self.set_ui_from_settings(self._selected_cards[-1].job.settings)
         self.update_preview_display()
+        self.update_estimate()
 
-    def remove_job_by_card(self, card):
-        if card in self._video_cards:
-            idx = self._video_cards.index(card)
-            self._video_cards.remove(card)
-            self.jobs.pop(idx)
-            card.deleteLater()
-            
-            if card in self._selected_cards:
-                self._selected_cards.remove(card)
-                if not self._selected_cards:
-                    self.set_ui_from_settings(self.default_settings)
-                self.update_preview_display()
-            
-            if not self.jobs:
-                self.process_btn.setEnabled(False)
-            self.update_estimate()
-
-    def remove_selected_jobs(self):
-        """Remove all selected jobs."""
-        for card in self._selected_cards[:]:  # Copy list to avoid modification during iteration
-            self.remove_job_by_card(card)
-
-    def clear_queue(self):
-        for card in self._video_cards[:]:
-            card.deleteLater()
-        self._video_cards.clear()
-        self.jobs.clear()
-        self._selected_cards.clear()
-        self.process_btn.setEnabled(False)
-        self.set_ui_from_settings(self.default_settings)
-        self.update_preview_display()
+    def clear_selection(self):
+        for c in self._selected_cards:
+            c.setSelected(False)
+        self._selected_cards = []
+        self.preview_widget.update_preview(None, {})
         self.update_estimate()
 
     def update_preview_display(self):
         if self._selected_cards:
-            # Show preview for the last selected card
-            job = self._selected_cards[-1].job
-            self.preview_widget.update_preview(job.file_path, self.get_settings_from_ui())
+            active_card = self._selected_cards[-1]
+            settings = active_card.job.settings or self.get_settings_from_ui()
+            self.preview_widget.update_preview(active_card.job.file_path, settings)
+        elif self._video_cards:
+            active_card = self._video_cards[0]
+            settings = active_card.job.settings or self.get_settings_from_ui()
+            self.preview_widget.update_preview(active_card.job.file_path, settings)
         else:
-            self.preview_widget.update_preview(None, None)
+            self.preview_widget.update_preview(None, {})
+
+    def _open_job_output_folder(self, job: Job):
+        out_dir = job.result.get("output_dir")
+        if not out_dir:
+            out_dir = os.path.join(job.settings.get("custom_output_dir") or os.path.dirname(job.file_path), Path(job.file_path).stem + "_processed")
+        if not out_dir:
+            out_dir = os.path.join(os.path.dirname(job.file_path), Path(job.file_path).stem + "_processed")
+        if os.path.exists(out_dir):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(out_dir))
+
+    def on_choose_output_dir(self):
+        directory = QFileDialog.getExistingDirectory(self, "Select Output Directory", self.custom_output_dir or "")
+        if directory:
+            self.custom_output_dir = directory
+            self.output_dir_label.setText(os.path.basename(directory))
+            self.output_dir_label.setStyleSheet("color: #E6E6EA;")
+            self.on_setting_changed()
 
     # =========================================================================
-    # ESTIMATE (U5)
+    # ESTIMATION
     # =========================================================================
-
-    _IMAGE_EXTS = ('.jpg', '.jpeg', '.png', '.tiff', '.tif')
-
-    def _media_meta(self, path):
-        """Return (fps, frame_count, width, height) for a media file, cached.
-
-        Reads container metadata only (no frame decoding), so it is cheap enough
-        to call while assembling the queue estimate.
-        """
-        if not hasattr(self, '_media_meta_cache'):
-            self._media_meta_cache = {}
-        if path in self._media_meta_cache:
-            return self._media_meta_cache[path]
-
-        fps, frames, w, h = 0.0, 1, 0, 0
-        try:
-            if path.lower().endswith(self._IMAGE_EXTS):
-                with Image.open(path) as im:
-                    w, h = im.size
-            else:
-                cap = cv2.VideoCapture(path)
-                if cap.isOpened():
-                    fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
-                    frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
-                    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                cap.release()
-        except Exception:
-            pass
-
-        meta = (fps, max(1, frames), w, h)
-        self._media_meta_cache[path] = meta
-        return meta
-
-    def _estimate_queue(self):
-        """Estimate (frames, images, bytes) for the whole queue.
-
-        Approximate on purpose: it ignores adaptive/blur skips (so it is an
-        upper bound) and uses rough bytes-per-pixel figures per format.
-        """
-        # Rough encoded size per pixel (RGB); TIFF here is uncompressed.
-        bpp = {'jpg': 0.45, 'jpeg': 0.45, 'png': 2.0, 'tiff': 3.0, 'tif': 3.0}
-        total_frames = 0
-        total_images = 0
-        total_bytes = 0.0
-
-        for job in self.jobs:
-            s = job.settings
-            fps, frames, w, h = self._media_meta(job.file_path)
-            is_image = job.file_path.lower().endswith(self._IMAGE_EXTS)
-
-            # Extraction interval in frames.
-            interval_value = float(s.get('interval_value', 1.0))
-            if s.get('interval_unit', 'Seconds') == 'Frames':
-                interval = max(1, int(interval_value))
-            else:
-                interval = max(1, round((fps or 30.0) * interval_value))
-            n_extract = 1 if is_image else (frames + interval - 1) // interval
-
-            # Views per frame + per-view pixel count.
-            if not s.get('is_360', True):
-                n_views = 1
-                px = (w or 1920) * (h or 1080)
-            else:
-                if s.get('layout_mode', 'ring') == 'cube':
-                    n_views = 6
-                else:
-                    n_views = int(s.get('camera_count', 6))
-                active = s.get('active_cameras')
-                if active:
-                    n_views = min(n_views, len(active))
-                res = int(s.get('resolution', 2048))
-                px = res * res
-
-            imgs = n_extract * n_views
-            fmt = str(s.get('output_format', 'jpg')).lower()
-            total_frames += n_extract
-            total_images += imgs
-            total_bytes += imgs * px * bpp.get(fmt, 0.6)
-
-        return total_frames, total_images, total_bytes
-
-    @staticmethod
-    def _human_size(num_bytes):
-        size = float(num_bytes)
-        for unit in ('B', 'KB', 'MB'):
-            if size < 1024:
-                return f"{size:.0f} {unit}"
-            size /= 1024
-        return f"{size:.1f} GB"
 
     def update_estimate(self):
-        """Refresh the pre-launch estimate label from the current queue."""
-        if not hasattr(self, 'estimate_label'):
-            return
         if not self.jobs:
-            self.estimate_label.setText("")
+            self.estimation_label.setText("No media loaded.")
+            self.extract_btn.setText("Extract Dataset")
+            self.extract_btn.setEnabled(False)
             return
-        frames, images, size = self._estimate_queue()
-        views = round(images / frames) if frames else 0
-        self.estimate_label.setText(
-            f"~{images:,} images ({frames:,} frames × {views} views), ~{self._human_size(size)}"
+
+        total_images = 0
+        total_size_mb = 0.0
+
+        for job in self.jobs:
+            s = job.settings or self.default_settings
+            is_360 = s.get('is_360', True)
+            cams = s.get('camera_count', 6) if is_360 else 1
+            interval_val = s.get('interval_value', 1.0)
+            interval_unit = s.get('interval_unit', 'Seconds')
+            res = s.get('resolution', 2048)
+
+            key = (job.file_path, os.path.getmtime(job.file_path) if os.path.exists(job.file_path) else None)
+            if key not in self._media_info:
+                if Path(job.file_path).suffix.lower() in ('.jpg', '.jpeg', '.png', '.tif', '.tiff'):
+                    self._media_info[key] = (1, 1.0)
+                else:
+                    cap = cv2.VideoCapture(job.file_path)
+                    try:
+                        self._media_info[key] = (max(1, int(cap.get(cv2.CAP_PROP_FRAME_COUNT))), cap.get(cv2.CAP_PROP_FPS) or 30.0)
+                    finally:
+                        cap.release()
+            frame_count, fps = self._media_info[key]
+            cams = (6 if s.get('layout_mode') == 'cube' else cams) if is_360 else 1
+            if s.get('active_cameras') is not None:
+                cams = len(s['active_cameras'])
+
+            if interval_unit == 'Frames':
+                from extractor360.core.frame_timing import frame_step
+                step = frame_step(interval_val)
+                extracted_frames = max(1, math.ceil(frame_count / step))
+            else:
+                # PTS sampling cannot be inferred exactly from nominal FPS.
+                extracted_frames = max(1, min(frame_count, math.ceil((frame_count / fps) / max(0.001, interval_val))))
+
+            job_images = extracted_frames * cams
+            total_images += job_images
+
+            # Estimate image size (jpg ~1.2MB, png ~4MB)
+            fmt = s.get('output_format', 'jpg')
+            mb_per_img = 1.2 if fmt == 'jpg' else (4.5 if fmt == 'png' else 8.0)
+            mb_per_img *= (res / 2048.0) ** 2
+            total_size_mb += job_images * mb_per_img
+
+        gb_size = total_size_mb / 1024.0
+        self.estimation_label.setText(
+            f"Estimated {total_images:,} pinhole images ({len(self.jobs)} media) • ~{gb_size:.1f} GB before masks • filters may reduce count"
         )
+        self.extract_btn.setText(f"Extract Dataset ({len(self.jobs)} video{'s' if len(self.jobs) > 1 else ''})")
+        self.extract_btn.setEnabled(not self.is_processing and not self._closing)
 
     # =========================================================================
-    # OUTPUT FOLDER (U4)
+    # BLUR ANALYSIS
     # =========================================================================
 
-    def _job_output_dir(self, job):
-        """Mirror the processor's output-folder logic for a job."""
-        file_path = job.file_path
-        name_no_ext = os.path.splitext(os.path.basename(file_path))[0]
-        custom = job.output_dir
-        base = custom if (custom and os.path.isdir(custom)) else os.path.dirname(file_path)
-        return os.path.join(base, f"{name_no_ext}_processed")
+    def analyze_blur_for_selected(self):
+        if self._blur_thread is not None or self.is_processing:
+            return
+        if not self._selected_cards:
+            QMessageBox.information(self, "No Video Selected", "Please select a video from the queue to analyze.")
+            return
 
-    def _open_folder(self, path):
-        if path and os.path.isdir(path):
-            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
-            return True
-        QMessageBox.warning(self, "Folder Not Found", f"Output folder does not exist yet:\n{path}")
-        return False
+        card = self._selected_cards[-1]
+        self.btn_analyze.setText("Analyzing...")
+        self.btn_analyze.setEnabled(False)
 
-    def open_output_folder(self, job):
-        """Open the output folder for a single finished job."""
-        self._open_folder(self._job_output_dir(job))
+        self._blur_job = card.job
+        self._blur_settings = copy.deepcopy(card.job.settings or self.default_settings)
+        self._blur_revision = self._job_settings_revisions.get(id(card.job), 0)
+        self._blur_thread = QThread(self)
+        self._blur_worker = BlurAnalysisWorker(card.job.file_path, copy.deepcopy(self._blur_settings))
+        self._blur_worker.moveToThread(self._blur_thread)
 
-    # =========================================================================
-    # PROCESSING
-    # =========================================================================
+        self._blur_thread.started.connect(self._blur_worker.run)
+        self._blur_worker.finished.connect(self._on_blur_analysis_finished)
+        self._blur_worker.error.connect(self._on_blur_analysis_error)
+        self._blur_worker.finished.connect(self._blur_thread.quit, Qt.DirectConnection)
+        self._blur_worker.error.connect(self._blur_thread.quit, Qt.DirectConnection)
+        self._blur_worker.error.connect(self._blur_worker.deleteLater)
+        self._blur_worker.finished.connect(self._blur_worker.deleteLater)
+        self._blur_thread.finished.connect(self._blur_thread.deleteLater)
+        self._blur_thread.finished.connect(self._clear_blur_worker)
+        self._blur_thread.start()
+
+    def _clear_blur_worker(self):
+        self._blur_thread = None
+        self._blur_worker = None
+        self.btn_analyze.setText("Analyze")
+        self.btn_analyze.setEnabled(not self.is_processing)
+
+    def _on_blur_analysis_finished(self, result: dict):
+        if self._closing or self._blur_job not in self.jobs:
+            return
+        if (self._job_settings_revisions.get(id(self._blur_job), 0) != self._blur_revision
+                or (self._blur_job.settings or self.default_settings) != self._blur_settings):
+            self.log_panel.log("Blur analysis discarded because the job settings changed. Run Analyze again.")
+            return
+        # A conservative suggestion from one sample, never a calibrated guarantee.
+        threshold = min(1e9, max(0.0, float(result['average']) * 0.6))
+        self._blur_job.settings.update(blur_threshold=threshold, blur_filter_enabled=True)
+        if self._selected_cards and self._selected_cards[-1].job is self._blur_job:
+            self.set_ui_from_settings(self._blur_job.settings)
+        self.log_panel.log(f"Blur sample: average {result['average']:.1f}; suggested threshold {threshold:.1f}")
+
+    def _on_blur_analysis_error(self, error_msg: str):
+        if not self._closing:
+            self.log_panel.log(f"Analysis failed: {error_msg}", "ERROR")
 
     def start_processing(self):
-        if not self.jobs:
+        if self.is_processing or not self.jobs or self._blur_thread is not None:
             return
-            
-        self.toggle_processing_state(True)
-        self._was_cancelled = False
-        self.progress_bar.setValue(0)
-        self.status_label.setText("Initializing...")
+        self._processing_jobs = [j for j in self.jobs if j.status in ("Pending", "Error", "Cancelled")] or list(self.jobs)
+        self._active_job_index = 0
+        # A native preview call may still hold its model after cancellation.
+        # Drain it asynchronously before extraction loads another AI service.
+        self.preview_widget.suspend()
+        self._waiting_for_preview = True
+        self.is_processing = True
+        self.left_panel.setEnabled(False)
+        self.right_panel.setEnabled(False)
+        self.top_nav.setEnabled(False)
+        self.extract_btn.setEnabled(False)
+        self.cancel_btn.setEnabled(True)
+        self.hud_progress.show()
+        self.hud_progress.setValue(0)
+        self._start_when_preview_idle()
 
-        for card in self._video_cards:
-            card.update_status("Pending")
-
-        # The worker is Qt-free; the bridge re-emits its callback events as Qt
-        # signals so they arrive queued on the GUI thread. A plain Python
-        # thread is enough (and avoids the classic self.thread/QObject.thread()
-        # shadowing trap).
-        self.worker = ProcessingWorker(self.jobs)
-        self._bridge = ProcessingBridge().attach(self.worker)
-
-        self._bridge.job_started.connect(self.on_job_started)
-        self._bridge.job_finished.connect(self.on_job_finished)
-        self._bridge.job_error.connect(self.on_job_error)
-        self._bridge.progress_updated.connect(self.update_progress)
-        self._bridge.finished.connect(self.processing_finished)
-
-        self._worker_thread = threading.Thread(
-            target=self.worker.run, name="ProcessingWorker", daemon=True
-        )
-        self._worker_thread.start()
+    def _start_when_preview_idle(self):
+        if not self._waiting_for_preview or self._closing:
+            return
+        if self.preview_widget.threadpool.activeThreadCount():
+            self.estimation_label.setText("Waiting for the current preview to stop…")
+            QTimer.singleShot(50, self._start_when_preview_idle)
+            return
+        self._waiting_for_preview = False
+        try:
+            self._controller = ProcessingController(self._processing_jobs, self)
+            self.worker = self._controller.worker
+            bridge = self._controller.bridge
+            bridge.progress_updated.connect(self._on_processing_progress)
+            bridge.job_started.connect(self._on_job_started)
+            bridge.job_finished.connect(self._on_job_finished)
+            bridge.job_error.connect(self._on_job_error)
+            bridge.job_cancelled.connect(self._on_job_cancelled)
+            self._controller.finished.connect(self._on_processing_finished)
+            self._controller.start()
+        except Exception as exc:
+            self.log_panel.log(f"Could not start extraction: {exc}", "ERROR")
+            self._on_processing_finished()
 
     def cancel_processing(self):
-        if hasattr(self, 'worker'):
-            self._was_cancelled = True
-            self.status_label.setText("Cancelling...")
-            self.worker.stop()
-            self.cancel_btn.setEnabled(False)
-
-    def toggle_processing_state(self, is_processing):
-        self.is_processing = is_processing
-        self.process_btn.setEnabled(not is_processing)
-        self.cancel_btn.setEnabled(is_processing)
-        self.drop_zone.setEnabled(not is_processing)
-        self.btn_remove.setEnabled(not is_processing)
-        self.btn_clear.setEnabled(not is_processing)
-        self.sidebar.setEnabled(not is_processing)
-        
-        if is_processing:
-            self.process_btn.setText("Processing...")
-        else:
-            self.process_btn.setText("▶  Start Processing")
-
-    def on_job_started(self, index):
-        if 0 <= index < len(self._video_cards):
-            self._video_cards[index].update_status("Processing")
-
-    def on_job_finished(self, index):
-        if 0 <= index < len(self._video_cards):
-            self._video_cards[index].update_status("Done")
-
-    def on_job_error(self, index, message):
-        # Mark the failing card without interrupting the rest of the batch.
-        if 0 <= index < len(self._video_cards):
-            self._video_cards[index].update_status("Error")
-        logger.error(f"Job {index} failed: {message}")
-
-    def update_progress(self, value, message):
-        self.progress_bar.setValue(value)
-        self.status_label.setText(message.split(" - ")[0] if " - " in message else message)
-        
-        # Update current job progress
-        for i, card in enumerate(self._video_cards):
-            if card.job.status == "Processing":
-                card.set_progress(value)
-
-    def processing_finished(self):
-        error_count = getattr(self.worker, 'error_count', 0) if hasattr(self, 'worker') else 0
-        self.toggle_processing_state(False)
-        self.progress_bar.setValue(100)
-
-        if getattr(self, '_was_cancelled', False):
-            self.status_label.setText("Cancelled")
-            self._show_completion_dialog(
-                QMessageBox.Information, "Cancelled", "Processing was cancelled.", with_open=True
-            )
-        elif error_count > 0:
-            self.status_label.setText(f"Completed with {error_count} error(s)")
-            self._show_completion_dialog(
-                QMessageBox.Warning, "Completed with errors",
-                f"Batch finished, but {error_count} job(s) failed. "
-                "See the log panel for details.", with_open=True
-            )
-        else:
-            self.status_label.setText("Complete!")
-            self._show_completion_dialog(
-                QMessageBox.Information, "Success",
-                "Batch processing completed successfully.", with_open=True
-            )
-
-    def _batch_output_base(self):
-        """Folder that contains the per-video '*_processed' output folders."""
-        for job in self.jobs:
-            processed = self._job_output_dir(job)
-            if os.path.isdir(processed):
-                return os.path.dirname(processed)
-        return None
-
-    def _show_completion_dialog(self, icon, title, text, with_open=False):
-        box = QMessageBox(self)
-        box.setIcon(icon)
-        box.setWindowTitle(title)
-        box.setText(text)
-        open_btn = None
-        base = self._batch_output_base() if with_open else None
-        if base:
-            open_btn = box.addButton("Open Output Folder", QMessageBox.ActionRole)
-        box.addButton(QMessageBox.Ok)
-        box.exec()
-        if open_btn is not None and box.clickedButton() is open_btn:
-            self._open_folder(base)
-
-    # =========================================================================
-    # ANALYSIS
-    # =========================================================================
-
-    def analyze_blur(self):
-        if not self._selected_cards:
-            QMessageBox.warning(self, "Selection Required", "Please select a video to analyze.")
+        if self._waiting_for_preview:
+            self._waiting_for_preview = False
+            self.log_panel.log("Extraction cancelled before starting.")
+            self._on_processing_finished()
             return
-        
-        # Analyze the last selected card
-        job = self._selected_cards[-1].job
-        self.status_label.setText(f"Analyzing {job.filename}...")
-        self.btn_analyze.setEnabled(False)
-        self.btn_analyze.setText("Analyzing...")
-        
-        self.analysis_thread = QThread()
-        self.analysis_worker = BlurAnalysisWorker(job.file_path, job.settings)
-        self.analysis_worker.moveToThread(self.analysis_thread)
-        
-        self.analysis_thread.started.connect(self.analysis_worker.run)
-        self.analysis_worker.finished.connect(self.on_analysis_finished)
-        self.analysis_worker.error.connect(self.on_analysis_error)
-        
-        self.analysis_worker.finished.connect(self.analysis_thread.quit)
-        self.analysis_worker.finished.connect(self.analysis_worker.deleteLater)
-        self.analysis_thread.finished.connect(self.analysis_thread.deleteLater)
-        self.analysis_worker.error.connect(self.analysis_thread.quit)
-        self.analysis_worker.error.connect(self.analysis_worker.deleteLater)
-        
-        self.analysis_thread.start()
+        if self._controller:
+            self._controller.stop()
+            self.cancel_btn.setEnabled(False)
+            self.log_panel.log("Cancelling extraction…")
 
-    def on_analysis_finished(self, result):
-        self.btn_analyze.setEnabled(True)
-        self.btn_analyze.setText("Analyze Selected Video")
-        self.status_label.setText("Analysis complete")
-        
-        avg = result['average']
-        recommendation = avg * 0.8
-        
-        QMessageBox.information(
-            self, "Blur Analysis",
-            f"Average Sharpness: {avg:.2f}\n"
-            f"Min: {result['min']:.2f} / Max: {result['max']:.2f}\n\n"
-            f"Recommended threshold: {recommendation:.2f}"
-        )
+    def _set_job_status(self, index, status):
+        job = self._processing_jobs[index]
+        job.status = status
+        result = self.worker.jobs[index].result
+        job.result = copy.deepcopy(result)
+        for card in self._video_cards:
+            if card.job is job:
+                card.refresh()
 
-    def on_analysis_error(self, error_msg):
-        self.btn_analyze.setEnabled(True)
-        self.btn_analyze.setText("Analyze Selected Video")
-        self.status_label.setText("Analysis failed")
-        QMessageBox.critical(self, "Error", f"Analysis failed: {error_msg}")
+    @Slot(int)
+    def _on_job_started(self, index):
+        self._active_job_index = index
+        self._set_job_status(index, "Processing")
 
-    def show_available_classes(self):
-        """Display a list of all available COCO classes."""
-        # Group classes for better readability
-        # It's an 80 items dict, let's format it in multiple columns or simple list
-        grouped_classes = "\n".join([f"{k}: {v}" for k, v in COCO_CLASSES.items()])
-        QMessageBox.information(
-            self, "Available Target Objects",
-            f"You can type any of the following items in the custom bar (comma separated):\n\n"
-            f"{grouped_classes}\n\n"
-            "Note: Sky and general background concepts are not native YOLO COCO classes."
-        )
+    @Slot(int)
+    def _on_job_finished(self, index):
+        self._set_job_status(index, "Done")
 
-    # =========================================================================
-    # LIFECYCLE
-    # =========================================================================
+    @Slot(int, str)
+    def _on_job_error(self, index, message):
+        self._set_job_status(index, "Error")
+        self.log_panel.log(message, "ERROR")
+
+    @Slot(int)
+    def _on_job_cancelled(self, index):
+        self._set_job_status(index, "Cancelled")
+
+    @Slot(int, str)
+    def _on_processing_progress(self, percentage: int, message: str):
+        self.hud_progress.setValue(int((self._active_job_index * 100 + percentage) / len(self._processing_jobs)))
+        self.estimation_label.setText(message)
+        for card in self._video_cards:
+            if card.job is self._processing_jobs[self._active_job_index]:
+                card.set_progress(percentage)
+
+    @Slot()
+    def _on_processing_finished(self):
+        self.is_processing = False
+        self.left_panel.setEnabled(True)
+        self.right_panel.setEnabled(True)
+        self.top_nav.setEnabled(True)
+        self.cancel_btn.setEnabled(False)
+        self.hud_progress.hide()
+        if self._controller:
+            self._controller.deleteLater()
+            self._controller = None
+        if not self._closing:
+            self.preview_widget.resume()
+        self.update_estimate()
+        self.log_panel.log("Extraction stopped." if getattr(self, "worker", None) is None or not self.worker.is_running else "Extraction complete. Check job results for errors.")
 
     def closeEvent(self, event):
-        # Stop the processing worker (plain thread) and wait for it so we never
-        # quit while a job is mid-write.
-        worker = getattr(self, 'worker', None)
-        if worker is not None:
-            worker.stop()
-        worker_thread = getattr(self, '_worker_thread', None)
-        if worker_thread is not None and worker_thread.is_alive():
-            worker_thread.join(timeout=5)
-
-        # The blur analysis still runs in a QThread; shut it down the Qt way.
-        self._shutdown_thread('analysis_worker', 'analysis_thread')
-
-        self.settings_manager.save_settings()
-        super().closeEvent(event)
-
-    def _shutdown_thread(self, worker_attr, thread_attr):
-        """Request a worker to stop and wait for its QThread to finish."""
-        worker = getattr(self, worker_attr, None)
-        thread = getattr(self, thread_attr, None)
-
-        if worker is not None:
-            try:
-                if hasattr(worker, 'stop'):
-                    worker.stop()
-            except RuntimeError:
-                pass  # Underlying C++ object already deleted
-
-        if thread is not None:
-            try:
-                if thread.isRunning():
-                    thread.quit()
-                    thread.wait(5000)
-            except RuntimeError:
-                pass  # Underlying C++ object already deleted
+        self._closing = True
+        if self._waiting_for_preview:
+            self._waiting_for_preview = False
+            self.is_processing = False
+        if self._controller:
+            self._controller.stop()
+        if self._blur_worker:
+            self._blur_worker.stop()
+        self.preview_widget.shutdown()
+        for card in self._video_cards:
+            card._cleanup_thread()
+        if (self.is_processing or self._blur_thread is not None
+                or self.preview_widget.threadpool.activeThreadCount()
+                or QThreadPool.globalInstance().activeThreadCount()):
+            event.ignore()
+            QTimer.singleShot(50, self.close)
+            return
+        self.log_panel.shutdown()
+        event.accept()

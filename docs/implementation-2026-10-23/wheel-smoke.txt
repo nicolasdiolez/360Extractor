@@ -1,0 +1,2 @@
+INSTALLED_PACKAGE: /private/tmp/application360-fixes-2026-10-23/venv/lib/python3.13/site-packages/extractor360 (4.0.1)
+INSTALLED_SMOKE_OK: site-packages, QSS, module/console CLI, flat pixels, six cube views, nadir mask, standalone COLMAP staging/order

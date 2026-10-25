@@ -1,0 +1,36 @@
+src/extractor360/utils/gpmf_parser.py:13: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/extractor360/utils/gpmf_parser.py:14: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/extractor360/ui/icons.py:61: error: "type[Qt]" has no attribute "transparent"  [attr-defined]
+src/extractor360/ui/icons.py:64: error: "type[QPainter]" has no attribute "Antialiasing"  [attr-defined]
+src/extractor360/ui/icons.py:65: error: "type[QPainter]" has no attribute "SmoothPixmapTransform"  [attr-defined]
+src/extractor360/ui/icons.py:92: error: "type[Qt]" has no attribute "NoBrush"  [attr-defined]
+src/extractor360/ui/icons.py:99: error: No overload variant of "drawLine" of "QPainter" matches argument types "float", "float", "float", "float"  [call-overload]
+src/extractor360/ui/icons.py:99: note: Possible overload variants:
+src/extractor360/ui/icons.py:99: note:     def drawLine(self, QLine, /) -> None
+src/extractor360/ui/icons.py:99: note:     def drawLine(self, QPoint, QPoint, /) -> None
+src/extractor360/ui/icons.py:99: note:     def drawLine(self, QLineF | QLine, /) -> None
+src/extractor360/ui/icons.py:99: note:     def drawLine(self, QPointF | QPoint | Element, QPointF | QPoint | Element, /) -> None
+src/extractor360/ui/icons.py:99: note:     def drawLine(self, int, int, int, int, /) -> None
+src/extractor360/ui/icons.py:109: error: "type[QFont]" has no attribute "Bold"  [attr-defined]
+src/extractor360/ui/icons.py:111: error: "type[Qt]" has no attribute "AlignCenter"  [attr-defined]
+src/extractor360/ui/toggle_switch.py:44: error: Name "circle_position" already defined on line 40  [no-redef]
+src/extractor360/ui/video_card.py:249: error: "type[Qt]" has no attribute "transparent"  [attr-defined]
+src/extractor360/ui/video_card.py:252: error: "type[QPainter]" has no attribute "Antialiasing"  [attr-defined]
+src/extractor360/core/motion_detector.py:23: error: No overload variant of "calcOpticalFlowFarneback" matches argument types "Any", "Any", "None", "float", "int", "int", "int", "int", "float", "int"  [call-overload]
+src/extractor360/core/motion_detector.py:23: note: Possible overload variants:
+src/extractor360/core/motion_detector.py:23: note:     def calcOpticalFlowFarneback(prev: Mat | ndarray[Any, dtype[integer[Any] | floating[Any]]], next: Mat | ndarray[Any, dtype[integer[Any] | floating[Any]]], flow: Mat | ndarray[Any, dtype[integer[Any] | floating[Any]]], pyr_scale: float, levels: int, winsize: int, iterations: int, poly_n: int, poly_sigma: float, flags: int) -> Mat | ndarray[Any, dtype[integer[Any] | floating[Any]]]
+src/extractor360/core/motion_detector.py:23: note:     def calcOpticalFlowFarneback(prev: UMat, next: UMat, flow: UMat, pyr_scale: float, levels: int, winsize: int, iterations: int, poly_n: int, poly_sigma: float, flags: int) -> UMat
+src/extractor360/core/exif_writer.py:98: error: Incompatible types in assignment (expression has type "int", target has type "bytes")  [assignment]
+src/extractor360/core/telemetry.py:26: error: Need type annotation for "metadata" (hint: "metadata: dict[<type>, <type>] = ...")  [var-annotated]
+src/extractor360/ui/main_window.py:60: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/extractor360/ui/main_window.py:64: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/extractor360/ui/main_window.py:65: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/extractor360/ui/main_window.py:87: error: "type[QFile]" has no attribute "ReadOnly"  [attr-defined]
+src/extractor360/ui/main_window.py:87: error: "type[QFile]" has no attribute "Text"  [attr-defined]
+src/extractor360/ui/main_window.py:146: error: "type[QFrame]" has no attribute "VLine"  [attr-defined]
+src/extractor360/ui/main_window.py:205: error: "type[Qt]" has no attribute "PointingHandCursor"  [attr-defined]
+src/extractor360/ui/main_window.py:218: error: "type[Qt]" has no attribute "ScrollBarAlwaysOff"  [attr-defined]
+src/extractor360/ui/main_window.py:273: error: "type[Qt]" has no attribute "ScrollBarAlwaysOff"  [attr-defined]
+src/extractor360/ui/main_window.py:331: error: "type[Qt]" has no attribute "Horizontal"  [attr-defined]
+src/extractor360/ui/main_window.py:706: error: "type[Qt]" has no attribute "PointingHandCursor"  [attr-defined]
+Found 21 errors in 7 files (checked 37 source files)

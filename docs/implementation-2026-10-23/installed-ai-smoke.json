@@ -1,0 +1,13 @@
+{
+  "status": "passed",
+  "device": "cpu",
+  "input": "synthetic uniform 96x64 PNG",
+  "image_count": 1,
+  "mask_count": 1,
+  "mask_values": [
+    255
+  ],
+  "model": "yolo26n-seg.pt",
+  "model_sha256": "361fbfabab285c3237700b6bb91d7ecfa602cd945fffda8dbe1242829b71e73f",
+  "qualification": "model loading/inference/writing through installed CLI; not segmentation accuracy or GPU"
+}

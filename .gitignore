@@ -58,9 +58,6 @@ cover/
 
 # Internal Development Files (not for public repo)
 plans/
-docs/CLI_TESTING_PROTOCOL.md
-IMPROVEMENTS.md
-TEST_CLI.md
 handoff.md
 tests/verify_*.py
 
@@ -68,3 +65,6 @@ tests/verify_*.py
 yolov8n-seg.pt
 yolo26n-seg.pt
 AUDIT.md
+
+# Personal tool permissions remain local.
+.claude/settings.local.json

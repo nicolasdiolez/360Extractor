@@ -1,0 +1,82 @@
+{
+  "checked_at_utc": "2026-09-07T17:21:42.272178+00:00",
+  "branch": "codex/audit-corrections",
+  "base_commit": "eef3edac24f4334180955848679137c123fa3e66",
+  "local_uncommitted_changes": true,
+  "python": "3.13.3",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "environment": "/private/tmp/360-corrections-venv",
+  "tests": {
+    "command": "QT_QPA_PLATFORM=offscreen EXTRACTOR360_MODEL_DIR=/private/tmp/360-installed-models /private/tmp/360-corrections-venv/bin/python -m pytest -q",
+    "exit_code": 0,
+    "passed": 154,
+    "subtests_passed": 20,
+    "seconds": 3.33
+  },
+  "ruff": {
+    "exit_code": 0,
+    "scope": "."
+  },
+  "critical_mypy": {
+    "exit_code": 0,
+    "target_python": "3.13",
+    "files": [
+      "src/extractor360/ui/workers.py",
+      "src/extractor360/core/validation.py",
+      "src/extractor360/core/output_plan.py",
+      "src/extractor360/core/reconstruction.py"
+    ]
+  },
+  "release_consistency": {
+    "exit_code": 0,
+    "version": "3.3.0"
+  },
+  "pip_check": {
+    "exit_code": 0,
+    "broken_requirements": 0
+  },
+  "git_diff_check": {
+    "exit_code": 0
+  },
+  "locked_package_hashes_checked_against_install_report": 58,
+  "osv": {
+    "packages_queried": 59,
+    "advisories_returned": 0,
+    "evidence": "qualified-osv-results.json",
+    "scope": "New macOS arm64/Python 3.13 environment only"
+  },
+  "installed_package": {
+    "package_path": "/private/tmp/360-final-install/extractor360",
+    "python": "3.13.3",
+    "stylesheet_packaged": true,
+    "stylesheet_loaded": true,
+    "reconstruction_launcher_packaged": true,
+    "gui_open_close": true,
+    "cli_exit": 0,
+    "cli_image_shape": [
+      96,
+      64,
+      3
+    ],
+    "cpu_mask_shape": [
+      96,
+      64
+    ],
+    "cpu_mask_values": [
+      255
+    ],
+    "wheel_sha256": "834a05884d921a04d366603cfcaed5bdeb4684ec84d863fee8a0e523bc9cfca8",
+    "wheel_size": 107940
+  },
+  "not_validated": [
+    "Windows and GPU hardware",
+    "Full camera corpus including GPS9",
+    "Real COLMAP reconstruction",
+    "PyInstaller binaries on clean machines",
+    "Whole pipeline performance and global RAM/VRAM",
+    "Power-loss recovery"
+  ],
+  "user_global_environment_replaced": false,
+  "published_release": false
+}

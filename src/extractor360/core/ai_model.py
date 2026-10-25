@@ -1,6 +1,14 @@
 import cv2
 import numpy as np
 import torch
+import os
+import shutil
+from pathlib import Path
+# Keep library settings separate from any other Ultralytics installation.
+_model_cache = Path(os.environ.get('EXTRACTOR360_MODEL_DIR', str(Path.home() / '.cache' / '360-extractor' / 'models')))
+os.environ.setdefault('YOLO_CONFIG_DIR', str(_model_cache.parent / 'ultralytics'))
+import ultralytics
+ultralytics.settings.update({'sync': False})
 from ultralytics import YOLO
 
 # Model naming/resolution live in ai_classes (torch-free) so the processing
@@ -32,6 +40,12 @@ class AIService:
             'device_name': 'CPU',
             'is_accelerated': False
         }
+        requested = os.environ.get('EXTRACTOR360_DEVICE', 'auto').strip().lower()
+        if requested not in ('auto', 'cpu'):
+            raise ValueError('EXTRACTOR360_DEVICE must be auto or cpu')
+        if requested == 'cpu':
+            logger.info('CPU inference explicitly selected with EXTRACTOR360_DEVICE=cpu')
+            return info
         
         if torch.backends.mps.is_available():
             info['device'] = 'mps'
@@ -74,12 +88,21 @@ class AIService:
         # 2. Load Model
         logger.info(f"Loading AI Model: {model_name} on {self.device}...")
         try:
-            self.model = YOLO(model_name)
+            model_path = model_name
+            if model_name in AI_MODEL_VARIANTS.values():
+                cache = Path(os.environ.get('EXTRACTOR360_MODEL_DIR', str(Path.home() / '.cache' / '360-extractor' / 'models')))
+                cache.mkdir(parents=True, exist_ok=True)
+                destination = cache / model_name
+                local = Path(__file__).resolve().parents[3] / model_name
+                if not destination.exists() and local.is_file():
+                    shutil.copy2(local, destination)
+                model_path = str(destination)
+            self.model = YOLO(model_path)
             logger.info(f"Successfully loaded {model_name}")
             logger.info(f"✅ ACTIVE AI MODEL: {model_name}")
         except Exception as e:
             logger.error(f"Failed to load model {model_name}: {e}")
-            self.model = None
+            raise RuntimeError(f"Could not load AI model {model_name}: {e}") from e
 
         # Class 0 is 'person' in COCO dataset
         # Future: Make this configurable in settings
@@ -93,8 +116,10 @@ class AIService:
         Returns:
             tuple: (processed_image, mask_or_status). See process_batch.
         """
-        if mode == 'none' or self.model is None:
+        if mode == 'none':
             return image, None
+        if self.model is None:
+            raise RuntimeError('AI model is unavailable')
         return self.process_batch(
             [image], mode=mode, conf=conf, classes=classes,
             invert_mask=invert_mask, feather_mask=feather_mask
@@ -109,20 +134,19 @@ class AIService:
         # Combined hard mask (any detection above 0.5), used for the non-feather path.
         combined_mask = torch.any(mask_tensors > 0.5, dim=0).byte() * 255
 
-        if feather_mask:
-            # Soft edges: use probability values instead of hard thresholding.
-            soft_mask_t = torch.max(mask_tensors, dim=0)[0]
-            full_mask = soft_mask_t.cpu().numpy()
-            full_mask = cv2.resize(full_mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
-            full_mask = (full_mask * 255).astype(np.uint8)
-        else:
-            full_mask = combined_mask.cpu().numpy()
-            full_mask = cv2.resize(full_mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
+        full_mask = combined_mask.cpu().numpy()
+        full_mask = cv2.resize(full_mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
 
         # Refinement: dilation to cover edges/halos.
         k_size = max(3, int(image.shape[1] * 0.005))
         kernel = np.ones((k_size, k_size), np.uint8)
         full_mask = cv2.dilate(full_mask, kernel, iterations=1)
+
+        if feather_mask:
+            # Ultralytics returns thresholded masks; this is explicit edge smoothing,
+            # not the model's confidence or a native alpha channel.
+            sigma = max(0.5, min(image.shape[:2]) * 0.002)
+            full_mask = np.clip(cv2.GaussianBlur(full_mask.astype(np.float32), (0, 0), sigma), 0, 255).astype(np.uint8)
 
         # Photogrammetry convention: black (0) = ignore (the person),
         # white (255) = keep (background).
@@ -149,13 +173,21 @@ class AIService:
         Returns:
             list of tuples: [(processed_image, mask_or_status), ...]
         """
-        if mode == 'none' or self.model is None or not images:
+        if mode == 'none' or not images:
             return [(img, None) for img in images]
             
+        if self.model is None:
+            raise RuntimeError("AI model is unavailable")
+        if mode == 'generate_mask' and getattr(self.model, 'task', None) not in (None, 'segment'):
+            raise RuntimeError("Generate Mask requires a segmentation model; use Skip Frame for a detection model")
+        if len(images) > 2:
+            return [result for start in range(0, len(images), 2) for result in self.process_batch(images[start:start+2], mode, conf, classes, invert_mask, feather_mask)]
         # Run inference on the whole batch
         target_classes = classes if classes is not None else self.target_classes
-        results = self.model(images, classes=target_classes, device=self.device, verbose=False, conf=conf)
+        results = self.model(images, classes=target_classes, device=self.device, verbose=False, conf=conf, retina_masks=True)
         
+        if len(results) != len(images):
+            raise RuntimeError("AI returned an incomplete batch")
         batch_results = []
         for i, res in enumerate(results):
             img = images[i]
@@ -169,7 +201,9 @@ class AIService:
                 else:
                     batch_results.append((img, False))
             elif mode == 'generate_mask':
-                if has_detection and res.masks:
+                if has_detection:
+                    if getattr(res, 'masks', None) is None or len(res.masks.data) == 0:
+                        raise RuntimeError("AI detected objects but returned no segmentation masks")
                     # res.masks.data is shape (N, H, W)
                     final_mask = self._build_mask(res.masks.data, img, invert_mask, feather_mask)
                     batch_results.append((img, final_mask))

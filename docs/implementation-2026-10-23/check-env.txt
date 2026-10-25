@@ -1,0 +1,25 @@
+Python: /private/tmp/application360-fixes-2026-10-23/venv/bin/python
+Version: 3.13.17
+Platform: macOS-26.7.1-arm64-arm-64bit-Mach-O
+OK numpy: 2.5.4
+OK cv2: 5.0.0.93
+OK defusedxml: 0.7.1
+OK piexif: 1.1.3
+OK PIL: 13.0.0
+OK tqdm: 4.70.1
+OK PySide6: 6.12.0
+OK torch: 2.14.1
+OK torchvision: 0.29.1
+Creating new Ultralytics Settings v0.0.8 file ✅
+View Ultralytics Settings with 'yolo settings' or at '/private/tmp/application360-fixes-2026-10-23/ultralytics/Ultralytics/settings.json'
+Update Settings with 'yolo settings key=value', i.e. 'yolo settings runs_dir=path/to/dir'. For help see https://docs.ultralytics.com/usage/settings.
+OK ultralytics: 8.4.184
+ffmpeg: /opt/homebrew/bin/ffmpeg
+ffprobe: /opt/homebrew/bin/ffprobe
+[INFO] CPU inference explicitly selected with EXTRACTOR360_DEVICE=cpu
+[WARNING] ⚠️ No GPU detected! AI processing will be slow (running on CPU).
+[INFO] For better performance, use a Mac with Apple Silicon or a CUDA-compatible GPU.
+[INFO] Loading AI Model: yolo26n-seg.pt on cpu...
+[INFO] Successfully loaded yolo26n-seg.pt
+[INFO] ✅ ACTIVE AI MODEL: yolo26n-seg.pt
+CPU inference: OK (does not qualify segmentation accuracy or GPU)
