@@ -4,6 +4,21 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ## [Unreleased]
 
+## [4.0.3] - 2026-10-25
+
+Local reconstruction-fix candidate; no public release is implied. The existing 4.0.2 tag and draft assets remain unchanged.
+
+### Fixed
+
+- Omit COLMAP's mask path for exports without masks. For mixed exports, stage white keep-all PNG masks for unmasked views while preserving the original masks, so COLMAP can import every confirmed image.
+- Validate mixed-mask dimensions before creating the reconstruction workspace. Keep the exported runner standalone, using only Python's standard library.
+
+### Validation
+
+- Add standalone runner regressions for exports without masks, fully masked exports and mixed exports, including mask dimensions and preservation of originals. Local validation passed 312 tests and 20 subtests with no skips, lint/type checks, installed-wheel and frozen CPU smoke tests.
+- Rebuilt and re-extracted the macOS ZIP. Real 8K panorama exports completed COLMAP 4.2 reconstruction without masks, with Down-only masks and with all views masked: 18 registered images, six cameras and three captures in each case. See [COLMAP correction validation](docs/implementation-2026-10-25/COLMAP_VALIDATION.md) for scope and limits.
+- macOS Developer ID signing/notarization and clean-machine qualification remain open. Windows is not qualified on a physical machine by this change.
+
 ## [4.0.2] - 2026-10-25
 
 Draft candidate for the October audit corrections. This entry records preparation of the candidate, not public availability or stable-release qualification. Published 4.0.1 assets remain unchanged.

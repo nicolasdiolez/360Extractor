@@ -320,8 +320,18 @@ def test_index_camera_must_match_rig_before_staging(exported_runner):
     assert not destination.parent.exists()
 
 
-def test_exported_standalone_runner_configures_rig_before_matching(exported_runner):
+@pytest.mark.parametrize('mask_mode', ['none', 'all', 'mixed'])
+def test_exported_standalone_runner_configures_rig_before_matching(exported_runner, mask_mode):
     dataset, destination = exported_runner
+    from PIL import Image
+    Image.new('RGB', (64, 64), 'white').save(dataset / 'photo.jpg')
+    Image.new('L', (64, 64), 0).save(dataset / 'ignore.png')
+    write_index(dataset, [
+        dict(image='photo.jpg', camera='Right', frame=7,
+             mask='ignore.png' if mask_mode != 'none' else None),
+        dict(image='photo.jpg', camera='Up', frame=7,
+             mask='ignore.png' if mask_mode == 'all' else None),
+    ])
     script = dataset / 'colmap' / 'reconstruct.py'
     # Isolated Python cannot import the project or its site packages. Only the
     # external COLMAP calls are replaced; the exported runner stages real files.
@@ -341,11 +351,53 @@ namespace['main']()
     feature = commands[0]
     np.testing.assert_allclose(
         [float(value) for value in feature[feature.index('--ImageReader.camera_params') + 1].split(',')], [32] * 4)
-    assert feature[feature.index('--ImageReader.mask_path') + 1] == str(destination / 'masks')
+    if mask_mode == 'none':
+        assert '--ImageReader.mask_path' not in feature
+        assert not list((destination / 'masks').rglob('*.png'))
+    else:
+        assert feature[feature.index('--ImageReader.mask_path') + 1] == str(destination / 'masks')
+        for camera in ['Right', 'Up']:
+            path = destination / 'masks' / camera / 'frame000000007.jpg.png'
+            with Image.open(path) as mask:
+                assert mask.size == (64, 64)
+                expected = 255 if mask_mode == 'mixed' and camera == 'Up' else 0
+                assert mask.getextrema() == (expected, expected)
+        assert (destination / 'masks' / 'Right' / 'frame000000007.jpg.png').read_bytes() == (dataset / 'ignore.png').read_bytes()
     assert feature[feature.index('--ImageReader.single_camera_per_folder') + 1] == '1'
     assert commands[1][commands[1].index('--rig_config_path') + 1] == str(script.with_name('rig_config.json'))
     mapper = commands[-1]
     for option in ['focal_length', 'principal_point', 'extra_params', 'sensor_from_rig']:
         assert mapper[mapper.index('--Mapper.ba_refine_' + option) + 1] == '0'
-    assert (destination / 'images.txt').read_text(encoding='utf-8') == 'Right/frame000000007.jpg\n'
-    assert {path.name for path in (destination / 'images').iterdir()} == {'Right'}
+    assert (destination / 'images.txt').read_text(encoding='utf-8') == 'Right/frame000000007.jpg\nUp/frame000000007.jpg\n'
+    assert {path.name for path in (destination / 'images').iterdir()} == {'Right', 'Up'}
+
+
+@pytest.mark.parametrize('size', [(16, 32), (512, 512), (8192, 16)])
+def test_mixed_export_white_mask_dimensions_and_originals(tmp_path, size):
+    from PIL import Image
+    Image.new('RGB', size, 'blue').save(tmp_path / 'photo.jpg')
+    Image.new('L', size, 0).save(tmp_path / 'mask.png')
+    originals = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
+    write_index(tmp_path, [record(mask='mask.png'), record(frame=8)])
+    destination = reconstruction.prepare(tmp_path, tmp_path / 'workspace')
+    with Image.open(destination / 'masks' / 'Front' / 'frame000000008.jpg.png') as mask:
+        assert mask.size == size
+        assert mask.mode == 'L'
+        assert mask.getextrema() == (255, 255)
+    assert all((tmp_path / name).read_bytes() == data for name, data in originals.items())
+
+
+@pytest.mark.parametrize('invalid', ['truncated', 'different-sizes', 'too-large'])
+def test_invalid_mixed_mask_dimensions_fail_before_staging(tmp_path, invalid):
+    from PIL import Image
+    (tmp_path / 'photo.jpg').write_bytes(b'image')
+    Image.new('L', (64, 64), 0).save(tmp_path / 'first.png')
+    if invalid == 'truncated':
+        (tmp_path / 'second.png').write_bytes(b'not a PNG')
+    else:
+        Image.new('L', (8193 if invalid == 'too-large' else 32, 64), 0).save(tmp_path / 'second.png')
+    write_index(tmp_path, [record(mask='first.png'), record(frame=8, mask='second.png'), record(frame=9)])
+    destination = tmp_path / 'new' / 'workspace'
+    with pytest.raises(ValueError):
+        reconstruction.prepare(tmp_path, destination)
+    assert not destination.parent.exists()

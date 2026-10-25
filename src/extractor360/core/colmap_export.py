@@ -149,6 +149,9 @@ Run: python reconstruct.py [new_workspace_directory]
 Requires Python 3.10+ and COLMAP with native rig_configurator support.
 The workspace must not already exist. images.jsonl selects only confirmed image
 outputs; masks are copied to a separate tree with COLMAP's <image-name>.png rule.
+Without masks, no mask path is passed to COLMAP. In mixed exports, unmasked views
+receive a white (keep-all) mask matching the existing export masks; original
+images and masks remain unchanged. Mixed masks must share the export dimensions.
 One folder per view and identical per-frame basenames preserve capture groups.
 rig_config.json is applied before sequential matching. Intrinsics and relative
 sensor rotations are held fixed during mapping. rig_rotations.json additionally
