@@ -4,6 +4,10 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ## [Unreleased]
 
+## [4.0.2] - 2026-10-25
+
+Draft candidate for the October audit corrections. This entry records preparation of the candidate, not public availability or stable-release qualification. Published 4.0.1 assets remain unchanged.
+
 ### Fixed
 
 - Keep longitude periodic without wrapping between the poles, including Lanczos interpolation; share the projection between extraction, preview and blur analysis.
@@ -20,6 +24,13 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 - Add regression coverage for geometry, interruption, Studio settings, metadata, adaptive motion and reconstruction safety. Require an installed-wheel smoke outside the checkout in CI on Linux/macOS/Windows.
 - Resolve the project-wide type diagnostics and make that CI check blocking, while retaining the stricter checks on critical modules.
 - See [October correction validation](docs/implementation-2026-10-23/VALIDATION.md) for local evidence and remaining platform, GPU and real-media qualification. No new release is published by these changes.
+
+### Validation and remaining limits
+
+- The correction commit `71e3d7d` passed all ten [PR #22 CI checks](https://github.com/nicolasdiolez/360Extractor/actions/runs/40216615868): core tests and installed wheels on Linux/macOS/Windows, Studio on macOS/Windows, lint/type checks and the aggregate gate. The Windows job completed 100 extraction/shutdown lifecycle repetitions without reproducing the historical crash in that run.
+- Local macOS arm64/Python 3.13 validation recorded 304 tests and 20 subtests with no skips, an installed-wheel smoke and real CPU inference. These results describe the correction sources; the versioned candidate and frozen binaries require their own build checks.
+- GPU inference, representative camera/GPS media, segmentation accuracy and full COLMAP reconstruction remain unqualified. The historical intermittent Windows native crash is not established as resolved by one successful stress run.
+- Downloaded draft binaries still require clean-machine launch, extraction, settings persistence and cancellation checks. macOS signing/notarization and a complete third-party distribution-license inventory remain open. Keep this candidate in draft pending that qualification.
 
 ## [4.0.1] - 2026-09-07
 

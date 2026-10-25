@@ -15,7 +15,7 @@ Earlier candidates reproduced an intermittent Windows native crash (`0xC0000005`
 
 ## Capabilities
 
-The source branch also contains the [October audit corrections](docs/implementation-2026-10-23/VALIDATION.md), currently unreleased. Their updated dependencies require Python 3.11 or later. Published v4.0.1 binaries remain unchanged.
+The source branch prepares the **4.0.2 draft candidate** with the [October audit corrections](docs/implementation-2026-10-23/VALIDATION.md). Its updated dependencies require Python 3.11 or later. This is not a new public download; published v4.0.1 binaries remain unchanged.
 
 - Cube, Ring and Fibonacci layouts, selectable views, FOV, pitch and output resolution.
 - Flat media passthrough at native resolution with the same filtering and masking options.
