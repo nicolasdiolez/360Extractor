@@ -13,6 +13,7 @@ from extractor360.core.settings_manager import SettingsManager, build_settings
 from extractor360.core.job import Job
 from extractor360.core.output_plan import discover_media
 from extractor360.core.validation import validate_settings
+from extractor360.core.mask_profiles import MASK_PROFILES
 from extractor360.core.processor import ProcessingWorker
 from extractor360.core.version import APP_NAME, VERSION
 from extractor360.utils.logger import logger
@@ -58,7 +59,8 @@ def parse_arguments():
     parser.add_argument("--ai-mask-cameras", type=str, help="Restrict AI masking to these faces only, comma-separated (e.g. 'Down' or 'Back,Down'; cube faces: Front,Right,Back,Left,Up,Down; ring/fibonacci: View_0,View_1,...). Empty = all faces.")
     
     # Naming Control
-    parser.add_argument("--naming-mode", type=str, choices=['realityscan', 'simple', 'custom'], help="Naming convention for output files")
+    parser.add_argument("--mask-profile", choices=list(MASK_PROFILES), help="Set mask polarity and names for realityscan, colmap or postshot (Remove Occluders). Default custom preserves manual settings.")
+    parser.add_argument("--naming-mode", type=str, choices=['realityscan', 'postshot', 'colmap', 'simple', 'custom'], help="Naming convention for output files (named mask profiles take precedence)")
     parser.add_argument("--image-pattern", type=str, help="Custom pattern for image filenames")
     parser.add_argument("--mask-pattern", type=str, help="Custom pattern for mask filenames")
     

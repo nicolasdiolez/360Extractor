@@ -33,6 +33,10 @@ Thumbnail work uses a shared pool capped at four jobs and returns QImage. Previe
 
 `validation.py` merges defaults and checks types, ranges, enums, active views, AI targets, model trust and a projection memory budget. `output_plan.py` discovers and deduplicates input files, excludes prior datasets and validates output names. Every run gets a new `_processed`, `_processed_001`, … folder. Replacing or resuming an existing run is deliberately not yet implemented.
 
+`mask_profiles.py` owns destination mask polarity and filename conventions. Named profiles normalize settings before preview or processing; custom preserves manual settings. The manifest's `mask_contract` records ignored/kept pixel values, meaning and smoothing. Postshot Remove Occluders and COLMAP have opposite conventions and cannot share an inverted mask export.
+
+`storage.py` supplies Studio estimates and the worker's rolling disk guard. The first check resolves the nearest existing destination ancestor and precedes model loading/output creation; later checks run before submitting a capture's writes. The budget covers all active views and possible masks plus encoder overhead and a 256 MiB reserve. Compression ranges and nominal-FPS counts are planning estimates before filtering; model caches and reconstruction workspaces are excluded. Low space mid-run produces a failed manifest with previously confirmed outputs, not an automatic resume point.
+
 `FileManager.write_pair` stages complete image/mask files before publishing them. Failed writes raise, all futures are inspected, and counters count confirmed writes. `images.jsonl` lists successful images with camera/frame associations. Manifest schema 2 starts in running state and records terminal state, output folder, counts, errors and run identity. It distinguishes source size/mtime identification from cryptographic verification; a source hash is not yet calculated. Publishing two files is not a power-loss-atomic transaction; a process kill can leave partial files/index data and a running manifest.
 
 ## Image and model pipeline

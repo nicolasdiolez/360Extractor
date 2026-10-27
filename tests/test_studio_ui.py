@@ -111,8 +111,11 @@ def test_studio_presets(qapp):
     s = window.get_settings_from_ui()
     assert s["layout_mode"] == "cube"
     assert s["ai_mode"] == "Generate Mask"
-    assert s["feather_mask"] is True
-    assert s["export_colmap"] is True
+    assert s["feather_mask"] is False
+    assert s["export_colmap"] is False
+    assert s["mask_profile"] == "postshot"
+    assert s["ai_invert_mask"] is False
+    assert s["naming_mode"] == "postshot"
 
     # Apply RealityScan preset
     window.apply_preset("RealityScan / Metashape")
@@ -153,7 +156,7 @@ def test_studio_estimate_calculation(qapp):
         window.add_videos_from_paths([str(f)])
 
         window.update_estimate()
-        assert "pinhole images" in window.estimation_label.text()
+        assert "images" in window.estimation_label.text()
         assert window.extract_btn.isEnabled()
 
 
@@ -302,11 +305,41 @@ def test_late_blur_analysis_does_not_overwrite_an_edited_job(settings_window, fi
 def test_frame_count_estimate_includes_zero_and_last_frame(settings_window):
     window = settings_window
     for job in window.jobs:
+        video = Path(job.file_path).with_suffix('.mp4')
+        video.touch()
+        job.file_path = str(video)
         job.settings.update(is_360=False, interval_unit='Frames', interval_value=10.9)
         key = (job.file_path, os.path.getmtime(job.file_path))
-        window._media_info[key] = (101, 10.0)
+        window._media_info[key] = (101, 10.0, 64, 32)
     window.update_estimate()
-    assert 'Estimated 22 pinhole images' in window.estimation_label.text()
+    assert 'Estimated 22 images' in window.estimation_label.text()
+
+
+def test_named_mask_profile_applies_contract_to_entire_selection(settings_window):
+    window = settings_window
+    first, second = window.jobs
+    first.settings.update(ai_invert_mask=False, naming_mode='postshot', quality=83)
+    second.settings.update(ai_invert_mask=True, naming_mode='simple', export_colmap=True, quality=65)
+    window.select_card(window._video_cards[1])
+    window.toggle_card_selection(window._video_cards[0])
+    window.mask_profile_combo.setCurrentIndex(window.mask_profile_combo.findData('postshot'))
+    for job in window.jobs:
+        assert job.settings['mask_profile'] == job.settings['naming_mode'] == 'postshot'
+        assert job.settings['ai_invert_mask'] is False
+        assert job.settings['export_colmap'] is False
+    assert (first.settings['quality'], second.settings['quality']) == (83, 65)
+    assert not window.ai_invert_toggle.isEnabled()
+    window.mask_profile_combo.setCurrentIndex(window.mask_profile_combo.findData('custom'))
+    assert window.ai_invert_toggle.isEnabled()
+
+
+def test_image_estimate_is_one_capture_at_native_size(settings_window):
+    window = settings_window
+    for job in window.jobs:
+        job.settings.update(is_360=False, resolution=8192, interval_value=0.001)
+    window.update_estimate()
+    assert 'Estimated 2 images' in window.estimation_label.text()
+    assert '0.0–0.0 GiB' in window.estimation_label.text()
 
 
 @pytest.mark.parametrize('action', ['start', 'cancel', 'close'])

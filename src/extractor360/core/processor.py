@@ -13,6 +13,8 @@ from extractor360.core import colmap_export, exif_writer
 from extractor360.core.events import Event
 from extractor360.core.frame_timing import FrameClock, frame_step
 from extractor360.core.validation import validate_settings
+from extractor360.core.mask_profiles import mask_contract
+from extractor360.core.storage import estimate_output, existing_destination, require_free_space
 from extractor360.core.output_plan import create_output_directory, output_names, preflight_names
 from extractor360.core.geometry import GeometryProcessor
 from extractor360.core.motion_detector import MotionDetector
@@ -252,6 +254,24 @@ class ProcessingWorker:
             active_cams = job.active_cameras
             selected_views = [v for i, v in enumerate(views) if active_cams is None or i in active_cams]
             preflight_names(job.settings, name_no_ext, selected_views, is_image)
+
+            if is_360:
+                output_width = output_height = out_res
+            elif is_image:
+                output_height, output_width = current_image_frame.shape[:2]
+            else:
+                output_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                output_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            storage = estimate_output(job.settings, output_width, output_height,
+                                      1 if is_image else int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
+                                      fps, is_image, [v[0] for v in selected_views])
+            destination = existing_destination(file_path, job.output_dir)
+            storage['free_bytes_at_start'] = require_free_space(destination, storage['capture_budget_bytes'])
+            storage['checked_destination'] = str(destination)
+            job.result['storage_preflight'] = storage
+            if storage['bytes_high'] is not None and storage['bytes_high'] + storage['reserve_bytes'] > storage['free_bytes_at_start']:
+                logger.warning('Estimated output may exceed free disk space; filters/compression can change the total. '
+                               'Free space will be checked before each capture. %s', storage['assumptions'])
 
             # AI Mode per job
             ai_mode_ui = job.settings.get('ai_mode', 'None')
@@ -586,6 +606,10 @@ class ProcessingWorker:
                                 combined = disc
                             ai_results[idx] = (img_i, combined)
 
+                    # Guard the whole submitted capture before its first write.
+                    # Previous capture writes have been drained; do not count
+                    # partially published output as safely resumable.
+                    require_free_space(output_dir, storage['capture_budget_bytes'])
                     # 5. Save (Multi-threaded I/O)
                     futures = []
                     for i, (final_img, mask_or_skip) in enumerate(ai_results):
@@ -765,6 +789,7 @@ class ProcessingWorker:
             "source_file": job.file_path,
             "output_dir": output_dir,
             "settings": job.settings,
+            "mask_contract": mask_contract(job.settings),
             **stats,
         }
         manifest["schema_version"] = 2

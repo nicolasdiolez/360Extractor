@@ -5,6 +5,7 @@ from typing import Any
 
 from extractor360.core.geometry import GeometryProcessor
 from extractor360.core.settings_manager import SettingsManager, normalize_mask_faces
+from extractor360.core.mask_profiles import MASK_PROFILES, profile_settings
 
 
 def validate_settings(settings: dict[str, Any]) -> dict[str, Any]:
@@ -39,13 +40,16 @@ def validate_settings(settings: dict[str, Any]) -> dict[str, Any]:
         'layout_mode': ('ring', 'cube', 'fibonacci'), 'output_format': ('jpg', 'png', 'tiff'),
         'interval_unit': ('Seconds', 'Frames'), 'ai_mode': ('None', 'Generate Mask', 'Skip Frame'),
         'altitude_mode': ('absolute', 'relative'), 'interpolation_mode': ('linear', 'lanczos'),
-        'naming_mode': ('realityscan', 'simple', 'custom'),
+        'naming_mode': ('realityscan', 'postshot', 'colmap', 'simple', 'custom'),
+        'mask_profile': tuple(MASK_PROFILES),
     }
     for key, values in enums.items():
         if result[key] not in values:
             raise ValueError(f'{key} must be one of {", ".join(values)}')
+    result.update(profile_settings(result['mask_profile']))
     if result['export_colmap'] and (result['ai_mode'] == 'Generate Mask' or result['nadir_mask_enabled']) and not result['ai_invert_mask']:
-        raise ValueError('COLMAP masks require black = ignored subject (ai_invert_mask=true)')
+        raise ValueError('COLMAP masks require black = ignored subject (ai_invert_mask=true). '
+                         'Postshot Remove Occluders uses white; export it in a separate run without export_colmap.')
     if result['ai_mode'] != 'None':
         from extractor360.core.ai_classes import COCO_STR_TO_ID, resolve_ai_model_name
         custom = [s.strip().lower() for s in result['ai_custom_classes'].split(',') if s.strip()]

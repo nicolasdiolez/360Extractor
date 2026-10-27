@@ -10,7 +10,6 @@ Unified 3-column Studio architecture with:
 from __future__ import annotations
 
 import copy
-import math
 import os
 from pathlib import Path
 
@@ -38,6 +37,9 @@ from extractor360.ui.preview_widget import PreviewWidget
 from extractor360.ui.video_card import VideoCard
 from extractor360.ui.widgets import DropZone
 from extractor360.ui.workers import BlurAnalysisWorker, ProcessingController
+from extractor360.core.mask_profiles import MASK_PROFILES, profile_settings
+from extractor360.core.validation import validate_settings
+from extractor360.core.storage import estimate_output, existing_destination, require_free_space
 
 
 class ScrollBlocker(QObject):
@@ -641,6 +643,19 @@ class MainWindow(QMainWindow):
         layout.addLayout(grid)
 
         # Essential Export Priors
+        profile_row = QHBoxLayout()
+        profile_row.addWidget(QLabel("Mask profile:"))
+        self.mask_profile_combo = QComboBox()
+        for profile, label in MASK_PROFILES.items():
+            self.mask_profile_combo.addItem(label, profile)
+        self.mask_profile_combo.setToolTip(
+            "Named profiles set mask polarity and filenames. Postshot uses Remove Occluders; "
+            "COLMAP requires a separate run with black ignored regions."
+        )
+        self.mask_profile_combo.currentIndexChanged.connect(self._on_mask_profile_changed)
+        profile_row.addWidget(self.mask_profile_combo)
+        layout.addLayout(profile_row)
+
         self.colmap_toggle = QCheckBox("Export COLMAP calibration files")
         self.colmap_toggle.toggled.connect(self.on_setting_changed)
         layout.addWidget(self.colmap_toggle)
@@ -658,6 +673,8 @@ class MainWindow(QMainWindow):
         adv_grid.addWidget(QLabel("Naming:"), 0, 0)
         self.naming_mode_combo = QComboBox()
         self.naming_mode_combo.addItem("RealityScan Standard", "realityscan")
+        self.naming_mode_combo.addItem("Postshot (.mask.png)", "postshot")
+        self.naming_mode_combo.addItem("COLMAP (.ext.png)", "colmap")
         self.naming_mode_combo.addItem("Simple Sequential", "simple")
         self.naming_mode_combo.addItem("Custom Pattern", "custom")
         self.naming_mode_combo.currentIndexChanged.connect(self.on_setting_changed)
@@ -758,11 +775,12 @@ class MainWindow(QMainWindow):
                         active_cameras=None, fov=90, pitch_offset=0,
                         resolution=2048, interpolation_mode='linear', output_format='jpg',
                         interval_value=1.0, interval_unit='Seconds', feather_mask=False,
-                        nadir_mask_radius=40.0, naming_mode='realityscan', ai_invert_mask=True)
+                        nadir_mask_radius=40.0, mask_profile='realityscan', naming_mode='realityscan', ai_invert_mask=True)
         if "Postshot" in preset_name:
-            changes.update(feather_mask=True, nadir_mask_radius=35.0)
+            changes.update(mask_profile='postshot', export_colmap=False, nadir_mask_radius=35.0)
         elif "COLMAP" in preset_name:
-            changes.update(resolution=3072, interpolation_mode='lanczos', output_format='png', interval_value=0.5)
+            changes.update(mask_profile='colmap', resolution=3072, interpolation_mode='lanczos', output_format='png', interval_value=0.5)
+        changes.update(profile_settings(changes['mask_profile']))
         settings = {**self.get_settings_from_ui(), **changes}
         self.set_ui_from_settings(settings)
         self._commit_ui_settings(settings, changes)
@@ -771,6 +789,19 @@ class MainWindow(QMainWindow):
 
     def _on_preset_selected(self, index: int):
         self.apply_preset(self.preset_combo.currentText())
+
+    def _on_mask_profile_changed(self, index: int):
+        if self._loading_settings or self.is_processing:
+            return
+        profile = self.mask_profile_combo.currentData()
+        changes = {'mask_profile': profile, **profile_settings(profile)}
+        if profile == 'postshot':
+            changes['export_colmap'] = False
+        settings = {**self.get_settings_from_ui(), **changes}
+        self.set_ui_from_settings(settings)
+        # Apply every contract field to every selected job, even fields already
+        # matching the active card. Unrelated settings remain untouched.
+        self._commit_ui_settings(settings, changes)
 
     # =========================================================================
     # SETTINGS SYNC (SettingsManager <-> UI)
@@ -806,6 +837,7 @@ class MainWindow(QMainWindow):
             'export_colmap': self.colmap_toggle.isChecked(),
             'interpolation_mode': 'lanczos' if self.lanczos_toggle.isChecked() else 'linear',
             'feather_mask': self.ai_feather_toggle.isChecked(),
+            'mask_profile': self.mask_profile_combo.currentData(),
             'ai_mode': self.ai_combo.currentText(),
             'ai_model': self.ai_model_combo.currentData(),
             'ai_invert_mask': self.ai_invert_toggle.isChecked(),
@@ -831,6 +863,7 @@ class MainWindow(QMainWindow):
 
     def set_ui_from_settings(self, settings: dict):
         self._loading_settings = True
+        settings = {**settings, **profile_settings(settings.get('mask_profile', 'custom'))}
         self._loaded_settings = copy.deepcopy(settings)
         blockers = [QSignalBlocker(w) for w in self.findChildren(QWidget)]
         self.quality_spin.setValue(settings.get("quality", 95))
@@ -915,6 +948,7 @@ class MainWindow(QMainWindow):
         self.telemetry_toggle.setChecked(settings.get('export_telemetry', False))
         self.exif_intrinsics_toggle.setChecked(settings.get('exif_intrinsics', True))
         self.colmap_toggle.setChecked(settings.get('export_colmap', False))
+        self.mask_profile_combo.setCurrentIndex(self.mask_profile_combo.findData(settings.get('mask_profile', 'custom')))
 
         alt_mode = settings.get('altitude_mode', 'absolute')
         idx = self.altitude_combo.findData(alt_mode)
@@ -930,6 +964,10 @@ class MainWindow(QMainWindow):
             self.naming_mode_combo.setCurrentIndex(idx)
         self.image_pattern_input.setText(settings.get('image_pattern', ''))
         self.mask_pattern_input.setText(settings.get('mask_pattern', ''))
+        managed_mask = settings.get('mask_profile', 'custom') != 'custom'
+        for control in (self.ai_invert_toggle, self.naming_mode_combo, self.image_pattern_input, self.mask_pattern_input):
+            control.setEnabled(not managed_mask)
+        self.colmap_toggle.setEnabled(settings.get('mask_profile') != 'postshot')
 
         for w in widgets:
             w.blockSignals(False)
@@ -1171,52 +1209,67 @@ class MainWindow(QMainWindow):
             return
 
         total_images = 0
-        total_size_mb = 0.0
+        low_bytes = high_bytes = 0
+        unknown = False
+        details = []
+        disk_error = False
 
         for job in self.jobs:
             s = job.settings or self.default_settings
             is_360 = s.get('is_360', True)
-            cams = s.get('camera_count', 6) if is_360 else 1
-            interval_val = s.get('interval_value', 1.0)
-            interval_unit = s.get('interval_unit', 'Seconds')
-            res = s.get('resolution', 2048)
-
             key = (job.file_path, os.path.getmtime(job.file_path) if os.path.exists(job.file_path) else None)
             if key not in self._media_info:
                 if Path(job.file_path).suffix.lower() in ('.jpg', '.jpeg', '.png', '.tif', '.tiff'):
-                    self._media_info[key] = (1, 1.0)
+                    from PIL import Image
+                    try:
+                        with Image.open(job.file_path) as image:
+                            width, height = image.size
+                    except (OSError, ValueError):
+                        width = height = 0
+                    self._media_info[key] = (1, 0.0, width, height)
                 else:
                     cap = cv2.VideoCapture(job.file_path)
                     try:
-                        self._media_info[key] = (max(1, int(cap.get(cv2.CAP_PROP_FRAME_COUNT))), cap.get(cv2.CAP_PROP_FPS) or 30.0)
+                        self._media_info[key] = (max(0, int(cap.get(cv2.CAP_PROP_FRAME_COUNT))),
+                                                cap.get(cv2.CAP_PROP_FPS),
+                                                int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                                                int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
                     finally:
                         cap.release()
-            frame_count, fps = self._media_info[key]
-            cams = (6 if s.get('layout_mode') == 'cube' else cams) if is_360 else 1
-            if s.get('active_cameras') is not None:
-                cams = len(s['active_cameras'])
+            frame_count, fps, width, height = self._media_info[key]
+            try:
+                settings = validate_settings(s)
+                views = GeometryProcessor.generate_views(settings['camera_count'], settings['pitch_offset'], settings['layout_mode']) if is_360 else [('flat', 0, 0, 0)]
+                active = settings.get('active_cameras')
+                names = [v[0] for i, v in enumerate(views) if active is None or i in active]
+                if is_360:
+                    width = height = settings['resolution']
+                estimate = estimate_output(settings, width, height, frame_count, fps,
+                                           Path(job.file_path).suffix.lower() in ('.jpg', '.jpeg', '.png', '.tif', '.tiff'), names)
+                if estimate['images_estimated'] is None:
+                    unknown = True
+                else:
+                    total_images += estimate['images_estimated']
+                    low_bytes += estimate['bytes_low']
+                    high_bytes += estimate['bytes_high']
+                destination = existing_destination(job.file_path, settings['custom_output_dir'])
+                free = require_free_space(destination, estimate['capture_budget_bytes'])
+                details.append(f'{job.filename}: {destination} — {free / 1024**3:.1f} GiB free. '
+                               f'{estimate["masks_estimated"]} masks estimated. {estimate["assumptions"]}')
+                if estimate['bytes_high'] is not None and estimate['bytes_high'] + estimate['reserve_bytes'] > free:
+                    details.append('WARNING: estimated output may exceed free space.')
+            except (OSError, ValueError) as exc:
+                unknown = True
+                disk_error = disk_error or isinstance(exc, OSError)
+                details.append(f'{job.filename}: {exc}')
 
-            if interval_unit == 'Frames':
-                from extractor360.core.frame_timing import frame_step
-                step = frame_step(interval_val)
-                extracted_frames = max(1, math.ceil(frame_count / step))
-            else:
-                # PTS sampling cannot be inferred exactly from nominal FPS.
-                extracted_frames = max(1, min(frame_count, math.ceil((frame_count / fps) / max(0.001, interval_val))))
-
-            job_images = extracted_frames * cams
-            total_images += job_images
-
-            # Estimate image size (jpg ~1.2MB, png ~4MB)
-            fmt = s.get('output_format', 'jpg')
-            mb_per_img = 1.2 if fmt == 'jpg' else (4.5 if fmt == 'png' else 8.0)
-            mb_per_img *= (res / 2048.0) ** 2
-            total_size_mb += job_images * mb_per_img
-
-        gb_size = total_size_mb / 1024.0
+        size_text = 'unknown' if unknown else f'{low_bytes / 1024**3:.1f}–{high_bytes / 1024**3:.1f} GiB'
+        count_text = 'unknown' if unknown else f'{total_images:,}'
         self.estimation_label.setText(
-            f"Estimated {total_images:,} pinhole images ({len(self.jobs)} media) • ~{gb_size:.1f} GB before masks • filters may reduce count"
+            f"Estimated {count_text} images ({len(self.jobs)} media) • {size_text} including masks • "
+            + ('insufficient disk space' if disk_error else 'before filters; reconstruction extra')
         )
+        self.estimation_label.setToolTip('\n'.join(details))
         self.extract_btn.setText(f"Extract Dataset ({len(self.jobs)} video{'s' if len(self.jobs) > 1 else ''})")
         self.extract_btn.setEnabled(not self.is_processing and not self._closing)
 

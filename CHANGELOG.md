@@ -4,6 +4,17 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ## [Unreleased]
 
+### Fixed
+
+- Give Postshot Remove Occluders a white-ignore mask profile and matching `.mask.png` filenames. Studio's Postshot preset selects this convention, binary masks and no incompatible COLMAP mask export. Named profiles update every selected job while preserving unrelated settings.
+- Check free space on the output volume before creating a dataset and before writing each capture. Fail explicitly and preserve the confirmed index if space runs out. Studio estimates include masks and native flat-image dimensions; unknown duration remains unknown.
+- Normalize OpenCV motion magnitudes to a NumPy array for compatibility with the current type stubs.
+
+### Added
+
+- Explicit RealityScan, COLMAP, Postshot and custom/legacy mask profiles in Studio and CLI, with the effective convention recorded in each manifest. Existing configurations remain custom/legacy until a profile is selected.
+- A bounded sparse-reconstruction comparison script and [benchmark protocol](docs/BENCHMARK_PROTOCOL.md), with [October 27 results and qualification limits](docs/implementation-2026-10-27/VALIDATION.md).
+
 ## [4.0.3] - 2026-10-25
 
 Local reconstruction-fix candidate; no public release is implied. The existing 4.0.2 tag and draft assets remain unchanged.

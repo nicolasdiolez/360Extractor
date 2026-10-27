@@ -81,6 +81,10 @@ python -m extractor360
 
 Every run creates a new source-specific folder: `panorama_processed`, `panorama_processed_001`, and so on. Existing datasets are never silently replaced or resumed. Recursive scans exclude generated folders. `manifest.json` starts as `running`, then records `completed`, `failed` or `cancelled` with confirmed write counts. A process kill or power loss can leave partial state; no automatic recovery is implemented. `images.jsonl` associates confirmed images and masks with their camera and frame.
 
+Development sources also provide `--mask-profile realityscan|colmap|postshot|custom`. Named profiles select mask filenames and polarity together; Postshot targets **Remove Occluders**, with white ignored regions. Use a separate export for COLMAP, which requires black ignored regions. These file contracts do not certify reconstruction quality in each application. See [profiles and disk estimates](docs/SETTINGS.md#mask-profiles-and-storage).
+
+Free space is checked on the destination volume before output creation and before each capture, retaining a 256 MiB reserve. This protects the next write batch; it does not guarantee that the full run, model downloads or reconstruction will fit. The [comparison protocol](docs/BENCHMARK_PROTOCOL.md) defines how future selection and export changes will be measured.
+
 Run `python reconstruct.py` from an exported `colmap/` folder to prepare a new workspace and invoke COLMAP. It requires a COLMAP build with native `rig_configurator` support. This pipeline follows the [COLMAP rig workflow](https://colmap.github.io/rigs.html); it has not yet been qualified through a full real reconstruction on this branch.
 
 ## Quality and metadata limits
