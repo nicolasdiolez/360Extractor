@@ -14,6 +14,7 @@ from extractor360.core.events import Event
 from extractor360.core.frame_timing import FrameClock, frame_step
 from extractor360.core.validation import validate_settings
 from extractor360.core.mask_profiles import mask_contract
+from extractor360.core.project import source_problem
 from extractor360.core.storage import estimate_output, existing_destination, require_free_space
 from extractor360.core.output_plan import create_output_directory, output_names, preflight_names
 from extractor360.core.geometry import GeometryProcessor
@@ -147,6 +148,10 @@ class ProcessingWorker:
         started = time.monotonic()
         try:
             job.settings = validate_settings(job.settings)
+            if job.source_check_required or job.source_identity is not None:
+                problem = source_problem(job)
+                if problem:
+                    raise ValueError(problem)
             stat = os.stat(job.file_path)
             job.result["source_identity"] = {"size_bytes": stat.st_size, "mtime_ns": stat.st_mtime_ns, "hash_verified": False}
             self._process_video(job, job_index, total_jobs)

@@ -40,6 +40,9 @@ from extractor360.ui.workers import BlurAnalysisWorker, ProcessingController
 from extractor360.core.mask_profiles import MASK_PROFILES, profile_settings
 from extractor360.core.validation import validate_settings
 from extractor360.core.storage import estimate_output, existing_destination, require_free_space
+from extractor360.core.project import source_identity, source_problem
+from extractor360.core.ai_classes import AI_MODEL_VARIANTS, resolve_ai_model_name
+from extractor360.ui.project_actions import ProjectActions
 
 
 class ScrollBlocker(QObject):
@@ -95,6 +98,7 @@ class MainWindow(QMainWindow):
         # Blur analysis worker thread
         self._blur_thread = None
         self._blur_worker = None
+        self.project_actions = ProjectActions(self)
 
     def load_stylesheet(self, filename: str):
         qss_path = os.path.join(os.path.dirname(__file__), filename)
@@ -534,7 +538,7 @@ class MainWindow(QMainWindow):
         self.ai_model_combo.addItem("YOLO26-N Seg (Fast Nano)", "yolo26n-seg.pt")
         self.ai_model_combo.addItem("YOLO26-S Seg (Balanced Small)", "yolo26s-seg.pt")
         self.ai_model_combo.addItem("YOLO26-M Seg (High Precision)", "yolo26m-seg.pt")
-        self.ai_model_combo.currentIndexChanged.connect(self.on_setting_changed)
+        self.ai_model_combo.currentIndexChanged.connect(self._on_ai_model_changed)
         adv_grid.addWidget(self.ai_model_combo, 0, 1)
 
         adv_grid.addWidget(QLabel("Confidence:"), 1, 0)
@@ -545,6 +549,11 @@ class MainWindow(QMainWindow):
         self.ai_conf_spin.valueChanged.connect(self.on_setting_changed)
         adv_grid.addWidget(self.ai_conf_spin, 1, 1)
         self.adv_ai.addLayout(adv_grid)
+
+        self.trust_model_toggle = QCheckBox("Trust this custom model (can execute code)")
+        self.trust_model_toggle.setToolTip("A project file cannot grant trust. Confirm only for a custom model whose source you trust.")
+        self.trust_model_toggle.toggled.connect(self.on_setting_changed)
+        self.adv_ai.addWidget(self.trust_model_toggle)
 
         # Target classes
         cls_row = QHBoxLayout()
@@ -600,6 +609,14 @@ class MainWindow(QMainWindow):
     # -------------------------------------------------------------------------
     # Card 4: Output & Calibration
     # -------------------------------------------------------------------------
+    def _on_ai_model_changed(self):
+        if self._loading_settings:
+            return
+        with QSignalBlocker(self.trust_model_toggle):
+            self.trust_model_toggle.setChecked(False)
+        self.trust_model_toggle.setVisible(resolve_ai_model_name(self.ai_model_combo.currentData()) not in AI_MODEL_VARIANTS.values())
+        self.on_setting_changed()
+
     def _build_export_card(self) -> QWidget:
         card = QFrame()
         card.setObjectName("inspectorCard")
@@ -840,6 +857,7 @@ class MainWindow(QMainWindow):
             'mask_profile': self.mask_profile_combo.currentData(),
             'ai_mode': self.ai_combo.currentText(),
             'ai_model': self.ai_model_combo.currentData(),
+            'trust_custom_model': self.trust_model_toggle.isChecked(),
             'ai_invert_mask': self.ai_invert_toggle.isChecked(),
             'ai_confidence': self.ai_conf_spin.value(),
             'nadir_mask_enabled': self.nadir_toggle.isChecked(),
@@ -890,6 +908,8 @@ class MainWindow(QMainWindow):
         if self.custom_output_dir:
             self.output_dir_label.setText(os.path.basename(self.custom_output_dir))
             self.output_dir_label.setStyleSheet("color: #E6E6EA;")
+        else:
+            self.output_dir_label.setText("Same as source")
 
         self.interval_spin.setValue(settings.get('interval_value', 1.0))
         self.interval_unit.setCurrentText(settings.get('interval_unit', 'Seconds'))
@@ -919,6 +939,8 @@ class MainWindow(QMainWindow):
             self.ai_model_combo.addItem(model, model)
             model_idx = self.ai_model_combo.count() - 1
         self.ai_model_combo.setCurrentIndex(model_idx)
+        self.trust_model_toggle.setChecked(settings.get('trust_custom_model', False))
+        self.trust_model_toggle.setVisible(resolve_ai_model_name(settings.get('ai_model')) not in AI_MODEL_VARIANTS.values())
 
         self.ai_invert_toggle.setChecked(settings.get('ai_invert_mask', True))
         self.ai_conf_spin.setValue(settings.get('ai_confidence', 0.25))
@@ -977,6 +999,15 @@ class MainWindow(QMainWindow):
         del blockers
         self._displayed_settings = self._read_settings_from_widgets()
         self._loading_settings = False
+        self._sync_model_trust_state()
+
+    def _sync_model_trust_state(self):
+        models = {resolve_ai_model_name(card.job.settings.get('ai_model')) for card in self._selected_cards}
+        self.trust_model_toggle.setEnabled(len(models) <= 1)
+        self.trust_model_toggle.setToolTip(
+            'Select jobs using the same model to grant trust.' if len(models) > 1 else
+            'A project file cannot grant trust. Confirm only for a custom model whose source you trust.'
+        )
 
     def _sync_fov_slider(self, value):
         with QSignalBlocker(self.fov_slider):
@@ -1024,9 +1055,10 @@ class MainWindow(QMainWindow):
                 card.refresh()
         else:
             self.default_settings = current_settings
-            for key, value in current_settings.items():
-                self.settings_manager.set(key, value)
-            self.settings_manager.save_settings()
+            if not self.jobs and self.project_actions.path is None:
+                for key, value in current_settings.items():
+                    self.settings_manager.set(key, value)
+                self.settings_manager.save_settings()
 
         self._loaded_settings = copy.deepcopy(current_settings)
         self._displayed_settings = self._read_settings_from_widgets()
@@ -1034,6 +1066,9 @@ class MainWindow(QMainWindow):
             self.preset_combo.setCurrentText("Custom Workflow")
         self.update_preview_display()
         self.update_estimate()
+        if changes:
+            self.project_actions.mark_dirty()
+        self._sync_model_trust_state()
 
     def on_layout_changed(self, index: int):
         if self._loading_settings:
@@ -1081,7 +1116,15 @@ class MainWindow(QMainWindow):
         if not new_jobs:
             return
 
-        for job in new_jobs:
+        self._append_jobs(new_jobs)
+        self._update_queue_ui_state()
+        if self._video_cards:
+            self.select_card(self._video_cards[-1])
+        self.update_estimate()
+        self.project_actions.mark_dirty()
+
+    def _append_jobs(self, jobs):
+        for job in jobs:
             self.jobs.append(job)
             card = VideoCard(job)
             card.clicked.connect(lambda c=card: self.select_card(c))
@@ -1091,17 +1134,16 @@ class MainWindow(QMainWindow):
 
             self._video_cards.append(card)
             self.cards_layout.insertWidget(self.cards_layout.count() - 1, card)
-
-        self._update_queue_ui_state()
-
-        if self._video_cards:
-            self.select_card(self._video_cards[-1])
-
-        self.update_estimate()
+            card.set_source_issue(source_problem(job))
 
     def _create_job_for_path(self, path: str) -> Job:
         job = Job(path)
         job.settings = copy.deepcopy(self.default_settings)
+        job.source_check_required = True
+        try:
+            job.source_identity = source_identity(path)
+        except OSError:
+            pass  # Keep unavailable sources visible for explicit relocation.
         return job
 
     def remove_video(self, card: VideoCard):
@@ -1127,6 +1169,7 @@ class MainWindow(QMainWindow):
                 self.clear_selection()
 
             self.update_estimate()
+            self.project_actions.mark_dirty()
 
     def clear_completed_jobs(self):
         to_remove = [card for card in self._video_cards if card.job.status == "Done"]
@@ -1165,6 +1208,7 @@ class MainWindow(QMainWindow):
         for c in self._selected_cards:
             c.setSelected(False)
         self._selected_cards = []
+        self.set_ui_from_settings(self.default_settings)
         self.preview_widget.update_preview(None, {})
         self.update_estimate()
 
@@ -1172,11 +1216,11 @@ class MainWindow(QMainWindow):
         if self._selected_cards:
             active_card = self._selected_cards[-1]
             settings = active_card.job.settings or self.get_settings_from_ui()
-            self.preview_widget.update_preview(active_card.job.file_path, settings)
+            self.preview_widget.update_preview(None if source_problem(active_card.job) else active_card.job.file_path, settings)
         elif self._video_cards:
             active_card = self._video_cards[0]
             settings = active_card.job.settings or self.get_settings_from_ui()
-            self.preview_widget.update_preview(active_card.job.file_path, settings)
+            self.preview_widget.update_preview(None if source_problem(active_card.job) else active_card.job.file_path, settings)
         else:
             self.preview_widget.update_preview(None, {})
 
@@ -1186,7 +1230,7 @@ class MainWindow(QMainWindow):
             out_dir = os.path.join(job.settings.get("custom_output_dir") or os.path.dirname(job.file_path), Path(job.file_path).stem + "_processed")
         if not out_dir:
             out_dir = os.path.join(os.path.dirname(job.file_path), Path(job.file_path).stem + "_processed")
-        if os.path.exists(out_dir):
+        if os.path.isdir(out_dir):
             QDesktopServices.openUrl(QUrl.fromLocalFile(out_dir))
 
     def on_choose_output_dir(self):
@@ -1213,6 +1257,14 @@ class MainWindow(QMainWindow):
         unknown = False
         details = []
         disk_error = False
+
+        problems = [(card, source_problem(card.job)) for card in self._video_cards]
+        for card, problem in problems:
+            card.set_source_issue(problem)
+        if any(problem for _, problem in problems):
+            self.estimation_label.setText("Locate missing or changed sources using Project > Locate Selected Source.")
+            self.extract_btn.setEnabled(False)
+            return
 
         for job in self.jobs:
             s = job.settings or self.default_settings
@@ -1285,6 +1337,10 @@ class MainWindow(QMainWindow):
             return
 
         card = self._selected_cards[-1]
+        problem = source_problem(card.job)
+        if problem:
+            self.log_panel.log(problem, 'WARNING')
+            return
         self.btn_analyze.setText("Analyzing...")
         self.btn_analyze.setEnabled(False)
 
@@ -1313,7 +1369,7 @@ class MainWindow(QMainWindow):
         self.btn_analyze.setEnabled(not self.is_processing)
 
     def _on_blur_analysis_finished(self, result: dict):
-        if self._closing or self._blur_job not in self.jobs:
+        if self._closing or not any(job is self._blur_job for job in self.jobs):
             return
         if (self._job_settings_revisions.get(id(self._blur_job), 0) != self._blur_revision
                 or (self._blur_job.settings or self.default_settings) != self._blur_settings):
@@ -1322,6 +1378,7 @@ class MainWindow(QMainWindow):
         # A conservative suggestion from one sample, never a calibrated guarantee.
         threshold = min(1e9, max(0.0, float(result['average']) * 0.6))
         self._blur_job.settings.update(blur_threshold=threshold, blur_filter_enabled=True)
+        self.project_actions.mark_dirty()
         if self._selected_cards and self._selected_cards[-1].job is self._blur_job:
             self.set_ui_from_settings(self._blur_job.settings)
         self.log_panel.log(f"Blur sample: average {result['average']:.1f}; suggested threshold {threshold:.1f}")
@@ -1333,6 +1390,9 @@ class MainWindow(QMainWindow):
     def start_processing(self):
         if self.is_processing or not self.jobs or self._blur_thread is not None:
             return
+        if any(source_problem(job) for job in self.jobs):
+            self.update_estimate()
+            return
         self._processing_jobs = [j for j in self.jobs if j.status in ("Pending", "Error", "Cancelled")] or list(self.jobs)
         self._active_job_index = 0
         # A native preview call may still hold its model after cancellation.
@@ -1340,6 +1400,7 @@ class MainWindow(QMainWindow):
         self.preview_widget.suspend()
         self._waiting_for_preview = True
         self.is_processing = True
+        self.project_actions.menu.setEnabled(False)
         self.left_panel.setEnabled(False)
         self.right_panel.setEnabled(False)
         self.top_nav.setEnabled(False)
@@ -1388,6 +1449,7 @@ class MainWindow(QMainWindow):
         job.status = status
         result = self.worker.jobs[index].result
         job.result = copy.deepcopy(result)
+        self.project_actions.mark_dirty()
         for card in self._video_cards:
             if card.job is job:
                 card.refresh()
@@ -1424,6 +1486,7 @@ class MainWindow(QMainWindow):
         self.left_panel.setEnabled(True)
         self.right_panel.setEnabled(True)
         self.top_nav.setEnabled(True)
+        self.project_actions.menu.setEnabled(True)
         self.cancel_btn.setEnabled(False)
         self.hud_progress.hide()
         if self._controller:
@@ -1438,12 +1501,12 @@ class MainWindow(QMainWindow):
         self._closing = True
         if self._waiting_for_preview:
             self._waiting_for_preview = False
-            self.is_processing = False
+            self._on_processing_finished()
         if self._controller:
             self._controller.stop()
         if self._blur_worker:
             self._blur_worker.stop()
-        self.preview_widget.shutdown()
+        self.preview_widget.suspend()
         for card in self._video_cards:
             card._cleanup_thread()
         if (self.is_processing or self._blur_thread is not None
@@ -1452,5 +1515,13 @@ class MainWindow(QMainWindow):
             event.ignore()
             QTimer.singleShot(50, self.close)
             return
+        if not self.project_actions.confirm_discard():
+            self._closing = False
+            self.preview_widget.resume()
+            self.update_preview_display()
+            self.update_estimate()
+            event.ignore()
+            return
+        self.preview_widget.shutdown()
         self.log_panel.shutdown()
         event.accept()

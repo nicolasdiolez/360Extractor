@@ -63,7 +63,7 @@ Standard model weights use `~/.cache/360-extractor/models` (override with `EXTRA
 AI selects an available accelerator automatically. If GPU inference is unavailable or unreliable on your machine, set `EXTRACTOR360_DEVICE=cpu` before launching (`export EXTRACTOR360_DEVICE=cpu` in a macOS/Linux terminal, or `$env:EXTRACTOR360_DEVICE="cpu"` in PowerShell). Use `auto` to restore automatic selection. The release smoke test qualifies CPU inference; it does not certify GPU profiles.
 
 ```sh
-# Studio
+# Studio (development sources: .360proj save/open in the Project menu)
 python -m extractor360
 
 # Stitched panorama or video, six cube views
@@ -90,6 +90,8 @@ Run `python reconstruct.py` from an exported `colmap/` folder to prepare a new w
 ## Quality and metadata limits
 
 Feather means smoothing of a binary segmentation mask, not native model probabilities. The segmentation output uses the original image dimensions through Ultralytics' [retina mask option](https://docs.ultralytics.com/modes/predict/). Precision on real operators, partial limbs, posters and tripod scenes remains to be measured.
+
+Studio's development sources can [save and reopen projects](docs/PROJECTS.md), retaining media references, per-job settings and the last recorded results. Missing/changed sources remain visible for relocation. Reopening does not resume extraction; running again creates a fresh output folder.
 
 GPS sidecars are aligned to video start by assumption. Camera heading is omitted without orientation evidence. Unknown or relative altitude is not written as sea-level altitude; only set `gps_altitude_reference: "orthometric"` after confirming the source reference. Inspect telemetry status and provenance in the manifest before relying on geotags.
 

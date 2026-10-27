@@ -6,7 +6,7 @@ Updated 2026-10-27 after the independent product review. The direction is reliab
 
 1. **Export contracts and storage:** named mask profiles and rolling output-space checks are implemented in development sources; [validation](docs/implementation-2026-10-27/VALIDATION.md). Complete real Postshot/RealityScan import qualification before claiming end-to-end compatibility.
 2. **Evidence before new selection features:** extend the existing-sample pilot with difficult indoor/museum scenes, reviewed masks, repetitions, geometry references and held-out splat views. Include a competitor on its supported platform. The present optical-flow filter has not demonstrated an advantage in the initial pilot.
-3. **Saved projects and inspectable selection:** retain source identity, capture timestamps, decisions, manual mask corrections and export settings. Then implement verified resume on a validated index; keep new runs as the safe default.
+3. **Saved projects and inspectable selection:** `.360proj` save/open is implemented in development sources, including per-job settings, source size/mtime checks, relocation and last-result references; see [project validation](docs/implementation-2026-10-27/PROJECTS_VALIDATION.md). Next retain capture-selection decisions and manual mask corrections. Verified resume still requires a validated output index; keep new runs as the safe default.
 4. **Early alignment diagnostics:** identify disconnected captures and propose targeted fixes. Use external reconstruction engines and maintain clear provenance instead of building a complete engine/editor.
 5. **Target-platform qualification:** Windows/CUDA, consumer imports, clean-machine binaries and measured resource budgets remain release gates.
 
@@ -37,7 +37,8 @@ These implementations are not all qualified on real camera/GPU/software combinat
 
 - [x] Output-volume preflight and rolling next-capture space guard (development sources; downstream reconstruction excluded).
 - [ ] Verified resume, full source hashes and recovery behavior.
-- [ ] Project/queue saving, complete mixed-value indicators, asynchronous metadata and accessibility/HiDPI acceptance.
+- [x] Explicit project/queue save/open with source relocation and last-result references (development sources).
+- [ ] Complete mixed-value indicators, asynchronous metadata and accessibility/HiDPI acceptance.
 - [ ] Annotated segmentation corpus, blur calibration and an optional whole-capture AI skip policy.
 - [ ] GPS9/GPSU support, camera fixtures, sidecar offset calibration and validated orientation sources.
 - [ ] End-to-end profiling and global RAM/VRAM budgets, bounded caches and staged processing.

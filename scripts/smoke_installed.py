@@ -110,6 +110,19 @@ def exercise(root, version):
     if mask is None or mask.shape != (32, 32) or mask[16, 16] != 0 or mask[0, 0] != 255:
         raise RuntimeError("Installed nadir mask is missing or does not exclude the tripod disc")
 
+    from extractor360.core.job import Job
+    from extractor360.core.project import Project, read_project, write_project, source_identity, source_problem
+    job = Job(str(panorama), settings={'resolution': 32, 'layout_mode': 'cube', 'active_cameras': [0, 5]},
+              result={'status': 'completed', 'output_dir': str(dataset)}, source_identity=source_identity(str(panorama)))
+    document = Project(jobs=[job], selected_job_ids=[job.job_id])
+    project_file = root / 'capture.360proj'
+    write_project(project_file, document)
+    reopened, _ = read_project(project_file)
+    if (reopened.jobs[0].job_id != job.job_id or reopened.jobs[0].status != 'Pending'
+            or reopened.jobs[0].settings['active_cameras'] != [0, 5]
+            or reopened.jobs[0].result['output_dir'] != str(dataset) or source_problem(reopened.jobs[0])):
+        raise RuntimeError('Installed project save/open did not preserve source, settings and result')
+
     # Execute the exported, standalone runner in an isolated interpreter. Only
     # COLMAP discovery and its external processes are simulated.
     harness = '''import json, runpy, sys
@@ -131,7 +144,7 @@ namespace['main']()
         raise RuntimeError("Installed runner staged an incomplete confirmed image index")
     if not (workspace / "masks" / (next(name for name in names if name.startswith("Down/")) + ".png")).is_file():
         raise RuntimeError("Installed runner did not stage the separate COLMAP mask")
-    print("INSTALLED_SMOKE_OK: site-packages, QSS, module/console CLI, flat pixels, six cube views, nadir mask, standalone COLMAP staging/order")
+    print("INSTALLED_SMOKE_OK: site-packages, QSS, module/console CLI, flat pixels, six cube views, nadir mask, project roundtrip, standalone COLMAP staging/order")
 
 
 def main():

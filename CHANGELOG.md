@@ -4,6 +4,13 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ## [Unreleased]
 
+### Studio projects
+
+- Save/open versioned `.360proj` documents with stable job IDs, per-job settings, defaults, selection and the latest result; preserve relative references when moving a project folder.
+- Keep missing/changed sources visible and provide explicit relocation. Check expected source size/mtime before processing; new runs preserve existing outputs.
+- Add unsaved-change prompts, validated staged writes and detection of external document changes. Project files cannot grant custom-model trust; explicit confirmation is available in Studio.
+- Validate document integrity, relocation, failed saves, UI lifecycle and installed-wheel round trips. See [project validation](docs/implementation-2026-10-27/PROJECTS_VALIDATION.md).
+
 ### Fixed
 
 - Give Postshot Remove Occluders a white-ignore mask profile and matching `.mask.png` filenames. Studio's Postshot preset selects this convention, binary masks and no incompatible COLMAP mask export. Named profiles update every selected job while preserving unrelated settings.

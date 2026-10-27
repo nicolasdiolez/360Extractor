@@ -182,6 +182,7 @@ def test_selection_preserves_unedited_settings_and_models(qapp,tmp_path):
     assert first.settings['fov']==second.settings['fov']==100
     assert first.settings['quality']==87 and second.settings['quality']==65
     assert first.settings['ai_model']=='yolo26l-seg.pt'
+    window.project_actions.confirm_discard = lambda: True
     window.close()
 
 
@@ -190,6 +191,7 @@ def test_preferences_persist_without_touching_user_config(qapp):
     window=MainWindow()
     window.quality_spin.setValue(81)
     assert window.settings_manager.config_file.is_file()
+    window.project_actions.confirm_discard = lambda: True
     window.close()
     SettingsManager._instance=None
     assert SettingsManager().get('quality')==81
@@ -308,6 +310,8 @@ def test_frame_count_estimate_includes_zero_and_last_frame(settings_window):
         video = Path(job.file_path).with_suffix('.mp4')
         video.touch()
         job.file_path = str(video)
+        from extractor360.core.project import source_identity
+        job.source_identity = source_identity(str(video))
         job.settings.update(is_360=False, interval_unit='Frames', interval_value=10.9)
         key = (job.file_path, os.path.getmtime(job.file_path))
         window._media_info[key] = (101, 10.0, 64, 32)
@@ -349,6 +353,7 @@ def test_extraction_waits_for_preview_without_blocking_ui(settings_window, qapp,
     from PySide6.QtCore import QRunnable
     from extractor360.ui import main_window
     window = settings_window
+    monkeypatch.setattr(window.project_actions, 'confirm_discard', lambda: True)
     for job in window.jobs:
         job.settings.update(is_360=False)
     entered, release = threading.Event(), threading.Event()

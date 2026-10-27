@@ -30,6 +30,7 @@ def test_studio_extract_repeat_error_cancel_and_close(tmp_path):
         cv2.imwrite(str(media),np.zeros((32,64,3),np.uint8))
         print('LIFECYCLE_STAGE: MainWindow')
         window=MainWindow()
+        window.project_actions.confirm_discard=lambda: True
         window.default_settings.update(resolution=32, layout_mode='cube', interval_unit='Frames', interval_value=1)
         window.show()
         video=Path('video.avi').resolve()

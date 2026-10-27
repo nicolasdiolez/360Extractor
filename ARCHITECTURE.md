@@ -39,6 +39,12 @@ Thumbnail work uses a shared pool capped at four jobs and returns QImage. Previe
 
 `FileManager.write_pair` stages complete image/mask files before publishing them. Failed writes raise, all futures are inspected, and counters count confirmed writes. `images.jsonl` lists successful images with camera/frame associations. Manifest schema 2 starts in running state and records terminal state, output folder, counts, errors and run identity. It distinguishes source size/mtime identification from cryptographic verification; a source hash is not yet calculated. Publishing two files is not a power-loss-atomic transaction; a process kill can leave partial files/index data and a running manifest.
 
+## Studio documents
+
+`core/project.py` defines schema-1 `.360proj` documents independently of Qt and model libraries. Jobs have stable UUIDs and optional expected size/mtime identities. The document stores queue order, selected job IDs, normalized settings/defaults and the latest result. References inside the project folder are relative; external references remain absolute. Loading validates the entire document before UI replacement, resets custom-model trust and leaves every job Pending. Results are historical references, not verified resume state.
+
+`ui/project_actions.py` owns document actions, dirty state, conflict detection and explicit relocation. It does not modify global preferences on load. The window blocks project replacement during processing/analysis and drains workers before close prompts; cancelling close resumes preview. Save uses staged replacement for existing files, an expected document digest for optimistic conflict detection and exclusive first publication (exclusive-write fallback on filesystems without hardlinks). No automatic recovery or media hashing is implied. See [the project guide](docs/PROJECTS.md).
+
 ## Image and model pipeline
 
 Geometry uses float64 ray tiles and float32 remapping tables. Preview, analysis and export share generated views and fixed-point OpenCV maps. Longitude wraps periodically; four replicated rows at each latitude edge isolate the poles for linear and Lanczos sampling. The padded source is prepared once per decoded frame. Preview scores are calculated at export resolution before sharpening or overlays, then its display image is reduced. Flat input retains its aspect ratio and is exported at native resolution.
