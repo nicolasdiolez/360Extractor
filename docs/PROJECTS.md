@@ -12,7 +12,7 @@ The project preserves queue order, stable job identifiers, each job's settings (
 
 Opening a project does not replace global preferences. A new untitled empty window retains the existing preference-editing behavior. Selection changes alone do not trigger an unsaved-content warning; selection is recorded when you explicitly save.
 
-Project actions are blocked during extraction; Open/Save also wait for blur analysis. Closing stops and drains active work before asking whether to save. Cancelling that dialog keeps Studio usable, but does not restart a cancelled extraction.
+Project actions are blocked during extraction; Open/Save also wait for blur analysis and alignment diagnostics. Closing stops and drains active work before asking whether to save. Cancelling that dialog keeps Studio usable, but does not restart cancelled work.
 
 ## Missing or changed sources
 
@@ -20,7 +20,7 @@ Files inside the project's folder use relative references. Moving that folder to
 
 Source identity contains size and modification time. Missing, inaccessible or changed sources remain visible as **Check source**; preview, analysis and extraction require resolution first. Select one card, then **Project → Locate Selected Source**. Reconnect its disk or choose the original at its new location. If size/date differs, Studio asks before accepting it and clears the old result association. It keeps the job identifier and settings; existing outputs remain untouched.
 
-Size/date is a lightweight check, **not a content hash**. Same-size changes with preserved timestamps can go undetected. Foreign-platform absolute paths require relocation. Studio does not search disks or infer replacement files by name.
+Size/date is a lightweight check, **not a content hash**. Same-size changes with preserved timestamps can go undetected. Replacing a source with a different identity also clears its capture exclusions: frame numbers belong to that source. Foreign-platform absolute paths require relocation. Studio does not search disks or infer replacement files by name.
 
 ## Custom models and previous results
 
@@ -36,4 +36,18 @@ Saving an existing project writes and flushes a temporary file beside it, then r
 
 First saves use exclusive publication. On filesystems without hardlinks, such as exFAT, they fall back to exclusive writing; a power loss can leave an incomplete new file. Subsequent saves use staged replacement. Project files are limited to 16 MiB and 10,000 sources; media and models are never embedded.
 
-This Studio format is separate from CLI `--config`. Manual capture exclusion, mask painting, persisted viewport position, complete run history, autosave and verified resume remain future work. [Implementation validation](implementation-2026-10-27/PROJECTS_VALIDATION.md).
+This Studio format is separate from CLI `--config`. Mask painting, persisted viewport position, complete run history, autosave and verified resume remain future work. [Implementation validation](implementation-2026-10-27/PROJECTS_VALIDATION.md).
+
+## Alignment diagnostic and capture decisions
+
+Select one source and choose **Project → Alignment Diagnostic**. First extract it with **COLMAP export** enabled. The diagnostic uses that completed export's confirmed index and calibrated perspective rig; it refuses a changed source, partial export or changed extraction settings. This first version supports a single 360 video export, not flat cameras, multiple source rigs or native panoramas. It does not automatically extract a preliminary sample from the original video.
+
+Install COLMAP 4.2 on PATH separately. Choose a maximum of 3–16 physical captures (default 8) and an output parent folder. Each run creates a new dated folder. It samples included exported captures evenly across their ordered frame indices, keeps their views together, resizes copies to at most 512 pixels, scales intrinsics and retains mask polarity. Originals are never rewritten. Limits are 128 views, four CPU threads, 4096 features per view, five minutes and a monitored 256 MiB workspace budget. The subprocess is stopped on cancellation/time/space failure; polling can briefly overshoot the disk threshold. The workspace and logs remain available after failure. Nothing is installed or downloaded automatically.
+
+The table distinguishes **registered**, **unregistered**, **excluded** and **not sampled**. Counts refer to physical captures, with registered views per model shown separately. Models sharing captures form overlapping alternatives; disjoint groups refer only to the sampled reconstructions. Missing registration alone does not diagnose blur, overlap or mask errors, and is not an instruction to discard a capture. These measurements do not establish geometric accuracy, dense reconstruction or Gaussian Splatting quality.
+
+Select a row and choose **View selected source capture** to inspect its source frame in Studio. Seeking reports an error if the decoder cannot confirm that frame. New export indexes retain decoded timestamps (or an explicit FPS fallback); older indexes show timing as unavailable.
+
+Uncheck **Include** to exclude that physical frame, across all virtual views, from future extractions and diagnostics. This preserves the sampling cadence: the following adjacent frame is not substituted automatically. It does not delete existing output. Rechecking includes it again if that frame is otherwise selected by sampling and filters. **Restore all excluded captures** also works when a subsequent export no longer contains those frames. Save the `.360proj` to retain decisions. CLI configuration accepts the same `excluded_frames` list of zero-based frame indices; it does not read `.360proj` directly.
+
+The latest diagnostic summary is embedded in the last result; changing selection marks it historical until rerun. New extraction replaces that last result, while retaining selection decisions. Saved diagnostics are historical measurements, not ongoing validation of files on disk. Diagnostic input size/mtime checks do not hash every pixel. Keep the JSON report and logs for evidence; after use, the diagnostic image copies/database/models can be discarded without affecting the export or project.

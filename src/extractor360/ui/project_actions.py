@@ -38,10 +38,11 @@ class ProjectActions:
             menu.addAction(action)
         menu.addSeparator()
         self.locate_action = menu.addAction('Locate Selected Source…', self.locate_source)
+        menu.addAction('Alignment Diagnostic…', window.open_alignment)
         self.update_title()
 
     def busy(self) -> bool:
-        return self.window.is_processing or self.window._blur_thread is not None
+        return self.window.is_processing or self.window._blur_thread is not None or self.window.alignment_busy()
 
     def update_title(self):
         name = self.path.name if self.path else 'Untitled project'

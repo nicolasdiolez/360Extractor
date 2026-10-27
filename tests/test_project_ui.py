@@ -222,3 +222,101 @@ def test_cancel_close_while_waiting_for_preview_restores_controls(window, monkey
     assert window.isVisible() and not window._closing and not window.is_processing
     assert not window.preview_widget._closed and not window.preview_widget._suspended
     assert all(widget.isEnabled() for widget in (window.left_panel, window.right_panel, window.top_nav, window.project_actions.menu))
+
+
+def alignment_report(job):
+    from extractor360.core.alignment import fingerprint
+    return {'schema_version': 1, 'fingerprint': fingerprint(job),
+            'registered_captures': 1, 'unregistered_captures': 1, 'sampled_frames': [0, 2],
+            'groups': [{'models': ['0'], 'frames': [0]}], 'models': [{'model': '0', 'frames': [0]}],
+            'captures': [{'frame': 0, 'images': ['Front/frame0.jpg'], 'models': {'0': 1}, 'state': 'registered'},
+                         {'frame': 2, 'images': ['Front/frame2.jpg'], 'models': {}, 'state': 'unregistered'}]}
+
+
+def test_alignment_selection_saved_reopened_and_source_navigation(window, tmp_path):
+    from PySide6.QtCore import Qt
+    from extractor360.ui.alignment_dialog import AlignmentDialog
+    job = window.jobs[0]
+    window.select_card(window._video_cards[0])
+    report = alignment_report(job)
+    job.result['alignment'] = report
+    dialog = AlignmentDialog(window, job)
+    dialog.table.item(1, 0).setCheckState(Qt.CheckState.Unchecked)
+    assert job.settings['excluded_frames'] == [2]
+    assert 'Historical' in dialog.summary.text() and window.project_actions.dirty
+    target = tmp_path / 'decisions.360proj'
+    window.project_actions.save_to(target)
+    dialog.close()
+    window.project_actions.load_from(target)
+    job = window.jobs[0]
+    assert job.settings['excluded_frames'] == [2] and job.result['alignment'] == report
+    dialog = AlignmentDialog(window, job)
+    assert dialog.table.item(1, 0).checkState() == Qt.CheckState.Unchecked
+    dialog.table.selectRow(1)
+    dialog.view_capture()
+    assert window._selected_cards[0].job is job and window.preview_widget._exact_frame == 2
+
+
+def test_excluded_captures_can_be_restored_after_new_export(window):
+    from extractor360.ui.alignment_dialog import AlignmentDialog
+    job = window.jobs[0]
+    job.settings['excluded_frames'] = [99]
+    job.result = {}  # A new extraction replaces the previous diagnostic.
+    dialog = AlignmentDialog(window, job)
+    assert dialog.restore_button.isEnabled()
+    dialog.restore_selection()
+    assert job.settings['excluded_frames'] == [] and window.project_actions.dirty
+    assert not dialog.restore_button.isEnabled()
+    dialog.close()
+
+
+def test_alignment_thread_blocks_actions_then_drains_on_close(window, tmp_path, monkeypatch, qapp):
+    import time
+    from extractor360.core.alignment import AlignmentRunner
+    from extractor360.ui.alignment_dialog import AlignmentDialog
+    entered = []
+    def run(runner, *args):
+        entered.append(True)
+        while not runner.cancelled():
+            time.sleep(.005)
+        raise InterruptedError('Alignment cancelled')
+    monkeypatch.setattr(AlignmentRunner, 'run', run)
+    window.show()
+    window.alignment_dialog = AlignmentDialog(window, window.jobs[0])
+    dialog = window.alignment_dialog
+    dialog.show()
+    dialog.start(tmp_path / 'diagnostic')
+    deadline = time.monotonic() + 5
+    while not entered:
+        qapp.processEvents()
+        assert time.monotonic() < deadline
+    with pytest.raises(ValueError, match='Wait'):
+        window.project_actions.save_to(tmp_path / 'busy.360proj')
+    window.start_processing()
+    assert not window.is_processing
+    monkeypatch.setattr(window.project_actions, 'confirm_discard', lambda: True)
+    window.close()
+    while window.isVisible() or dialog.busy:
+        qapp.processEvents()
+        time.sleep(.005)
+        assert time.monotonic() < deadline
+    assert dialog._thread is None
+
+
+def test_alignment_delivers_result_only_after_thread_finishes(window, tmp_path, monkeypatch, qapp):
+    import time
+    from extractor360.core.alignment import AlignmentRunner
+    from extractor360.ui.alignment_dialog import AlignmentDialog
+    job = window.jobs[0]
+    report = alignment_report(job)
+    monkeypatch.setattr(AlignmentRunner, 'run', lambda *args: report)
+    dialog = AlignmentDialog(window, job)
+    dialog.start(tmp_path / 'diagnostic')
+    deadline = time.monotonic() + 5
+    while dialog.busy:
+        qapp.processEvents()
+        time.sleep(.005)
+        assert time.monotonic() < deadline
+    assert job.result['alignment'] == report and window.project_actions.dirty
+    assert dialog.table.rowCount() == 2 and dialog.run_button.isEnabled()
+    dialog.close()

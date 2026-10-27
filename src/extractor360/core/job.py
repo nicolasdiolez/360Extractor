@@ -93,4 +93,6 @@ class Job:
         elif ai_mode == 'Skip Frame':
             ai_str = " [AI Skip]"
             
-        return f"{pitch_str}{cam_str}{adaptive}{ai_str}"
+        count = len(self.settings.get('excluded_frames', []))
+        selection = f" [{count} captures excluded]" if count else ""
+        return f"{pitch_str}{cam_str}{adaptive}{ai_str}{selection}"

@@ -98,7 +98,24 @@ class MainWindow(QMainWindow):
         # Blur analysis worker thread
         self._blur_thread = None
         self._blur_worker = None
+        self.alignment_dialog = None
         self.project_actions = ProjectActions(self)
+
+    def alignment_busy(self):
+        return self.alignment_dialog is not None and self.alignment_dialog.busy
+
+    def open_alignment(self):
+        if self.project_actions.busy():
+            return
+        if len(self._selected_cards) != 1:
+            QMessageBox.information(self, 'Alignment diagnostic', 'Select exactly one source in the queue.')
+            return
+        from extractor360.ui.alignment_dialog import AlignmentDialog
+        if self.alignment_dialog:
+            self.alignment_dialog.close()
+            self.alignment_dialog.deleteLater()
+        self.alignment_dialog = AlignmentDialog(self, self._selected_cards[0].job)
+        self.alignment_dialog.show()
 
     def load_stylesheet(self, filename: str):
         qss_path = os.path.join(os.path.dirname(__file__), filename)
@@ -1330,6 +1347,8 @@ class MainWindow(QMainWindow):
     # =========================================================================
 
     def analyze_blur_for_selected(self):
+        if self.alignment_busy():
+            return
         if self._blur_thread is not None or self.is_processing:
             return
         if not self._selected_cards:
@@ -1388,7 +1407,7 @@ class MainWindow(QMainWindow):
             self.log_panel.log(f"Analysis failed: {error_msg}", "ERROR")
 
     def start_processing(self):
-        if self.is_processing or not self.jobs or self._blur_thread is not None:
+        if self.is_processing or not self.jobs or self._blur_thread is not None or self.alignment_busy():
             return
         if any(source_problem(job) for job in self.jobs):
             self.update_estimate()
@@ -1506,10 +1525,12 @@ class MainWindow(QMainWindow):
             self._controller.stop()
         if self._blur_worker:
             self._blur_worker.stop()
+        if self.alignment_dialog:
+            self.alignment_dialog.close()
         self.preview_widget.suspend()
         for card in self._video_cards:
             card._cleanup_thread()
-        if (self.is_processing or self._blur_thread is not None
+        if (self.is_processing or self._blur_thread is not None or self.alignment_busy()
                 or self.preview_widget.threadpool.activeThreadCount()
                 or QThreadPool.globalInstance().activeThreadCount()):
             event.ignore()

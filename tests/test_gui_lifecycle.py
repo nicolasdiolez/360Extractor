@@ -40,6 +40,16 @@ def test_studio_extract_repeat_error_cancel_and_close(tmp_path):
         encoder.release()
         print('LIFECYCLE_STAGE: import media')
         window.add_videos_from_paths([str(media),str(video)])
+        print('LIFECYCLE_STAGE: save, close, reopen project')
+        project=Path('session.360proj').resolve()
+        window.project_actions.save_to(project)
+        window.close()
+        until(lambda: not window.isVisible())
+        window=MainWindow()
+        window.project_actions.confirm_discard=lambda: True
+        window.show()
+        assert window.project_actions.load_from(project)
+        assert len(window.jobs)==2
         print('LIFECYCLE_STAGE: first extraction')
         QTest.mouseClick(window.extract_btn,Qt.LeftButton)
         until(lambda: not window.is_processing)

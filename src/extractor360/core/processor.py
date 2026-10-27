@@ -431,6 +431,8 @@ class ProcessingWorker:
             frames_skipped_motion = 0  # skipped by the adaptive/motion filter
             job.result['extraction'] = {'images_written': 0, 'writes_failed': 0}
             next_extract_time = 0.0
+            excluded_frames = set(job.settings.get('excluded_frames', []))
+            frames_excluded = 0
             views_skipped_ai = 0       # views dropped by AI "Skip Frame"
 
             frame_idx = 0
@@ -440,6 +442,9 @@ class ProcessingWorker:
             while self.is_running:
                 if is_image:
                     if frame_idx > 0:
+                        break
+                    if frame_idx in excluded_frames:
+                        frames_excluded += 1
                         break
                     frame = current_image_frame
                 else:
@@ -454,12 +459,15 @@ class ProcessingWorker:
                     if not due:
                         frame_idx += 1
                         continue
+                    if interval_unit == 'Seconds':
+                        next_extract_time = (int(sample_time / interval_value) + 1) * interval_value
+                    if frame_idx in excluded_frames:
+                        frames_excluded += 1
+                        frame_idx += 1
+                        continue
                     ret, frame = cap.retrieve()
                     if not ret or frame is None:
                         raise IOError(f'Could not decode selected frame {frame_idx}')
-                    if interval_unit == 'Seconds':
-                        next_extract_time = (int(sample_time / interval_value) + 1) * interval_value
-
                 # Reached only on extraction points (or the single image frame).
                 if is_image or interval_unit == 'Seconds' or frame_idx % interval == 0:
                     frame_time = 0.0 if is_image else sample_time
@@ -652,11 +660,14 @@ class ProcessingWorker:
                             FileManager.write_pair, full_save_path, final_img, save_params,
                             exif_bytes, full_mask_path,
                             mask_or_skip if isinstance(mask_or_skip, np.ndarray) else None
-                        ), {"image": save_name, "mask": mask_name if isinstance(mask_or_skip, np.ndarray) else None, "camera": name, "frame": frame_idx}))
+                        ), {"image": save_name, "mask": mask_name if isinstance(mask_or_skip, np.ndarray) else None,
+                            "camera": name, "frame": frame_idx, "timestamp_seconds": frame_time,
+                            "timestamp_source": 'still_image' if is_image else time_source}))
 
                     job.result['extraction'].update(
                         interval_frames=interval, frames_processed=frames_processed,
                         frames_skipped_motion=frames_skipped_motion,
+                        frames_excluded=frames_excluded,
                         views_skipped_blur=skipped_blur_count, views_skipped_ai=views_skipped_ai,
                     )
                     accepted = self._drain_writes(job, output_dir, futures, written_view_names)
@@ -724,6 +735,7 @@ class ProcessingWorker:
                 "interval_frames": interval,
                 "frames_processed": frames_processed,
                 "frames_skipped_motion": frames_skipped_motion,
+                "frames_excluded": frames_excluded,
                 "images_written": images_written,
                 "views_skipped_blur": skipped_blur_count,
                 "views_skipped_ai": views_skipped_ai,

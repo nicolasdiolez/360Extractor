@@ -112,7 +112,7 @@ def exercise(root, version):
 
     from extractor360.core.job import Job
     from extractor360.core.project import Project, read_project, write_project, source_identity, source_problem
-    job = Job(str(panorama), settings={'resolution': 32, 'layout_mode': 'cube', 'active_cameras': [0, 5]},
+    job = Job(str(panorama), settings={'resolution': 32, 'layout_mode': 'cube', 'active_cameras': [0, 5], 'excluded_frames': [2]},
               result={'status': 'completed', 'output_dir': str(dataset)}, source_identity=source_identity(str(panorama)))
     document = Project(jobs=[job], selected_job_ids=[job.job_id])
     project_file = root / 'capture.360proj'
@@ -120,8 +120,16 @@ def exercise(root, version):
     reopened, _ = read_project(project_file)
     if (reopened.jobs[0].job_id != job.job_id or reopened.jobs[0].status != 'Pending'
             or reopened.jobs[0].settings['active_cameras'] != [0, 5]
+            or reopened.jobs[0].settings['excluded_frames'] != [2]
             or reopened.jobs[0].result['output_dir'] != str(dataset) or source_problem(reopened.jobs[0])):
         raise RuntimeError('Installed project save/open did not preserve source, settings and result')
+
+    from extractor360.core.alignment import sample_frames, summarize
+    sample = sample_frames(range(10), [2], 3)
+    frames = {frame: {'frame': frame, 'images': [f'Front/frame{frame}.jpg']} for frame in sample}
+    report = summarize(frames, sample, set(), {'0': {frames[sample[0]]['images'][0]}})
+    if report['registered_captures'] != 1 or report['unregistered_captures'] != 2:
+        raise RuntimeError('Installed alignment summary counted virtual views as captures')
 
     # Execute the exported, standalone runner in an isolated interpreter. Only
     # COLMAP discovery and its external processes are simulated.

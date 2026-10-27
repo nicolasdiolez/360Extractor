@@ -13,6 +13,11 @@ def validate_settings(settings: dict[str, Any]) -> dict[str, Any]:
         raise ValueError('Settings must be a JSON object')
     result: dict[str, Any] = copy.deepcopy(SettingsManager.DEFAULT_SETTINGS)
     result.update(copy.deepcopy(settings))
+    excluded = result.get('excluded_frames', [])
+    if (not isinstance(excluded, list) or len(excluded) > 100000
+            or any(type(frame) is not int or frame < 0 for frame in excluded)):
+        raise ValueError('excluded_frames must contain at most 100000 nonnegative frame indices')
+    result['excluded_frames'] = sorted(set(excluded))
     if result['layout_mode'] == 'adaptive':
         result['layout_mode'] = 'ring'
     bounds = {

@@ -82,13 +82,15 @@ class PreviewModelCache:
 class PreviewWorker(QRunnable):
     """Background worker generating perspective preview with overlays."""
     def __init__(self, media_path: str, settings: dict, face_name: str = "Front",
-                 position_ratio: float = 0.0, show_ai_mask: bool = True, show_nadir_disc: bool = True, ai_cache=None):
+                 position_ratio: float = 0.0, show_ai_mask: bool = True, show_nadir_disc: bool = True, ai_cache=None,
+                 exact_frame: int | None = None):
         super().__init__()
         self.media_path = media_path
         self.settings = copy.deepcopy(settings)
         self.ai_cache = ai_cache if ai_cache is not None else PreviewModelCache()
         self.face_name = face_name
         self.position_ratio = position_ratio
+        self.exact_frame = exact_frame
         self.show_ai_mask = show_ai_mask
         self.show_nadir_disc = show_nadir_disc
         self.signals = WorkerSignals()
@@ -130,6 +132,8 @@ class PreviewWorker(QRunnable):
                     fps = cap.get(cv2.CAP_PROP_FPS)
                     total_sec = count / fps if math.isfinite(count) and count > 0 and math.isfinite(fps) and fps > 0 else float('nan')
                     target_frame = max(0, min(int(self.position_ratio * (total_frames - 1)), total_frames - 1))
+                    if self.exact_frame is not None:
+                        target_frame = self.exact_frame
                     self._checkpoint()
                     cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
                     ret, frame = cap.read()
@@ -139,6 +143,8 @@ class PreviewWorker(QRunnable):
                         # it when available, since seeking can land elsewhere.
                         position = cap.get(cv2.CAP_PROP_POS_FRAMES)
                         current_frame = max(0, round(position) - 1) if math.isfinite(position) and position >= 1 else target_frame
+                        if self.exact_frame is not None and (not math.isfinite(position) or position < 1 or current_frame != target_frame):
+                            raise IOError(f'Decoder could not confirm requested frame {target_frame}; returned {current_frame}')
                         current_sec, source = FrameClock(fps).resolve(current_frame, cap.get(cv2.CAP_PROP_POS_MSEC) / 1000)
                         self.signals.timing_source.emit(source)
                 finally:
@@ -194,7 +200,9 @@ class PreviewWorker(QRunnable):
                 else:
                     mask = result
             self._checkpoint()
-            self.signals.view_status.emit("Rejected by AI · excluded from export" if rejected else "")
+            self.signals.view_status.emit(
+                "Capture excluded in project" if current_frame in settings.get('excluded_frames', [])
+                else "Rejected by AI · excluded from export" if rejected else "")
             if self.show_nadir_disc and settings['nadir_mask_enabled'] and name.lower() == 'down':
                 disc = ProcessingWorker._build_nadir_mask(remapped.shape, settings['nadir_mask_radius'], settings['ai_invert_mask'])
                 mask = disc if mask is None else (cv2.min(mask, disc) if settings['ai_invert_mask'] else cv2.max(mask, disc))
@@ -307,6 +315,7 @@ class PreviewWidget(QWidget):
         self._active_worker = None
         self.cached_image = None
         self._position_ratio = 0.0
+        self._exact_frame = None
 
         self.threadpool = QThreadPool(self)
         self.threadpool.setMaxThreadCount(1)
@@ -460,7 +469,12 @@ class PreviewWidget(QWidget):
         self._schedule_update()
 
     def _on_scrubber_changed(self, value: int):
+        self._exact_frame = None
         self._position_ratio = value / 1000.0
+        self._schedule_update()
+
+    def seek_frame(self, frame: int):
+        self._exact_frame = frame
         self._schedule_update()
 
     def set_empty(self, is_empty: bool):
@@ -477,6 +491,8 @@ class PreviewWidget(QWidget):
             self.timeline_bar.show()
 
     def update_preview(self, media_path: str | None, settings: dict):
+        if media_path != self.current_media_path:
+            self._exact_frame = None
         if not media_path:
             self._debounce.stop()
             self._pending = None
@@ -542,6 +558,7 @@ class PreviewWidget(QWidget):
             show_ai_mask=self.show_ai_mask,
             show_nadir_disc=self.show_nadir_disc,
             ai_cache=self._ai_cache,
+            exact_frame=self._exact_frame,
         )
         self._active_worker = worker
         delivery = PreviewDelivery(self, gen, worker)

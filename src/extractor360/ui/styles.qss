@@ -10,6 +10,41 @@ QMainWindow {
     color: #E6E6EA;
 }
 
+QDialog#alignmentDiagnostic {
+    background-color: #141417;
+}
+QDialog#alignmentDiagnostic QLabel, QDialog#alignmentDiagnostic QPushButton {
+    color: #E6E6EA;
+    font-size: 12px;
+}
+QDialog#alignmentDiagnostic QTableWidget {
+    background-color: #1D1D23;
+    color: #E6E6EA;
+    gridline-color: #3A3A46;
+    selection-background-color: #4A3A22;
+    selection-color: #FFFFFF;
+    font-size: 12px;
+}
+QDialog#alignmentDiagnostic QHeaderView {
+    background-color: #1D1D23;
+}
+QDialog#alignmentDiagnostic QHeaderView::section, QDialog#alignmentDiagnostic QTableCornerButton::section {
+    background-color: #2A2A33;
+    color: #E6E6EA;
+    padding: 5px;
+    border: 1px solid #3A3A46;
+}
+QDialog#alignmentDiagnostic QPushButton {
+    background-color: #2A2A33;
+    border: 1px solid #4A4A56;
+    padding: 6px;
+    border-radius: 4px;
+}
+QDialog#alignmentDiagnostic QPushButton:disabled {
+    color: #74747E;
+    background-color: #1D1D23;
+}
+
 QWidget {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
     font-size: 11px;

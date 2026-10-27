@@ -6,6 +6,9 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ### Studio projects
 
+- Add a bounded CPU COLMAP diagnostic from a completed 360 rig export: physical-capture counts, unregistered/unsampled states, overlapping models versus disjoint groups, source-frame navigation and persistent reversible frame exclusions. Keep exclusion decisions across new extractions and expose restoration even when excluded frames are absent from the new export.
+- Index source timestamps and their provenance. Check extraction save/close/reopen lifecycle and diagnostic cancellation/timeout/space failures. See [alignment scope and validation](docs/implementation-2026-10-27/ALIGNMENT_VALIDATION.md).
+
 - Save/open versioned `.360proj` documents with stable job IDs, per-job settings, defaults, selection and the latest result; preserve relative references when moving a project folder.
 - Keep missing/changed sources visible and provide explicit relocation. Check expected source size/mtime before processing; new runs preserve existing outputs.
 - Add unsaved-change prompts, validated staged writes and detection of external document changes. Project files cannot grant custom-model trust; explicit confirmation is available in Studio.

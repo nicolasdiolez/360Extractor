@@ -62,6 +62,7 @@ def relink_source(job: Job, path: str) -> None:
     if job.source_identity != identity:
         # Existing results describe the old source; never relabel them as new.
         job.result = {}
+        job.settings['excluded_frames'] = []
     job.file_path = str(source)
     job.source_identity = identity
     job.source_check_required = True

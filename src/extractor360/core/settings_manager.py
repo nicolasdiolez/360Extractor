@@ -9,6 +9,7 @@ class SettingsManager:
     _instance = None
     
     DEFAULT_SETTINGS = {
+        "excluded_frames": [],
         "is_360": True,
         "resolution": 2048,
         "fov": 90,
