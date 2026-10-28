@@ -224,6 +224,10 @@ def run_cli(args):
         sys.exit(1)
 
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == '--diagnostic-sample':
+        from extractor360.core.preflight import sample_main
+        sample_main(sys.argv[2])
+        return
     args = parse_arguments()
     
     # Check if CLI required arguments are present (input is strictly required via CLI or Config)

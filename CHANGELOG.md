@@ -6,6 +6,9 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ### Studio projects
 
+- Run a preliminary alignment directly from a stitched 360 video, without a full export: supervised native decoding/AI, uniform bounded sampling, explicit preview adaptations and preserved project settings. Missing models never trigger a diagnostic download. Stop the sampling process tree on cancellation/time/space failure.
+- Report COLMAP's known no-model outcome as unregistered captures, while preserving other tool errors. Distinguish candidates filtered before alignment from registration failures. Qualify the source workflow on Cour and the more difficult Bobillot staircase; see [October 28 validation](docs/implementation-2026-10-28/PREFLIGHT_VALIDATION.md).
+
 - Add a bounded CPU COLMAP diagnostic from a completed 360 rig export: physical-capture counts, unregistered/unsampled states, overlapping models versus disjoint groups, source-frame navigation and persistent reversible frame exclusions. Keep exclusion decisions across new extractions and expose restoration even when excluded frames are absent from the new export.
 - Index source timestamps and their provenance. Check extraction save/close/reopen lifecycle and diagnostic cancellation/timeout/space failures. See [alignment scope and validation](docs/implementation-2026-10-27/ALIGNMENT_VALIDATION.md).
 

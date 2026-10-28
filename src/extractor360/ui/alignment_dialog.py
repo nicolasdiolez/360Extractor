@@ -8,8 +8,8 @@ import threading
 import uuid
 from typing import Any, TYPE_CHECKING
 
-from PySide6.QtCore import QThread, Signal, Qt
-from PySide6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QLabel, QMessageBox,
+from PySide6.QtCore import QThread, Signal, Qt, QTimer
+from PySide6.QtWidgets import (QComboBox, QDialog, QFileDialog, QHBoxLayout, QLabel, QMessageBox,
                                QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout)
 
 from extractor360.core.alignment import AlignmentRunner, fingerprint, load_export
@@ -21,10 +21,11 @@ if TYPE_CHECKING:
 class AlignmentThread(QThread):
     progress = Signal(str)
 
-    def __init__(self, job, destination, maximum, parent=None):
+    def __init__(self, job, destination, maximum, parent=None, mode='export'):
         super().__init__(parent)
         self.job = copy.deepcopy(job)
         self.destination, self.maximum = destination, maximum
+        self.mode = mode
         self.cancelled = threading.Event()
         self.report: dict[str, Any] | None = None
         self.error: str | None = None
@@ -32,7 +33,8 @@ class AlignmentThread(QThread):
     def run(self):
         try:
             runner = AlignmentRunner(self.cancelled.is_set, self.progress.emit)
-            self.report = runner.run(self.job, self.destination, self.maximum)
+            self.report = (runner.run_source(self.job, self.destination, self.maximum) if self.mode == 'source'
+                           else runner.run(self.job, self.destination, self.maximum))
         except Exception as exc:
             self.error = str(exc)
 
@@ -49,12 +51,22 @@ class AlignmentDialog(QDialog):
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.resize(900, 600)
         layout = QVBoxLayout(self)
-        intro = QLabel('Test confirmed images from the last 360 COLMAP export. Maximum 16 captures, '
+        intro = QLabel('Test a source sample before full extraction, or images from the last 360 COLMAP export. Maximum 16 captures, '
                        '128 views, 512 px/view, CPU, 5 minutes and a 256 MiB workspace limit.\n'
                        'An unregistered capture is a finding, not a diagnosis of its cause. '
                        'Excluding it does not necessarily improve reconstruction.')
         intro.setWordWrap(True)
         layout.addWidget(intro)
+        self.mode = QComboBox()
+        self.mode.addItem('From source — preliminary sample', 'source')
+        self.mode.addItem('From last completed COLMAP export', 'export')
+        self.mode.setCurrentIndex(1 if job.result.get('output_dir') else 0)
+        layout.addWidget(self.mode)
+        self.scope = QLabel('')
+        self.scope.setWordWrap(True)
+        layout.addWidget(self.scope)
+        self.mode.currentIndexChanged.connect(self.update_scope)
+        self.update_scope()
         controls = QHBoxLayout()
         controls.addWidget(QLabel('Maximum captures:'))
         self.maximum = QSpinBox()
@@ -69,7 +81,7 @@ class AlignmentDialog(QDialog):
         self.cancel_button.clicked.connect(self.cancel)
         controls.addWidget(self.cancel_button)
         layout.addLayout(controls)
-        self.summary = QLabel('Extract this source with COLMAP export enabled, then run a diagnostic.')
+        self.summary = QLabel('Choose a diagnostic source and an output folder to begin.')
         self.summary.setWordWrap(True)
         layout.addWidget(self.summary)
         self.table = QTableWidget(0, 5)
@@ -108,9 +120,21 @@ class AlignmentDialog(QDialog):
     def busy(self):
         return self._thread is not None
 
+    def update_scope(self):
+        self.scope.setText('Source preflight samples the whole video uniformly, independently of the export interval. '
+                           'It uses reduced-resolution JPEGs and current geometry/AI/nadir choices; blur and motion rejection '
+                           'are disabled. AI runs on CPU with an already available model. Project settings remain unchanged.'
+                           ' Exclusions target exact frames; other export intervals may select different frames.'
+                           if self.mode.currentData() == 'source' else
+                           'The last export must be complete and match the current source and settings. Existing pixels and masks are reused.')
+
     def choose_destination(self):
         try:
-            load_export(self.job)
+            if self.mode.currentData() == 'source':
+                from extractor360.core.preflight import source_plan
+                source_plan(self.job, self.maximum.value())
+            else:
+                load_export(self.job)
             parent = QFileDialog.getExistingDirectory(self, 'Choose diagnostic output folder')
             if parent:
                 name = f'alignment-{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:8]}'
@@ -124,13 +148,24 @@ class AlignmentDialog(QDialog):
         self._close_requested = False
         self.run_button.setEnabled(False)
         self.maximum.setEnabled(False)
+        self.mode.setEnabled(False)
         self.table.setEnabled(False)
         self.restore_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self.path_label.setText(f'Diagnostic files: {destination}')
-        self._thread = AlignmentThread(self.job, destination, self.maximum.value(), self)
+        self._thread = AlignmentThread(self.job, destination, self.maximum.value(), self, mode=self.mode.currentData())
         self._thread.progress.connect(self.summary.setText)
         self._thread.finished.connect(self.finished_run)
+        self._window.preview_widget.suspend()
+        self.launch_when_preview_idle()
+
+    def launch_when_preview_idle(self):
+        if self._thread is None:
+            return
+        if self._window.preview_widget.threadpool.activeThreadCount():
+            self.summary.setText('Waiting for the current preview to stop…')
+            QTimer.singleShot(50, self.launch_when_preview_idle)
+            return
         self._thread.start()
 
     def cancel(self):
@@ -147,6 +182,7 @@ class AlignmentDialog(QDialog):
         self._thread = None
         self.run_button.setEnabled(True)
         self.maximum.setEnabled(True)
+        self.mode.setEnabled(True)
         self.table.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self.restore_button.setEnabled(bool(self.job.settings.get('excluded_frames')))
@@ -157,6 +193,8 @@ class AlignmentDialog(QDialog):
         else:
             self.summary.setText(thread.error or 'Alignment cancelled. Previous diagnostic retained, if any.')
         thread.deleteLater()
+        if not self._window._closing:
+            self._window.preview_widget.resume()
         if self._close_requested:
             super().reject()
 
@@ -167,7 +205,7 @@ class AlignmentDialog(QDialog):
         # Validate before creating editable checkboxes from an imported project.
         for item in report['captures']:
             if (type(item.get('frame')) is not int or item['frame'] < 0
-                    or item.get('state') not in ('registered', 'unregistered', 'excluded', 'not_sampled')
+                    or item.get('state') not in ('registered', 'unregistered', 'excluded', 'not_sampled', 'filtered')
                     or not isinstance(item.get('models'), dict) or not isinstance(item.get('images'), list)):
                 raise ValueError('Invalid capture in saved diagnostic')
         self.report = report
@@ -187,7 +225,8 @@ class AlignmentDialog(QDialog):
                 include.setData(Qt.ItemDataRole.UserRole, item['frame'])
                 self.table.setItem(row, 0, include)
                 seconds = item.get('timestamp_seconds')
-                timing = f'{seconds:.3f} s ({item.get("timestamp_source", "unavailable")})' if type(seconds) in (int, float) else 'Unavailable in export'
+                time_source = {'decoder_timestamp': 'decoded', 'fps_estimate': 'FPS estimate', 'still_image': 'image'}.get(item.get('timestamp_source'), 'unavailable')
+                timing = f'{seconds:.3f} s ({time_source})' if type(seconds) in (int, float) else 'Unavailable in export'
                 memberships = ', '.join(f'Model {name}: {count}/{len(item["images"])} views' for name, count in item['models'].items())
                 for column, value in enumerate((str(item['frame']), timing, item['state'].replace('_', ' '), memberships or '—'), 1):
                     cell = QTableWidgetItem(value)
@@ -205,10 +244,16 @@ class AlignmentDialog(QDialog):
         report = self.report
         stale = report.get('fingerprint') != fingerprint(self.job)
         self.summary.setText(
-            f'{report["registered_captures"]}/{len(report["sampled_frames"])} sampled physical captures registered; '
+            ('Source preflight: ' if report.get('mode') == 'source_preflight' else 'Export diagnostic: ')
+            + f'{report["registered_captures"]}/{len(report["sampled_frames"])} sampled physical captures registered; '
             f'{report["unregistered_captures"]} unregistered. '
             f'{len(report["groups"])} disjoint group(s), {len(report["models"])} model(s). '
             'Models sharing captures are overlapping alternatives. Unsampled captures are untested.\n'
+            + ('COLMAP did not create a sparse model. A coarse sample can fail even when a larger export aligns.\n'
+               if report.get('mapper_status') == 'no_model' else '')
+            + (f'{report.get("filtered_captures", 0)} candidates produced no confirmed views before alignment. '
+               + report.get('alignment_not_run', '') + '\n'
+               if report.get('filtered_captures') or report.get('alignment_not_run') else '')
             + ('Historical result: selection/settings changed. Run again to measure their effect. ' if stale else '')
             + 'Checkboxes apply to all views of that frame in future extractions. Save the project to retain decisions.')
 

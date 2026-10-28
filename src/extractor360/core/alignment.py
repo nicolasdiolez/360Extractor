@@ -31,6 +31,21 @@ class _Component(TypedDict):
     frames: set[int]
 
 
+class CommandFailed(RuntimeError):
+    def __init__(self, name, returncode, log_path, hint=''):
+        self.command, self.returncode, self.log_path = name, returncode, log_path
+        super().__init__(f'{name} failed (exit {returncode}). See {log_path}. {hint}')
+
+
+def no_model_outcome(error, sparse):
+    if error.command != 'mapper' or error.returncode != 1 or any(sparse.iterdir()):
+        return False
+    with error.log_path.open('rb') as file:
+        file.seek(max(0, error.log_path.stat().st_size - 65536))
+        tail = file.read().decode('utf-8', errors='replace')
+    return 'Failed to create any sparse model' in tail
+
+
 def _json(path):
     if path.stat().st_size > 16 * 1024**2:
         raise ValueError(f'Diagnostic input exceeds 16 MiB: {path.name}')
@@ -175,36 +190,50 @@ def summarize(frames, sampled, excluded, models):
 
 class AlignmentRunner:
     """Run one disposable CPU workspace with size, time and cancellation bounds."""
-    def __init__(self, cancelled=lambda: False, progress=lambda message: None):
+    def __init__(self, cancelled=lambda: False, progress=lambda message: None, budget=None):
         self.cancelled = cancelled
         self.progress = progress
+        self.budget = budget
 
     def _check(self):
+        if self.budget is not None:
+            self.budget._check()
+            return
         if self.cancelled():
             raise InterruptedError('Alignment cancelled')
         if time.monotonic() > self.deadline:
             raise TimeoutError(f'Alignment exceeded {MAX_SECONDS} seconds')
-        size = sum(path.stat().st_size for path in self.root.rglob('*') if path.is_file())
+        size = 0
+        for path in self.root.rglob('*'):
+            try:
+                if path.is_file():
+                    size += path.stat().st_size
+            except FileNotFoundError:
+                # Native tools can remove their own temporary files mid-scan.
+                continue
         if size > MAX_BYTES:
             raise OSError('Alignment reached its 256 MiB workspace limit')
         require_free_space(self.root, 8 * 1024**2)
 
     def _command(self, name, arguments, label=None):
-        self._check()
-        self.progress(label or name)
         argv = [self.colmap, name, '--log_target', 'stderr', *map(str, arguments)]
+        self._execute(argv, name, label or name, hint='Verify the COLMAP log and supported version (4.2).')
+
+    def _execute(self, argv, name, label, env=None, hint=''):
+        self._check()
+        self.progress(label)
         started = time.monotonic()
-        with (self.root / f'{len(self.commands):02d}-{name}.log').open('xb') as output:
+        log_path = self.root / f'{len(self.commands):02d}-{name}.log'
+        with log_path.open('xb') as output:
             process = subprocess.Popen(argv, stdout=output, stderr=subprocess.STDOUT,
-                                       start_new_session=os.name != 'nt')
+                                       start_new_session=os.name != 'nt', env=env)
             try:
                 while process.poll() is None:
                     self._check()
                     time.sleep(.1)
                 self._check()
                 if process.returncode:
-                    raise RuntimeError(f'COLMAP {name} failed (exit {process.returncode}). '
-                                       f'See logs in {self.root}. COLMAP 4.2 is required.')
+                    raise CommandFailed(name, process.returncode, log_path, hint)
             finally:
                 if process.poll() is None:
                     if os.name != 'nt':
@@ -213,11 +242,23 @@ class AlignmentRunner:
                         except ProcessLookupError:
                             pass
                     else:
-                        process.kill()
+                        # The sampling helper can own ffprobe/ExifTool children.
+                        # taskkill /T closes that process tree on Windows.
+                        try:
+                            subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
+                                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+                        except (OSError, subprocess.TimeoutExpired):
+                            pass
+                        if process.poll() is None:
+                            process.kill()
                 process.wait()
                 self.commands.append({'command': argv, 'seconds': round(time.monotonic() - started, 3),
                                       'returncode': process.returncode})
                 (self.root / 'commands.json').write_text(json.dumps(self.commands, indent=2), encoding='utf-8')
+
+    def run_source(self, job, destination, maximum=8):
+        from extractor360.core.preflight import run_source
+        return run_source(self, job, destination, maximum)
 
     def run(self, job, destination, maximum=16):
         import cv2  # optional media dependency; no Qt or model imports
@@ -290,10 +331,16 @@ class AlignmentRunner:
                 '--SequentialMatching.quadratic_overlap', 0])
             sparse = self.root / 'sparse'
             sparse.mkdir()
-            self._command('mapper', ['--database_path', db, '--image_path', images, '--output_path', sparse,
-                '--Mapper.num_threads', 4, '--Mapper.random_seed', 0, '--Mapper.min_model_size', 3,
-                '--Mapper.ba_refine_focal_length', 0, '--Mapper.ba_refine_principal_point', 0,
-                '--Mapper.ba_refine_extra_params', 0, '--Mapper.ba_refine_sensor_from_rig', 0])
+            mapper_status = 'completed'
+            try:
+                self._command('mapper', ['--database_path', db, '--image_path', images, '--output_path', sparse,
+                    '--Mapper.num_threads', 4, '--Mapper.random_seed', 0, '--Mapper.min_model_size', 3,
+                    '--Mapper.ba_refine_focal_length', 0, '--Mapper.ba_refine_principal_point', 0,
+                    '--Mapper.ba_refine_extra_params', 0, '--Mapper.ba_refine_sensor_from_rig', 0])
+            except CommandFailed as exc:
+                if not no_model_outcome(exc, sparse):
+                    raise
+                mapper_status = 'no_model'
             models = {}
             for model in sorted(sparse.iterdir()):
                 if not model.is_dir():
@@ -304,7 +351,7 @@ class AlignmentRunner:
                 models[model.name] = read_registered_images(text / 'images.txt', selected_names)
             report = {**summarize(frames, sampled, excluded, models), 'schema_version': 1,
                       'fingerprint': fingerprint(job), 'run_id': manifest['run_id'], 'export_signature': export_signature,
-                      'resolution': dimension, 'excluded_frames': sorted(excluded),
+                      'resolution': dimension, 'excluded_frames': sorted(excluded), 'mapper_status': mapper_status,
                       'limits': 'Sample only; unregistered does not establish a cause. Overlapping models are alternatives. '
                                 'No dense reconstruction, metric accuracy or Gaussian Splatting quality measured.',
                       'seconds': round(time.monotonic() - (self.deadline - MAX_SECONDS), 3)}

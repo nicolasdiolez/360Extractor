@@ -284,6 +284,7 @@ def test_alignment_thread_blocks_actions_then_drains_on_close(window, tmp_path, 
     window.show()
     window.alignment_dialog = AlignmentDialog(window, window.jobs[0])
     dialog = window.alignment_dialog
+    dialog.mode.setCurrentIndex(1)
     dialog.show()
     dialog.start(tmp_path / 'diagnostic')
     deadline = time.monotonic() + 5
@@ -311,6 +312,7 @@ def test_alignment_delivers_result_only_after_thread_finishes(window, tmp_path, 
     report = alignment_report(job)
     monkeypatch.setattr(AlignmentRunner, 'run', lambda *args: report)
     dialog = AlignmentDialog(window, job)
+    dialog.mode.setCurrentIndex(1)
     dialog.start(tmp_path / 'diagnostic')
     deadline = time.monotonic() + 5
     while dialog.busy:
@@ -319,4 +321,32 @@ def test_alignment_delivers_result_only_after_thread_finishes(window, tmp_path, 
         assert time.monotonic() < deadline
     assert job.result['alignment'] == report and window.project_actions.dirty
     assert dialog.table.rowCount() == 2 and dialog.run_button.isEnabled()
+    dialog.close()
+
+
+def test_source_preflight_routes_without_export_and_retains_settings(window, tmp_path, monkeypatch, qapp):
+    import time
+    from extractor360.core.alignment import AlignmentRunner
+    from extractor360.ui.alignment_dialog import AlignmentDialog
+    job = window.jobs[0]
+    original = copy.deepcopy(job.settings)
+    report = alignment_report(job)
+    report.update(mode='source_preflight', requested_frames=[0, 2], filtered_captures=0)
+    called = []
+    def run(runner, sample_job, *args):
+        called.append(sample_job)
+        assert window.preview_widget._suspended
+        return report
+    monkeypatch.setattr(AlignmentRunner, 'run_source', run)
+    dialog = AlignmentDialog(window, job)
+    assert dialog.mode.currentData() == 'source'
+    dialog.start(tmp_path / 'source-preflight')
+    deadline = time.monotonic() + 5
+    while dialog.busy:
+        qapp.processEvents()
+        time.sleep(.005)
+        assert time.monotonic() < deadline
+    assert len(called) == 1 and called[0] is not job
+    assert job.settings == original and job.result['alignment']['mode'] == 'source_preflight'
+    assert 'Source preflight' in dialog.summary.text() and not window.preview_widget._suspended
     dialog.close()

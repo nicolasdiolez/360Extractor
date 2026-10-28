@@ -97,6 +97,8 @@ class AIService:
                 if not destination.exists() and local.is_file():
                     shutil.copy2(local, destination)
                 model_path = str(destination)
+            if os.environ.get('EXTRACTOR360_OFFLINE_MODELS') == '1' and not Path(model_path).is_file():
+                raise FileNotFoundError('Diagnostic AI model is not available locally; provision it before running the diagnostic')
             self.model = YOLO(model_path)
             logger.info(f"Successfully loaded {model_name}")
             logger.info(f"✅ ACTIVE AI MODEL: {model_name}")

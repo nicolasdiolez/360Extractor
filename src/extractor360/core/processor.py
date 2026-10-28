@@ -40,7 +40,14 @@ class ProcessingWorker:
     ``threading.Thread``; the CLI calls ``run()`` synchronously).
     """
 
-    def __init__(self, jobs):
+    def __init__(self, jobs, *, diagnostic_frames=None):
+        if diagnostic_frames is not None:
+            if (len(jobs) != 1 or not isinstance(diagnostic_frames, list)
+                    or not 1 <= len(diagnostic_frames) <= 16
+                    or any(type(i) is not int or i < 0 for i in diagnostic_frames)
+                    or sorted(set(diagnostic_frames)) != diagnostic_frames):
+                raise ValueError('A diagnostic requires one job and 1..16 unique ordered frame indices')
+        self.diagnostic_frames = diagnostic_frames
         self.progress_updated = Event()  # (value 0-100, message)
         self.job_started = Event()       # (job index)
         self.job_finished = Event()      # (job index)
@@ -201,6 +208,8 @@ class ProcessingWorker:
             save_params = [cv2.IMWRITE_TIFF_COMPRESSION, 1] # 1 = NONE
 
         is_image = file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.tiff', '.tif'))
+        if self.diagnostic_frames is not None and is_image:
+            raise ValueError('A source diagnostic requires a video')
 
         cap = None
         current_image_frame = None
@@ -225,6 +234,8 @@ class ProcessingWorker:
 
                 fps = cap.get(cv2.CAP_PROP_FPS)
                 total_frames_video = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                if self.diagnostic_frames is not None and (total_frames_video < 1 or self.diagnostic_frames[-1] >= total_frames_video):
+                    raise ValueError('Diagnostic frame indices exceed the reported source length')
                 if total_frames_video <= 0: total_frames_video = 1 # Prevent division by zero
 
                 # Calculate extraction interval
@@ -438,6 +449,9 @@ class ProcessingWorker:
             frame_idx = 0
             job_start_time = time.time()
             frame_clock = FrameClock(fps)
+            diagnostic_iterator = iter(self.diagnostic_frames or [])
+            if self.diagnostic_frames is not None:
+                job.result['diagnostic_sampling'] = {'requested_frames': self.diagnostic_frames, 'decoded_frames': []}
 
             while self.is_running:
                 if is_image:
@@ -448,14 +462,29 @@ class ProcessingWorker:
                         break
                     frame = current_image_frame
                 else:
+                    if self.diagnostic_frames is not None:
+                        selected_frame = next(diagnostic_iterator, None)
+                        if selected_frame is None:
+                            break
+                        frame_idx = selected_frame
+                        if not cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx):
+                            raise IOError(f'Decoder cannot seek to diagnostic frame {frame_idx}')
                     if not cap.grab():
+                        if self.diagnostic_frames is not None:
+                            raise IOError(f'Could not decode diagnostic frame {frame_idx}')
                         break
+                    if self.diagnostic_frames is not None:
+                        position = cap.get(cv2.CAP_PROP_POS_FRAMES)
+                        if not np.isfinite(position) or abs(position - (frame_idx + 1)) > .01:
+                            raise IOError(f'Decoder cannot confirm diagnostic frame {frame_idx}')
+                        job.result['diagnostic_sampling']['decoded_frames'].append(frame_idx)
                     sample_time, time_source = frame_clock.resolve(frame_idx, cap.get(cv2.CAP_PROP_POS_MSEC) / 1000)
                     job.result["frame_time_source"] = frame_clock.source
                     if time_source == 'fps_estimate' and 'timestamp_fallback' not in job.result:
                         job.result['timestamp_fallback'] = 'Decoder timestamps unavailable or nonmonotonic; FPS estimation used'
                         logger.warning(job.result['timestamp_fallback'])
-                    due = frame_idx % interval == 0 if interval_unit == 'Frames' else sample_time + 1e-8 >= next_extract_time
+                    due = (self.diagnostic_frames is not None or
+                           (frame_idx % interval == 0 if interval_unit == 'Frames' else sample_time + 1e-8 >= next_extract_time))
                     if not due:
                         frame_idx += 1
                         continue
@@ -469,7 +498,7 @@ class ProcessingWorker:
                     if not ret or frame is None:
                         raise IOError(f'Could not decode selected frame {frame_idx}')
                 # Reached only on extraction points (or the single image frame).
-                if is_image or interval_unit == 'Seconds' or frame_idx % interval == 0:
+                if self.diagnostic_frames is not None or is_image or interval_unit == 'Seconds' or frame_idx % interval == 0:
                     frame_time = 0.0 if is_image else sample_time
 
                     # Update GPS fix and travel heading for the current time
@@ -675,7 +704,7 @@ class ProcessingWorker:
                         last_extracted_frame = frame.copy()
 
                 frame_idx += 1
-            if not is_image and self.is_running:
+            if not is_image and self.is_running and self.diagnostic_frames is None:
                 expected = telemetry_handler.metadata.get('frame_count', total_frames_video)
                 count_source = telemetry_handler.metadata.get('frame_count_source', 'decoder_reported')
                 job.result['frame_count_check'] = dict(expected=expected, decoded=frame_idx, source=count_source)

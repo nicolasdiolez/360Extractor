@@ -131,6 +131,26 @@ def exercise(root, version):
     if report['registered_captures'] != 1 or report['unregistered_captures'] != 2:
         raise RuntimeError('Installed alignment summary counted virtual views as captures')
 
+    # Exercise the same helper entry used by a frozen app, without Qt or COLMAP.
+    # The source process must load this installed package, not the checkout.
+    sample_source = root / 'preflight.avi'
+    encoder = cv2.VideoWriter(str(sample_source), cv2.VideoWriter_fourcc(*'MJPG'), 10, (64, 32))
+    if not encoder.isOpened():
+        raise RuntimeError('Could not create the preflight video fixture')
+    for value in (20, 60, 100, 140, 180):
+        encoder.write(np.full((32, 64, 3), value, np.uint8))
+    encoder.release()
+    sample_root = root / 'preflight'
+    sample_root.mkdir()
+    request = sample_root / 'sample-request.json'
+    request.write_text(json.dumps({'source': str(sample_source), 'source_identity': source_identity(str(sample_source)),
+                                  'settings': {'layout_mode': 'cube', 'resolution': 32, 'exif_intrinsics': False},
+                                  'maximum': 3}), encoding='utf-8')
+    run_command([str(console), '--diagnostic-sample', str(request)], root, env)
+    sampled = json.loads((sample_root / 'sample-result.json').read_text(encoding='utf-8'))
+    if sampled['requested_frames'] != [0, 2, 4] or sampled['result']['extraction']['images_written'] != 18:
+        raise RuntimeError('Installed preflight helper did not export exactly the requested source frames')
+
     # Execute the exported, standalone runner in an isolated interpreter. Only
     # COLMAP discovery and its external processes are simulated.
     harness = '''import json, runpy, sys
