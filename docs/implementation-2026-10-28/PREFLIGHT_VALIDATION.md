@@ -34,6 +34,8 @@ The staircase source has 344 frames, 7680×3840 pixels at 25 fps. The eight-fram
 
 Increasing resolution alone did not rescue this eight-frame sample. That does **not** establish the cause of failure, prove the source unusable or qualify automatic capture rejection. A denser reference reconstruction and more difficult scenes are needed before calibrating warnings. No geometric truth, pose accuracy, dense reconstruction quality, splat quality or competitor ranking was measured.
 
+Follow-up on the same date: the [denser reference](DENSER_REFERENCE.md) reconstructs a 36-capture main model from 64 captures at 1024 px, and one complete 16-capture model in a short initial window. At 512 px the corresponding positive counts consist only of two-capture fragments. This confirms why the preliminary negative result must not reject the source and why total registration alone is insufficient.
+
 ## Practical limits and next direction
 
 Source preflight samples independently of the full-export interval and disables blur/motion filters. Its exact-frame exclusions do not define time ranges; a later export may select different frames. Treat it as a quick, reviewable experiment rather than an acceptance gate. Keep full settings and evidence visible, qualify negative outcomes against denser references, and avoid adding unexplained quality scores or automatically deleting failed captures.
