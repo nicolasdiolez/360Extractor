@@ -13,6 +13,9 @@ from extractor360.core import colmap_export, exif_writer
 from extractor360.core.events import Event
 from extractor360.core.frame_timing import FrameClock, frame_step
 from extractor360.core.validation import validate_settings
+from extractor360.core.mask_profiles import mask_contract
+from extractor360.core.project import source_problem
+from extractor360.core.storage import estimate_output, existing_destination, require_free_space
 from extractor360.core.output_plan import create_output_directory, output_names, preflight_names
 from extractor360.core.geometry import GeometryProcessor
 from extractor360.core.motion_detector import MotionDetector
@@ -37,7 +40,14 @@ class ProcessingWorker:
     ``threading.Thread``; the CLI calls ``run()`` synchronously).
     """
 
-    def __init__(self, jobs):
+    def __init__(self, jobs, *, diagnostic_frames=None):
+        if diagnostic_frames is not None:
+            if (len(jobs) != 1 or not isinstance(diagnostic_frames, list)
+                    or not 1 <= len(diagnostic_frames) <= 16
+                    or any(type(i) is not int or i < 0 for i in diagnostic_frames)
+                    or sorted(set(diagnostic_frames)) != diagnostic_frames):
+                raise ValueError('A diagnostic requires one job and 1..16 unique ordered frame indices')
+        self.diagnostic_frames = diagnostic_frames
         self.progress_updated = Event()  # (value 0-100, message)
         self.job_started = Event()       # (job index)
         self.job_finished = Event()      # (job index)
@@ -145,6 +155,10 @@ class ProcessingWorker:
         started = time.monotonic()
         try:
             job.settings = validate_settings(job.settings)
+            if job.source_check_required or job.source_identity is not None:
+                problem = source_problem(job)
+                if problem:
+                    raise ValueError(problem)
             stat = os.stat(job.file_path)
             job.result["source_identity"] = {"size_bytes": stat.st_size, "mtime_ns": stat.st_mtime_ns, "hash_verified": False}
             self._process_video(job, job_index, total_jobs)
@@ -194,6 +208,8 @@ class ProcessingWorker:
             save_params = [cv2.IMWRITE_TIFF_COMPRESSION, 1] # 1 = NONE
 
         is_image = file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.tiff', '.tif'))
+        if self.diagnostic_frames is not None and is_image:
+            raise ValueError('A source diagnostic requires a video')
 
         cap = None
         current_image_frame = None
@@ -218,6 +234,8 @@ class ProcessingWorker:
 
                 fps = cap.get(cv2.CAP_PROP_FPS)
                 total_frames_video = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                if self.diagnostic_frames is not None and (total_frames_video < 1 or self.diagnostic_frames[-1] >= total_frames_video):
+                    raise ValueError('Diagnostic frame indices exceed the reported source length')
                 if total_frames_video <= 0: total_frames_video = 1 # Prevent division by zero
 
                 # Calculate extraction interval
@@ -252,6 +270,24 @@ class ProcessingWorker:
             active_cams = job.active_cameras
             selected_views = [v for i, v in enumerate(views) if active_cams is None or i in active_cams]
             preflight_names(job.settings, name_no_ext, selected_views, is_image)
+
+            if is_360:
+                output_width = output_height = out_res
+            elif is_image:
+                output_height, output_width = current_image_frame.shape[:2]
+            else:
+                output_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                output_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            storage = estimate_output(job.settings, output_width, output_height,
+                                      1 if is_image else int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
+                                      fps, is_image, [v[0] for v in selected_views])
+            destination = existing_destination(file_path, job.output_dir)
+            storage['free_bytes_at_start'] = require_free_space(destination, storage['capture_budget_bytes'])
+            storage['checked_destination'] = str(destination)
+            job.result['storage_preflight'] = storage
+            if storage['bytes_high'] is not None and storage['bytes_high'] + storage['reserve_bytes'] > storage['free_bytes_at_start']:
+                logger.warning('Estimated output may exceed free disk space; filters/compression can change the total. '
+                               'Free space will be checked before each capture. %s', storage['assumptions'])
 
             # AI Mode per job
             ai_mode_ui = job.settings.get('ai_mode', 'None')
@@ -406,37 +442,63 @@ class ProcessingWorker:
             frames_skipped_motion = 0  # skipped by the adaptive/motion filter
             job.result['extraction'] = {'images_written': 0, 'writes_failed': 0}
             next_extract_time = 0.0
+            excluded_frames = set(job.settings.get('excluded_frames', []))
+            frames_excluded = 0
             views_skipped_ai = 0       # views dropped by AI "Skip Frame"
 
             frame_idx = 0
             job_start_time = time.time()
             frame_clock = FrameClock(fps)
+            diagnostic_iterator = iter(self.diagnostic_frames or [])
+            if self.diagnostic_frames is not None:
+                job.result['diagnostic_sampling'] = {'requested_frames': self.diagnostic_frames, 'decoded_frames': []}
 
             while self.is_running:
                 if is_image:
                     if frame_idx > 0:
                         break
+                    if frame_idx in excluded_frames:
+                        frames_excluded += 1
+                        break
                     frame = current_image_frame
                 else:
+                    if self.diagnostic_frames is not None:
+                        selected_frame = next(diagnostic_iterator, None)
+                        if selected_frame is None:
+                            break
+                        frame_idx = selected_frame
+                        if not cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx):
+                            raise IOError(f'Decoder cannot seek to diagnostic frame {frame_idx}')
                     if not cap.grab():
+                        if self.diagnostic_frames is not None:
+                            raise IOError(f'Could not decode diagnostic frame {frame_idx}')
                         break
+                    if self.diagnostic_frames is not None:
+                        position = cap.get(cv2.CAP_PROP_POS_FRAMES)
+                        if not np.isfinite(position) or abs(position - (frame_idx + 1)) > .01:
+                            raise IOError(f'Decoder cannot confirm diagnostic frame {frame_idx}')
+                        job.result['diagnostic_sampling']['decoded_frames'].append(frame_idx)
                     sample_time, time_source = frame_clock.resolve(frame_idx, cap.get(cv2.CAP_PROP_POS_MSEC) / 1000)
                     job.result["frame_time_source"] = frame_clock.source
                     if time_source == 'fps_estimate' and 'timestamp_fallback' not in job.result:
                         job.result['timestamp_fallback'] = 'Decoder timestamps unavailable or nonmonotonic; FPS estimation used'
                         logger.warning(job.result['timestamp_fallback'])
-                    due = frame_idx % interval == 0 if interval_unit == 'Frames' else sample_time + 1e-8 >= next_extract_time
+                    due = (self.diagnostic_frames is not None or
+                           (frame_idx % interval == 0 if interval_unit == 'Frames' else sample_time + 1e-8 >= next_extract_time))
                     if not due:
+                        frame_idx += 1
+                        continue
+                    if interval_unit == 'Seconds':
+                        next_extract_time = (int(sample_time / interval_value) + 1) * interval_value
+                    if frame_idx in excluded_frames:
+                        frames_excluded += 1
                         frame_idx += 1
                         continue
                     ret, frame = cap.retrieve()
                     if not ret or frame is None:
                         raise IOError(f'Could not decode selected frame {frame_idx}')
-                    if interval_unit == 'Seconds':
-                        next_extract_time = (int(sample_time / interval_value) + 1) * interval_value
-
                 # Reached only on extraction points (or the single image frame).
-                if is_image or interval_unit == 'Seconds' or frame_idx % interval == 0:
+                if self.diagnostic_frames is not None or is_image or interval_unit == 'Seconds' or frame_idx % interval == 0:
                     frame_time = 0.0 if is_image else sample_time
 
                     # Update GPS fix and travel heading for the current time
@@ -586,6 +648,10 @@ class ProcessingWorker:
                                 combined = disc
                             ai_results[idx] = (img_i, combined)
 
+                    # Guard the whole submitted capture before its first write.
+                    # Previous capture writes have been drained; do not count
+                    # partially published output as safely resumable.
+                    require_free_space(output_dir, storage['capture_budget_bytes'])
                     # 5. Save (Multi-threaded I/O)
                     futures = []
                     for i, (final_img, mask_or_skip) in enumerate(ai_results):
@@ -623,11 +689,14 @@ class ProcessingWorker:
                             FileManager.write_pair, full_save_path, final_img, save_params,
                             exif_bytes, full_mask_path,
                             mask_or_skip if isinstance(mask_or_skip, np.ndarray) else None
-                        ), {"image": save_name, "mask": mask_name if isinstance(mask_or_skip, np.ndarray) else None, "camera": name, "frame": frame_idx}))
+                        ), {"image": save_name, "mask": mask_name if isinstance(mask_or_skip, np.ndarray) else None,
+                            "camera": name, "frame": frame_idx, "timestamp_seconds": frame_time,
+                            "timestamp_source": 'still_image' if is_image else time_source}))
 
                     job.result['extraction'].update(
                         interval_frames=interval, frames_processed=frames_processed,
                         frames_skipped_motion=frames_skipped_motion,
+                        frames_excluded=frames_excluded,
                         views_skipped_blur=skipped_blur_count, views_skipped_ai=views_skipped_ai,
                     )
                     accepted = self._drain_writes(job, output_dir, futures, written_view_names)
@@ -635,7 +704,7 @@ class ProcessingWorker:
                         last_extracted_frame = frame.copy()
 
                 frame_idx += 1
-            if not is_image and self.is_running:
+            if not is_image and self.is_running and self.diagnostic_frames is None:
                 expected = telemetry_handler.metadata.get('frame_count', total_frames_video)
                 count_source = telemetry_handler.metadata.get('frame_count_source', 'decoder_reported')
                 job.result['frame_count_check'] = dict(expected=expected, decoded=frame_idx, source=count_source)
@@ -695,6 +764,7 @@ class ProcessingWorker:
                 "interval_frames": interval,
                 "frames_processed": frames_processed,
                 "frames_skipped_motion": frames_skipped_motion,
+                "frames_excluded": frames_excluded,
                 "images_written": images_written,
                 "views_skipped_blur": skipped_blur_count,
                 "views_skipped_ai": views_skipped_ai,
@@ -765,6 +835,7 @@ class ProcessingWorker:
             "source_file": job.file_path,
             "output_dir": output_dir,
             "settings": job.settings,
+            "mask_contract": mask_contract(job.settings),
             **stats,
         }
         manifest["schema_version"] = 2

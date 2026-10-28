@@ -365,3 +365,28 @@ def test_suspend_keeps_image_defers_latest_request_and_resume_refreshes(monkeypa
     assert widget._closed and widget._suspended
     assert not widget._pending and not widget._debounce.isActive()
     assert widget.threadpool.activeThreadCount() == 0
+
+
+@pytest.mark.parametrize('actual', [2, 1])
+def test_exact_source_navigation_confirms_requested_frame(monkeypatch, actual):
+    class Capture:
+        def isOpened(self): return True
+        def set(self, prop, value): assert prop == cv2.CAP_PROP_POS_FRAMES and value == 2
+        def get(self, prop):
+            return {cv2.CAP_PROP_FRAME_COUNT: 100, cv2.CAP_PROP_FPS: 10,
+                    cv2.CAP_PROP_POS_FRAMES: actual + 1, cv2.CAP_PROP_POS_MSEC: actual * 100}[prop]
+        def read(self): return True, np.zeros((16, 32, 3), np.uint8)
+        def release(self): pass
+    monkeypatch.setattr(cv2, 'VideoCapture', lambda path: Capture())
+    worker = PreviewWorker('source.mp4', {'is_360': False, 'excluded_frames': [2]}, exact_frame=2)
+    errors, times, states, images = [], [], [], []
+    worker.signals.error.connect(errors.append)
+    worker.signals.duration_info.connect(lambda *values: times.append(values))
+    worker.signals.view_status.connect(states.append)
+    worker.signals.result.connect(images.append)
+    worker.run()
+    if actual == 2:
+        assert not errors and times[0][1] == 2 and len(images) == 1
+        assert states == ['Capture excluded in project']
+    else:
+        assert errors and 'could not confirm' in errors[0] and not images

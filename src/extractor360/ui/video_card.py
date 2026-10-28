@@ -5,6 +5,7 @@ Modern card-style widget for displaying video jobs with thumbnail and metadata c
 from __future__ import annotations
 
 import cv2
+from pathlib import Path
 from PySide6.QtCore import QObject, Qt, QRunnable, QThreadPool, Signal, Slot, QCoreApplication
 from PySide6.QtGui import QImage, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
@@ -106,6 +107,7 @@ class VideoCard(QWidget):
         self._selected = False
         self._thread = None
         self._worker = None
+        self._source_issue = None
 
         self.setObjectName("videoCard")
         self.setFixedHeight(76)
@@ -233,6 +235,8 @@ class VideoCard(QWidget):
 
     def _load_thumbnail(self):
         self._cleanup_thread()
+        if not Path(self.job.file_path).is_file():
+            return
         self._worker = ThumbnailWorker(self.job.file_path, size=54)
         # The card can be removed before decoding ends. Keep the signal owner
         # alive on the GUI thread until completion, independently of the card.
@@ -270,9 +274,9 @@ class VideoCard(QWidget):
 
     def update_status(self, status: str):
         self.job.status = status
-        self._status_label.setText(status)
+        self._status_label.setText('Check source' if self._source_issue else status)
 
-        color = self.STATUS_COLORS.get(status, "#71717A")
+        color = '#EF4444' if self._source_issue else self.STATUS_COLORS.get(status, "#71717A")
         self._status_dot.setStyleSheet(f"color: {color}; font-size: 8px;")
 
         if status == "Processing":
@@ -280,7 +284,16 @@ class VideoCard(QWidget):
         else:
             self._progress.hide()
 
-        self._folder_btn.setVisible(status == "Done")
+        self._folder_btn.setVisible(bool(self.job.result.get('output_dir')))
+
+    def set_source_issue(self, issue):
+        self._source_issue = issue
+        last = self.job.result.get('status')
+        details = f'{self.job.file_path}\n{issue or ""}'
+        if last:
+            details += f'\nLast recorded run: {last} (outputs not revalidated)'
+        self.setToolTip(details)
+        self.update_status(self.job.status)
 
     def set_progress(self, value: int):
         self._progress.setValue(value)

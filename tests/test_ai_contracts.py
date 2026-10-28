@@ -39,6 +39,15 @@ def test_load_failure_is_not_a_passthrough(tmp_path,monkeypatch):
             AIService()
 
 
+def test_offline_diagnostic_never_calls_yolo_for_missing_model(tmp_path, monkeypatch):
+    monkeypatch.setenv('EXTRACTOR360_OFFLINE_MODELS', '1')
+    monkeypatch.setenv('EXTRACTOR360_MODEL_DIR', str(tmp_path / 'models'))
+    with patch('extractor360.core.ai_model.YOLO') as load, patch.object(AIService, 'get_device_info', return_value={'device': 'cpu', 'is_accelerated': False}):
+        with pytest.raises(RuntimeError, match='not available locally'):
+            AIService('yolo26x-seg.pt')
+        load.assert_not_called()
+
+
 def test_incomplete_inference_batch_is_error():
     service=AIService.__new__(AIService)
     service.model=lambda *args,**kwargs: []

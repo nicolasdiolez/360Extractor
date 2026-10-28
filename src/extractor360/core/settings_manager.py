@@ -9,6 +9,7 @@ class SettingsManager:
     _instance = None
     
     DEFAULT_SETTINGS = {
+        "excluded_frames": [],
         "is_360": True,
         "resolution": 2048,
         "fov": 90,
@@ -46,6 +47,7 @@ class SettingsManager:
         "export_colmap": False,
         "interpolation_mode": "linear",
         "feather_mask": False,
+        "mask_profile": "custom",
         "naming_mode": "realityscan",
         "image_pattern": "{filename}_frame{frame}_{camera}",
         "mask_pattern": "{filename}_frame{frame}_{camera}_mask"
@@ -165,6 +167,7 @@ def build_settings(args, config, active_cameras=None, output_path=""):
         'naming_mode': args.naming_mode,
         'image_pattern': args.image_pattern,
         'mask_pattern': args.mask_pattern,
+        'mask_profile': getattr(args, 'mask_profile', None),
     }
     for key, value in cli_overrides.items():
         if value is not None:

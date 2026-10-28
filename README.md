@@ -5,9 +5,16 @@
 
 Desktop and command-line preprocessing for stitched 360° panoramas and standard videos/images. Generate rectilinear views, filter blur and motion, and export segmentation masks and optional GPS metadata for reconstruction workflows.
 
-**360 Extractor Studio — [v4.0.1 Preview](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.1).** This public prerelease introduces the new interface and reliability corrections for user feedback. It does not replace the latest stable release. Download the attached assets and read their installation notes and validation limits on the release page; start with a short clip and a separate output folder. Full camera/GPU/reconstruction qualification remains open in the [implementation follow-up](docs/implementation-2026-09-07/PROGRESSION.md).
+**360 Extractor Studio — [v4.0.3 Pre-release](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.3).** This public preview is for user feedback and is excluded from **Latest**; [v3.3 remains the latest stable release](https://github.com/nicolasdiolez/360Extractor/releases/tag/v3.3).
 
-Earlier candidates reproduced an intermittent Windows native crash (`0xC0000005`) during extraction. Version 4.0.1 strengthens Qt worker ownership and shutdown; the exact native cause remains unconfirmed, so Windows remains experimental pending broader qualification. Report any recurrence through the [bug report form](https://github.com/nicolasdiolez/360Extractor/issues/new?template=bug_report.yml), with your settings and available logs.
+| Platform | Download v4.0.3 | Validation status |
+| :--- | :--- | :--- |
+| macOS — Apple Silicon (arm64) | [macOS ZIP](https://github.com/nicolasdiolez/360Extractor/releases/download/v4.0.3/360-Extractor-macos-arm64.zip) | Developer ID signed and Apple-notarized, with the ticket attached. Gatekeeper checks and real-media extraction, CPU/MPS masking and COLMAP tests passed on an existing Mac. |
+| Windows — x64 | [Windows ZIP](https://github.com/nicolasdiolez/360Extractor/releases/download/v4.0.3/360-Extractor-windows-x64.zip) | **Experimental.** Automated CI and frozen-executable smoke tests passed; physical Windows/CUDA qualification remains pending. |
+
+**Windows limitation:** earlier candidates reproduced an intermittent native crash (`0xC0000005`) during extraction/shutdown. Its exact cause remains unconfirmed, and passing hosted CI and lifecycle stress tests does not prove it is resolved. Report any recurrence through the [bug report form](https://github.com/nicolasdiolez/360Extractor/issues/new?template=bug_report.yml), with your settings and available logs.
+
+Start with a short clip and a separate output folder. Clean-machine/browser first-launch acceptance and the full Studio interaction/persistence/cancellation matrix remain open. Read the [release notes and SHA-256 fingerprints](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.3) for the tested scope, prerequisites and remaining limits; [validation evidence](https://github.com/nicolasdiolez/360Extractor/releases/download/v4.0.3/validation.json) and [macOS notarization evidence](https://github.com/nicolasdiolez/360Extractor/releases/download/v4.0.3/notarization.json) are attached to the release.
 
 ![360 Extractor Studio: media queue, live Cube preview and processing settings](docs/images/screenshot-gui.png)
 
@@ -15,7 +22,7 @@ Earlier candidates reproduced an intermittent Windows native crash (`0xC0000005`
 
 ## Capabilities
 
-The source branch prepares the **4.0.2 draft candidate** with the [October audit corrections](docs/implementation-2026-10-23/VALIDATION.md). Its updated dependencies require Python 3.11 or later. This is not a new public download; published v4.0.1 binaries remain unchanged.
+Version **4.0.3** includes the [October audit corrections](docs/implementation-2026-10-23/VALIDATION.md) and fixes COLMAP reconstruction for unmasked and mixed-mask exports. Source installation requires Python 3.11 or later. Qualification results and remaining limits are documented in the release notes above.
 
 - Cube, Ring and Fibonacci layouts, selectable views, FOV, pitch and output resolution.
 - Flat media passthrough at native resolution with the same filtering and masking options.
@@ -30,10 +37,10 @@ Input 360 media must already be stitched. Accepting `.insv` does not imply nativ
 
 ## Install from source
 
-Clone the repository and select the `v4.0.1` tag to test the published preview. `main` may contain subsequent changes. Run the commands below from the selected checkout’s root.
+Clone the repository and select the `v4.0.3` tag to test the published preview's source. `main` may contain different changes. Run the commands below from the selected checkout’s root.
 
 ```sh
-git clone --branch v4.0.1 https://github.com/nicolasdiolez/360Extractor.git
+git clone --branch v4.0.3 https://github.com/nicolasdiolez/360Extractor.git
 cd 360Extractor
 ```
 
@@ -56,7 +63,7 @@ Standard model weights use `~/.cache/360-extractor/models` (override with `EXTRA
 AI selects an available accelerator automatically. If GPU inference is unavailable or unreliable on your machine, set `EXTRACTOR360_DEVICE=cpu` before launching (`export EXTRACTOR360_DEVICE=cpu` in a macOS/Linux terminal, or `$env:EXTRACTOR360_DEVICE="cpu"` in PowerShell). Use `auto` to restore automatic selection. The release smoke test qualifies CPU inference; it does not certify GPU profiles.
 
 ```sh
-# Studio
+# Studio (development sources: .360proj save/open in the Project menu)
 python -m extractor360
 
 # Stitched panorama or video, six cube views
@@ -74,11 +81,17 @@ python -m extractor360
 
 Every run creates a new source-specific folder: `panorama_processed`, `panorama_processed_001`, and so on. Existing datasets are never silently replaced or resumed. Recursive scans exclude generated folders. `manifest.json` starts as `running`, then records `completed`, `failed` or `cancelled` with confirmed write counts. A process kill or power loss can leave partial state; no automatic recovery is implemented. `images.jsonl` associates confirmed images and masks with their camera and frame.
 
+Development sources also provide `--mask-profile realityscan|colmap|postshot|custom`. Named profiles select mask filenames and polarity together; Postshot targets **Remove Occluders**, with white ignored regions. Use a separate export for COLMAP, which requires black ignored regions. These file contracts do not certify reconstruction quality in each application. See [profiles and disk estimates](docs/SETTINGS.md#mask-profiles-and-storage).
+
+Free space is checked on the destination volume before output creation and before each capture, retaining a 256 MiB reserve. This protects the next write batch; it does not guarantee that the full run, model downloads or reconstruction will fit. The [comparison protocol](docs/BENCHMARK_PROTOCOL.md) defines how future selection and export changes will be measured.
+
 Run `python reconstruct.py` from an exported `colmap/` folder to prepare a new workspace and invoke COLMAP. It requires a COLMAP build with native `rig_configurator` support. This pipeline follows the [COLMAP rig workflow](https://colmap.github.io/rigs.html); it has not yet been qualified through a full real reconstruction on this branch.
 
 ## Quality and metadata limits
 
 Feather means smoothing of a binary segmentation mask, not native model probabilities. The segmentation output uses the original image dimensions through Ultralytics' [retina mask option](https://docs.ultralytics.com/modes/predict/). Precision on real operators, partial limbs, posters and tripod scenes remains to be measured.
+
+Studio's development sources can [save and reopen projects](docs/PROJECTS.md), retaining media references, per-job settings and the last recorded results. Missing/changed sources remain visible for relocation. Reopening does not resume extraction; running again creates a fresh output folder.
 
 GPS sidecars are aligned to video start by assumption. Camera heading is omitted without orientation evidence. Unknown or relative altitude is not written as sea-level altitude; only set `gps_altitude_reference: "orthometric"` after confirming the source reference. Inspect telemetry status and provenance in the manifest before relying on geotags.
 

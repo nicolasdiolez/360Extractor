@@ -53,7 +53,7 @@ Defaults below come from `SettingsManager.DEFAULT_SETTINGS`. Numeric ranges desc
 | `ai_model` | `"yolo26n-seg.pt"` | n/s/m/l/x resolve to standard yolo26 segmentation weights. Custom .pt paths require trust. Unrecognized short names currently fall back to nano; inspect the active-model log. |
 | `trust_custom_model` | `false` | Must be explicitly true for a custom model; .pt loading can execute code. |
 | `ai_confidence` | `0.25` | Detection threshold, 0–1. |
-| `ai_invert_mask` | `true` | True: black ignores the subject, white keeps background. Required for masks exported to COLMAP. |
+| `ai_invert_mask` | `true` | True: black ignores the subject, white keeps background. Required for masks exported to COLMAP. Named mask profiles set this value. |
 | `ai_detect_humans` | `true` | COCO person. |
 | `ai_detect_vehicles` | `false` | COCO car, motorcycle, airplane, bus, train, truck and boat. Add bicycle via custom classes if needed. |
 | `ai_detect_plants` | `false` | COCO potted plant only; not general vegetation. |
@@ -80,7 +80,8 @@ Defaults below come from `SettingsManager.DEFAULT_SETTINGS`. Numeric ranges desc
 | `export_colmap` | `false` | 360 calibration/rig files plus Python runner. Requires real reconstruction qualification. |
 | `interpolation_mode` | `"linear"` | linear or lanczos. |
 | `feather_mask` | `false` | Smooth edges of a binary mask; not probabilities, alpha-channel preservation or background reconstruction. |
-| `naming_mode` | `"realityscan"` | realityscan, simple or custom. See naming rules below. |
+| `mask_profile` | `"custom"` | custom, realityscan, colmap or postshot. Named profiles own polarity/naming; custom preserves manual/legacy behavior. |
+| `naming_mode` | `"realityscan"` | realityscan, colmap, postshot, simple or custom. Named mask profiles override this field. |
 | `image_pattern` | `"{filename}_frame{frame}_{camera}"` | Custom image pattern; append the output extension if omitted. |
 | `mask_pattern` | `"{filename}_frame{frame}_{camera}_mask"` | Custom mask pattern; PNG extension appended if needed. |
 
@@ -98,6 +99,8 @@ Names preserve the generated camera's case. For source `trip.mp4`, first frame a
 | Mode | Image | Mask, when generated |
 | :--- | :--- | :--- |
 | realityscan | `trip_frame000000_Front.jpg` | `trip_frame000000_Front.jpg.mask.png` |
+| colmap | `trip_frame000000_Front.jpg` | `trip_frame000000_Front.jpg.png` |
+| postshot | `trip_frame000000_Front.jpg` | `trip_frame000000_Front.mask.png` |
 | simple | `trip_frame000000_Front.jpg` | `trip_frame000000_Front_mask.png` |
 | custom | Defined by image_pattern | Defined by mask_pattern |
 
@@ -112,6 +115,23 @@ Names preserve the generated camera's case. For source `trip.mp4`, first frame a
 A valid custom pair is `"{filename}_{frame}_{camera}{ext}"` and `"{image_name}.mask.png"`. Video names must contain `{frame}` and multi-view names `{camera}`. Masks need equivalent identifiers or `{image_name}`. Image extensions must match the selected format. Paths, reserved Windows names, unsafe characters and collisions are rejected before image writes.
 
 The output parent contains a new folder for each run. `manifest.json` schema 2 records initial `running` state, then `completed`, `failed` or `cancelled`; `images.jsonl` records confirmed pairs with view/frame identity. Files are not overwritten or automatically resumed. An abrupt shutdown can leave incomplete pairs/index data and a running manifest; staged writes do not provide a two-file power-loss transaction.
+
+## Mask profiles and storage
+
+| Profile | Ignored region | Kept region | Intended use |
+| :--- | :--- | :--- | :--- |
+| RealityScan | Black (0) | White (255) | Existing mask-layer naming |
+| COLMAP | Black (0) | White (255) | Feature exclusion; portable runner stages a separate mask tree |
+| Postshot | White (255) | Black (0) | **Remove Occluders**, not Remove Background |
+| Custom / legacy | Set manually | Set manually | Existing settings and custom patterns |
+
+Named profiles update polarity and filenames together. They do not create masks unless AI Generate Mask or the nadir disc is enabled. Studio disables conflicting manual controls; selecting Custom enables them again. The Postshot preset uses binary masks. Feather remains an optional smoothing operation, without a promise of identical interpretation by every consumer. The manifest records the effective convention in `mask_contract`.
+
+Postshot requires masks matching the color dimensions and basename; drop masks into its Image Masks list. In Remove Occluders, white pixels exclude observations from that image. Remove Background encodes empty space instead and is not interchangeable. [Official Postshot guide](https://www.jawset.com/docs/d/Postshot%2BUser%2BGuide/Interface/Training%2BConfiguration). COLMAP's [mask documentation](https://colmap.github.io/faq.html#mask-image-regions) requires the full image filename followed by `.png`, with black excluded pixels. An export with white-ignore masks and COLMAP calibration is rejected; make separate runs. Direct imports into Postshot and RealityScan remain to be qualified on their target platforms.
+
+Studio shows a compression-dependent storage range including masks and before filters. Flat images use their native dimensions, and a still image counts as one capture regardless of the interval. Video counts in seconds use nominal FPS for planning only; actual extraction still uses decoded timestamps. Unknown duration is not replaced with an invented FPS.
+
+Before creating output or loading AI, and again before each capture's writes, the worker checks the destination volume for a conservative capture budget plus 256 MiB reserve. It warns if the full estimated output may exceed free space, but permits processing while the next capture fits. A concurrent writer can still exhaust space; checked writes then fail explicitly. The guard cannot guarantee the entire job fits, recover a partial run, or reserve space for models/reconstruction. Choose an output volume with room for those later stages.
 
 ## Models and metadata
 

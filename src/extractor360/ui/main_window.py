@@ -10,7 +10,6 @@ Unified 3-column Studio architecture with:
 from __future__ import annotations
 
 import copy
-import math
 import os
 from pathlib import Path
 
@@ -38,6 +37,12 @@ from extractor360.ui.preview_widget import PreviewWidget
 from extractor360.ui.video_card import VideoCard
 from extractor360.ui.widgets import DropZone
 from extractor360.ui.workers import BlurAnalysisWorker, ProcessingController
+from extractor360.core.mask_profiles import MASK_PROFILES, profile_settings
+from extractor360.core.validation import validate_settings
+from extractor360.core.storage import estimate_output, existing_destination, require_free_space
+from extractor360.core.project import source_identity, source_problem
+from extractor360.core.ai_classes import AI_MODEL_VARIANTS, resolve_ai_model_name
+from extractor360.ui.project_actions import ProjectActions
 
 
 class ScrollBlocker(QObject):
@@ -93,6 +98,24 @@ class MainWindow(QMainWindow):
         # Blur analysis worker thread
         self._blur_thread = None
         self._blur_worker = None
+        self.alignment_dialog = None
+        self.project_actions = ProjectActions(self)
+
+    def alignment_busy(self):
+        return self.alignment_dialog is not None and self.alignment_dialog.busy
+
+    def open_alignment(self):
+        if self.project_actions.busy():
+            return
+        if len(self._selected_cards) != 1:
+            QMessageBox.information(self, 'Alignment diagnostic', 'Select exactly one source in the queue.')
+            return
+        from extractor360.ui.alignment_dialog import AlignmentDialog
+        if self.alignment_dialog:
+            self.alignment_dialog.close()
+            self.alignment_dialog.deleteLater()
+        self.alignment_dialog = AlignmentDialog(self, self._selected_cards[0].job)
+        self.alignment_dialog.show()
 
     def load_stylesheet(self, filename: str):
         qss_path = os.path.join(os.path.dirname(__file__), filename)
@@ -532,7 +555,7 @@ class MainWindow(QMainWindow):
         self.ai_model_combo.addItem("YOLO26-N Seg (Fast Nano)", "yolo26n-seg.pt")
         self.ai_model_combo.addItem("YOLO26-S Seg (Balanced Small)", "yolo26s-seg.pt")
         self.ai_model_combo.addItem("YOLO26-M Seg (High Precision)", "yolo26m-seg.pt")
-        self.ai_model_combo.currentIndexChanged.connect(self.on_setting_changed)
+        self.ai_model_combo.currentIndexChanged.connect(self._on_ai_model_changed)
         adv_grid.addWidget(self.ai_model_combo, 0, 1)
 
         adv_grid.addWidget(QLabel("Confidence:"), 1, 0)
@@ -543,6 +566,11 @@ class MainWindow(QMainWindow):
         self.ai_conf_spin.valueChanged.connect(self.on_setting_changed)
         adv_grid.addWidget(self.ai_conf_spin, 1, 1)
         self.adv_ai.addLayout(adv_grid)
+
+        self.trust_model_toggle = QCheckBox("Trust this custom model (can execute code)")
+        self.trust_model_toggle.setToolTip("A project file cannot grant trust. Confirm only for a custom model whose source you trust.")
+        self.trust_model_toggle.toggled.connect(self.on_setting_changed)
+        self.adv_ai.addWidget(self.trust_model_toggle)
 
         # Target classes
         cls_row = QHBoxLayout()
@@ -598,6 +626,14 @@ class MainWindow(QMainWindow):
     # -------------------------------------------------------------------------
     # Card 4: Output & Calibration
     # -------------------------------------------------------------------------
+    def _on_ai_model_changed(self):
+        if self._loading_settings:
+            return
+        with QSignalBlocker(self.trust_model_toggle):
+            self.trust_model_toggle.setChecked(False)
+        self.trust_model_toggle.setVisible(resolve_ai_model_name(self.ai_model_combo.currentData()) not in AI_MODEL_VARIANTS.values())
+        self.on_setting_changed()
+
     def _build_export_card(self) -> QWidget:
         card = QFrame()
         card.setObjectName("inspectorCard")
@@ -641,6 +677,19 @@ class MainWindow(QMainWindow):
         layout.addLayout(grid)
 
         # Essential Export Priors
+        profile_row = QHBoxLayout()
+        profile_row.addWidget(QLabel("Mask profile:"))
+        self.mask_profile_combo = QComboBox()
+        for profile, label in MASK_PROFILES.items():
+            self.mask_profile_combo.addItem(label, profile)
+        self.mask_profile_combo.setToolTip(
+            "Named profiles set mask polarity and filenames. Postshot uses Remove Occluders; "
+            "COLMAP requires a separate run with black ignored regions."
+        )
+        self.mask_profile_combo.currentIndexChanged.connect(self._on_mask_profile_changed)
+        profile_row.addWidget(self.mask_profile_combo)
+        layout.addLayout(profile_row)
+
         self.colmap_toggle = QCheckBox("Export COLMAP calibration files")
         self.colmap_toggle.toggled.connect(self.on_setting_changed)
         layout.addWidget(self.colmap_toggle)
@@ -658,6 +707,8 @@ class MainWindow(QMainWindow):
         adv_grid.addWidget(QLabel("Naming:"), 0, 0)
         self.naming_mode_combo = QComboBox()
         self.naming_mode_combo.addItem("RealityScan Standard", "realityscan")
+        self.naming_mode_combo.addItem("Postshot (.mask.png)", "postshot")
+        self.naming_mode_combo.addItem("COLMAP (.ext.png)", "colmap")
         self.naming_mode_combo.addItem("Simple Sequential", "simple")
         self.naming_mode_combo.addItem("Custom Pattern", "custom")
         self.naming_mode_combo.currentIndexChanged.connect(self.on_setting_changed)
@@ -758,11 +809,12 @@ class MainWindow(QMainWindow):
                         active_cameras=None, fov=90, pitch_offset=0,
                         resolution=2048, interpolation_mode='linear', output_format='jpg',
                         interval_value=1.0, interval_unit='Seconds', feather_mask=False,
-                        nadir_mask_radius=40.0, naming_mode='realityscan', ai_invert_mask=True)
+                        nadir_mask_radius=40.0, mask_profile='realityscan', naming_mode='realityscan', ai_invert_mask=True)
         if "Postshot" in preset_name:
-            changes.update(feather_mask=True, nadir_mask_radius=35.0)
+            changes.update(mask_profile='postshot', export_colmap=False, nadir_mask_radius=35.0)
         elif "COLMAP" in preset_name:
-            changes.update(resolution=3072, interpolation_mode='lanczos', output_format='png', interval_value=0.5)
+            changes.update(mask_profile='colmap', resolution=3072, interpolation_mode='lanczos', output_format='png', interval_value=0.5)
+        changes.update(profile_settings(changes['mask_profile']))
         settings = {**self.get_settings_from_ui(), **changes}
         self.set_ui_from_settings(settings)
         self._commit_ui_settings(settings, changes)
@@ -771,6 +823,19 @@ class MainWindow(QMainWindow):
 
     def _on_preset_selected(self, index: int):
         self.apply_preset(self.preset_combo.currentText())
+
+    def _on_mask_profile_changed(self, index: int):
+        if self._loading_settings or self.is_processing:
+            return
+        profile = self.mask_profile_combo.currentData()
+        changes = {'mask_profile': profile, **profile_settings(profile)}
+        if profile == 'postshot':
+            changes['export_colmap'] = False
+        settings = {**self.get_settings_from_ui(), **changes}
+        self.set_ui_from_settings(settings)
+        # Apply every contract field to every selected job, even fields already
+        # matching the active card. Unrelated settings remain untouched.
+        self._commit_ui_settings(settings, changes)
 
     # =========================================================================
     # SETTINGS SYNC (SettingsManager <-> UI)
@@ -806,8 +871,10 @@ class MainWindow(QMainWindow):
             'export_colmap': self.colmap_toggle.isChecked(),
             'interpolation_mode': 'lanczos' if self.lanczos_toggle.isChecked() else 'linear',
             'feather_mask': self.ai_feather_toggle.isChecked(),
+            'mask_profile': self.mask_profile_combo.currentData(),
             'ai_mode': self.ai_combo.currentText(),
             'ai_model': self.ai_model_combo.currentData(),
+            'trust_custom_model': self.trust_model_toggle.isChecked(),
             'ai_invert_mask': self.ai_invert_toggle.isChecked(),
             'ai_confidence': self.ai_conf_spin.value(),
             'nadir_mask_enabled': self.nadir_toggle.isChecked(),
@@ -831,6 +898,7 @@ class MainWindow(QMainWindow):
 
     def set_ui_from_settings(self, settings: dict):
         self._loading_settings = True
+        settings = {**settings, **profile_settings(settings.get('mask_profile', 'custom'))}
         self._loaded_settings = copy.deepcopy(settings)
         blockers = [QSignalBlocker(w) for w in self.findChildren(QWidget)]
         self.quality_spin.setValue(settings.get("quality", 95))
@@ -857,6 +925,8 @@ class MainWindow(QMainWindow):
         if self.custom_output_dir:
             self.output_dir_label.setText(os.path.basename(self.custom_output_dir))
             self.output_dir_label.setStyleSheet("color: #E6E6EA;")
+        else:
+            self.output_dir_label.setText("Same as source")
 
         self.interval_spin.setValue(settings.get('interval_value', 1.0))
         self.interval_unit.setCurrentText(settings.get('interval_unit', 'Seconds'))
@@ -886,6 +956,8 @@ class MainWindow(QMainWindow):
             self.ai_model_combo.addItem(model, model)
             model_idx = self.ai_model_combo.count() - 1
         self.ai_model_combo.setCurrentIndex(model_idx)
+        self.trust_model_toggle.setChecked(settings.get('trust_custom_model', False))
+        self.trust_model_toggle.setVisible(resolve_ai_model_name(settings.get('ai_model')) not in AI_MODEL_VARIANTS.values())
 
         self.ai_invert_toggle.setChecked(settings.get('ai_invert_mask', True))
         self.ai_conf_spin.setValue(settings.get('ai_confidence', 0.25))
@@ -915,6 +987,7 @@ class MainWindow(QMainWindow):
         self.telemetry_toggle.setChecked(settings.get('export_telemetry', False))
         self.exif_intrinsics_toggle.setChecked(settings.get('exif_intrinsics', True))
         self.colmap_toggle.setChecked(settings.get('export_colmap', False))
+        self.mask_profile_combo.setCurrentIndex(self.mask_profile_combo.findData(settings.get('mask_profile', 'custom')))
 
         alt_mode = settings.get('altitude_mode', 'absolute')
         idx = self.altitude_combo.findData(alt_mode)
@@ -930,6 +1003,10 @@ class MainWindow(QMainWindow):
             self.naming_mode_combo.setCurrentIndex(idx)
         self.image_pattern_input.setText(settings.get('image_pattern', ''))
         self.mask_pattern_input.setText(settings.get('mask_pattern', ''))
+        managed_mask = settings.get('mask_profile', 'custom') != 'custom'
+        for control in (self.ai_invert_toggle, self.naming_mode_combo, self.image_pattern_input, self.mask_pattern_input):
+            control.setEnabled(not managed_mask)
+        self.colmap_toggle.setEnabled(settings.get('mask_profile') != 'postshot')
 
         for w in widgets:
             w.blockSignals(False)
@@ -939,6 +1016,15 @@ class MainWindow(QMainWindow):
         del blockers
         self._displayed_settings = self._read_settings_from_widgets()
         self._loading_settings = False
+        self._sync_model_trust_state()
+
+    def _sync_model_trust_state(self):
+        models = {resolve_ai_model_name(card.job.settings.get('ai_model')) for card in self._selected_cards}
+        self.trust_model_toggle.setEnabled(len(models) <= 1)
+        self.trust_model_toggle.setToolTip(
+            'Select jobs using the same model to grant trust.' if len(models) > 1 else
+            'A project file cannot grant trust. Confirm only for a custom model whose source you trust.'
+        )
 
     def _sync_fov_slider(self, value):
         with QSignalBlocker(self.fov_slider):
@@ -986,9 +1072,10 @@ class MainWindow(QMainWindow):
                 card.refresh()
         else:
             self.default_settings = current_settings
-            for key, value in current_settings.items():
-                self.settings_manager.set(key, value)
-            self.settings_manager.save_settings()
+            if not self.jobs and self.project_actions.path is None:
+                for key, value in current_settings.items():
+                    self.settings_manager.set(key, value)
+                self.settings_manager.save_settings()
 
         self._loaded_settings = copy.deepcopy(current_settings)
         self._displayed_settings = self._read_settings_from_widgets()
@@ -996,6 +1083,9 @@ class MainWindow(QMainWindow):
             self.preset_combo.setCurrentText("Custom Workflow")
         self.update_preview_display()
         self.update_estimate()
+        if changes:
+            self.project_actions.mark_dirty()
+        self._sync_model_trust_state()
 
     def on_layout_changed(self, index: int):
         if self._loading_settings:
@@ -1043,7 +1133,15 @@ class MainWindow(QMainWindow):
         if not new_jobs:
             return
 
-        for job in new_jobs:
+        self._append_jobs(new_jobs)
+        self._update_queue_ui_state()
+        if self._video_cards:
+            self.select_card(self._video_cards[-1])
+        self.update_estimate()
+        self.project_actions.mark_dirty()
+
+    def _append_jobs(self, jobs):
+        for job in jobs:
             self.jobs.append(job)
             card = VideoCard(job)
             card.clicked.connect(lambda c=card: self.select_card(c))
@@ -1053,17 +1151,16 @@ class MainWindow(QMainWindow):
 
             self._video_cards.append(card)
             self.cards_layout.insertWidget(self.cards_layout.count() - 1, card)
-
-        self._update_queue_ui_state()
-
-        if self._video_cards:
-            self.select_card(self._video_cards[-1])
-
-        self.update_estimate()
+            card.set_source_issue(source_problem(job))
 
     def _create_job_for_path(self, path: str) -> Job:
         job = Job(path)
         job.settings = copy.deepcopy(self.default_settings)
+        job.source_check_required = True
+        try:
+            job.source_identity = source_identity(path)
+        except OSError:
+            pass  # Keep unavailable sources visible for explicit relocation.
         return job
 
     def remove_video(self, card: VideoCard):
@@ -1089,6 +1186,7 @@ class MainWindow(QMainWindow):
                 self.clear_selection()
 
             self.update_estimate()
+            self.project_actions.mark_dirty()
 
     def clear_completed_jobs(self):
         to_remove = [card for card in self._video_cards if card.job.status == "Done"]
@@ -1127,6 +1225,7 @@ class MainWindow(QMainWindow):
         for c in self._selected_cards:
             c.setSelected(False)
         self._selected_cards = []
+        self.set_ui_from_settings(self.default_settings)
         self.preview_widget.update_preview(None, {})
         self.update_estimate()
 
@@ -1134,11 +1233,11 @@ class MainWindow(QMainWindow):
         if self._selected_cards:
             active_card = self._selected_cards[-1]
             settings = active_card.job.settings or self.get_settings_from_ui()
-            self.preview_widget.update_preview(active_card.job.file_path, settings)
+            self.preview_widget.update_preview(None if source_problem(active_card.job) else active_card.job.file_path, settings)
         elif self._video_cards:
             active_card = self._video_cards[0]
             settings = active_card.job.settings or self.get_settings_from_ui()
-            self.preview_widget.update_preview(active_card.job.file_path, settings)
+            self.preview_widget.update_preview(None if source_problem(active_card.job) else active_card.job.file_path, settings)
         else:
             self.preview_widget.update_preview(None, {})
 
@@ -1148,7 +1247,7 @@ class MainWindow(QMainWindow):
             out_dir = os.path.join(job.settings.get("custom_output_dir") or os.path.dirname(job.file_path), Path(job.file_path).stem + "_processed")
         if not out_dir:
             out_dir = os.path.join(os.path.dirname(job.file_path), Path(job.file_path).stem + "_processed")
-        if os.path.exists(out_dir):
+        if os.path.isdir(out_dir):
             QDesktopServices.openUrl(QUrl.fromLocalFile(out_dir))
 
     def on_choose_output_dir(self):
@@ -1171,52 +1270,75 @@ class MainWindow(QMainWindow):
             return
 
         total_images = 0
-        total_size_mb = 0.0
+        low_bytes = high_bytes = 0
+        unknown = False
+        details = []
+        disk_error = False
+
+        problems = [(card, source_problem(card.job)) for card in self._video_cards]
+        for card, problem in problems:
+            card.set_source_issue(problem)
+        if any(problem for _, problem in problems):
+            self.estimation_label.setText("Locate missing or changed sources using Project > Locate Selected Source.")
+            self.extract_btn.setEnabled(False)
+            return
 
         for job in self.jobs:
             s = job.settings or self.default_settings
             is_360 = s.get('is_360', True)
-            cams = s.get('camera_count', 6) if is_360 else 1
-            interval_val = s.get('interval_value', 1.0)
-            interval_unit = s.get('interval_unit', 'Seconds')
-            res = s.get('resolution', 2048)
-
             key = (job.file_path, os.path.getmtime(job.file_path) if os.path.exists(job.file_path) else None)
             if key not in self._media_info:
                 if Path(job.file_path).suffix.lower() in ('.jpg', '.jpeg', '.png', '.tif', '.tiff'):
-                    self._media_info[key] = (1, 1.0)
+                    from PIL import Image
+                    try:
+                        with Image.open(job.file_path) as image:
+                            width, height = image.size
+                    except (OSError, ValueError):
+                        width = height = 0
+                    self._media_info[key] = (1, 0.0, width, height)
                 else:
                     cap = cv2.VideoCapture(job.file_path)
                     try:
-                        self._media_info[key] = (max(1, int(cap.get(cv2.CAP_PROP_FRAME_COUNT))), cap.get(cv2.CAP_PROP_FPS) or 30.0)
+                        self._media_info[key] = (max(0, int(cap.get(cv2.CAP_PROP_FRAME_COUNT))),
+                                                cap.get(cv2.CAP_PROP_FPS),
+                                                int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                                                int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
                     finally:
                         cap.release()
-            frame_count, fps = self._media_info[key]
-            cams = (6 if s.get('layout_mode') == 'cube' else cams) if is_360 else 1
-            if s.get('active_cameras') is not None:
-                cams = len(s['active_cameras'])
+            frame_count, fps, width, height = self._media_info[key]
+            try:
+                settings = validate_settings(s)
+                views = GeometryProcessor.generate_views(settings['camera_count'], settings['pitch_offset'], settings['layout_mode']) if is_360 else [('flat', 0, 0, 0)]
+                active = settings.get('active_cameras')
+                names = [v[0] for i, v in enumerate(views) if active is None or i in active]
+                if is_360:
+                    width = height = settings['resolution']
+                estimate = estimate_output(settings, width, height, frame_count, fps,
+                                           Path(job.file_path).suffix.lower() in ('.jpg', '.jpeg', '.png', '.tif', '.tiff'), names)
+                if estimate['images_estimated'] is None:
+                    unknown = True
+                else:
+                    total_images += estimate['images_estimated']
+                    low_bytes += estimate['bytes_low']
+                    high_bytes += estimate['bytes_high']
+                destination = existing_destination(job.file_path, settings['custom_output_dir'])
+                free = require_free_space(destination, estimate['capture_budget_bytes'])
+                details.append(f'{job.filename}: {destination} — {free / 1024**3:.1f} GiB free. '
+                               f'{estimate["masks_estimated"]} masks estimated. {estimate["assumptions"]}')
+                if estimate['bytes_high'] is not None and estimate['bytes_high'] + estimate['reserve_bytes'] > free:
+                    details.append('WARNING: estimated output may exceed free space.')
+            except (OSError, ValueError) as exc:
+                unknown = True
+                disk_error = disk_error or isinstance(exc, OSError)
+                details.append(f'{job.filename}: {exc}')
 
-            if interval_unit == 'Frames':
-                from extractor360.core.frame_timing import frame_step
-                step = frame_step(interval_val)
-                extracted_frames = max(1, math.ceil(frame_count / step))
-            else:
-                # PTS sampling cannot be inferred exactly from nominal FPS.
-                extracted_frames = max(1, min(frame_count, math.ceil((frame_count / fps) / max(0.001, interval_val))))
-
-            job_images = extracted_frames * cams
-            total_images += job_images
-
-            # Estimate image size (jpg ~1.2MB, png ~4MB)
-            fmt = s.get('output_format', 'jpg')
-            mb_per_img = 1.2 if fmt == 'jpg' else (4.5 if fmt == 'png' else 8.0)
-            mb_per_img *= (res / 2048.0) ** 2
-            total_size_mb += job_images * mb_per_img
-
-        gb_size = total_size_mb / 1024.0
+        size_text = 'unknown' if unknown else f'{low_bytes / 1024**3:.1f}–{high_bytes / 1024**3:.1f} GiB'
+        count_text = 'unknown' if unknown else f'{total_images:,}'
         self.estimation_label.setText(
-            f"Estimated {total_images:,} pinhole images ({len(self.jobs)} media) • ~{gb_size:.1f} GB before masks • filters may reduce count"
+            f"Estimated {count_text} images ({len(self.jobs)} media) • {size_text} including masks • "
+            + ('insufficient disk space' if disk_error else 'before filters; reconstruction extra')
         )
+        self.estimation_label.setToolTip('\n'.join(details))
         self.extract_btn.setText(f"Extract Dataset ({len(self.jobs)} video{'s' if len(self.jobs) > 1 else ''})")
         self.extract_btn.setEnabled(not self.is_processing and not self._closing)
 
@@ -1225,6 +1347,8 @@ class MainWindow(QMainWindow):
     # =========================================================================
 
     def analyze_blur_for_selected(self):
+        if self.alignment_busy():
+            return
         if self._blur_thread is not None or self.is_processing:
             return
         if not self._selected_cards:
@@ -1232,6 +1356,10 @@ class MainWindow(QMainWindow):
             return
 
         card = self._selected_cards[-1]
+        problem = source_problem(card.job)
+        if problem:
+            self.log_panel.log(problem, 'WARNING')
+            return
         self.btn_analyze.setText("Analyzing...")
         self.btn_analyze.setEnabled(False)
 
@@ -1260,7 +1388,7 @@ class MainWindow(QMainWindow):
         self.btn_analyze.setEnabled(not self.is_processing)
 
     def _on_blur_analysis_finished(self, result: dict):
-        if self._closing or self._blur_job not in self.jobs:
+        if self._closing or not any(job is self._blur_job for job in self.jobs):
             return
         if (self._job_settings_revisions.get(id(self._blur_job), 0) != self._blur_revision
                 or (self._blur_job.settings or self.default_settings) != self._blur_settings):
@@ -1269,6 +1397,7 @@ class MainWindow(QMainWindow):
         # A conservative suggestion from one sample, never a calibrated guarantee.
         threshold = min(1e9, max(0.0, float(result['average']) * 0.6))
         self._blur_job.settings.update(blur_threshold=threshold, blur_filter_enabled=True)
+        self.project_actions.mark_dirty()
         if self._selected_cards and self._selected_cards[-1].job is self._blur_job:
             self.set_ui_from_settings(self._blur_job.settings)
         self.log_panel.log(f"Blur sample: average {result['average']:.1f}; suggested threshold {threshold:.1f}")
@@ -1278,7 +1407,10 @@ class MainWindow(QMainWindow):
             self.log_panel.log(f"Analysis failed: {error_msg}", "ERROR")
 
     def start_processing(self):
-        if self.is_processing or not self.jobs or self._blur_thread is not None:
+        if self.is_processing or not self.jobs or self._blur_thread is not None or self.alignment_busy():
+            return
+        if any(source_problem(job) for job in self.jobs):
+            self.update_estimate()
             return
         self._processing_jobs = [j for j in self.jobs if j.status in ("Pending", "Error", "Cancelled")] or list(self.jobs)
         self._active_job_index = 0
@@ -1287,6 +1419,7 @@ class MainWindow(QMainWindow):
         self.preview_widget.suspend()
         self._waiting_for_preview = True
         self.is_processing = True
+        self.project_actions.menu.setEnabled(False)
         self.left_panel.setEnabled(False)
         self.right_panel.setEnabled(False)
         self.top_nav.setEnabled(False)
@@ -1335,6 +1468,7 @@ class MainWindow(QMainWindow):
         job.status = status
         result = self.worker.jobs[index].result
         job.result = copy.deepcopy(result)
+        self.project_actions.mark_dirty()
         for card in self._video_cards:
             if card.job is job:
                 card.refresh()
@@ -1371,6 +1505,7 @@ class MainWindow(QMainWindow):
         self.left_panel.setEnabled(True)
         self.right_panel.setEnabled(True)
         self.top_nav.setEnabled(True)
+        self.project_actions.menu.setEnabled(True)
         self.cancel_btn.setEnabled(False)
         self.hud_progress.hide()
         if self._controller:
@@ -1385,19 +1520,29 @@ class MainWindow(QMainWindow):
         self._closing = True
         if self._waiting_for_preview:
             self._waiting_for_preview = False
-            self.is_processing = False
+            self._on_processing_finished()
         if self._controller:
             self._controller.stop()
         if self._blur_worker:
             self._blur_worker.stop()
-        self.preview_widget.shutdown()
+        if self.alignment_dialog:
+            self.alignment_dialog.close()
+        self.preview_widget.suspend()
         for card in self._video_cards:
             card._cleanup_thread()
-        if (self.is_processing or self._blur_thread is not None
+        if (self.is_processing or self._blur_thread is not None or self.alignment_busy()
                 or self.preview_widget.threadpool.activeThreadCount()
                 or QThreadPool.globalInstance().activeThreadCount()):
             event.ignore()
             QTimer.singleShot(50, self.close)
             return
+        if not self.project_actions.confirm_discard():
+            self._closing = False
+            self.preview_widget.resume()
+            self.update_preview_display()
+            self.update_estimate()
+            event.ignore()
+            return
+        self.preview_widget.shutdown()
         self.log_panel.shutdown()
         event.accept()

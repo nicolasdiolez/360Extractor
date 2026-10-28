@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 import os
+import uuid
 
 @dataclass
 class Job:
@@ -8,6 +9,10 @@ class Job:
     status: str = "Pending"  # Pending, Processing, Done, Error
     settings: Dict[str, Any] = field(default_factory=dict)
     result: Dict[str, Any] = field(default_factory=dict)
+    job_id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    source_identity: Optional[Dict[str, int]] = None
+    source_check_required: bool = False
+    diagnostic_settings: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def active_cameras(self) -> Optional[List[int]]:
@@ -89,4 +94,6 @@ class Job:
         elif ai_mode == 'Skip Frame':
             ai_str = " [AI Skip]"
             
-        return f"{pitch_str}{cam_str}{adaptive}{ai_str}"
+        count = len(self.settings.get('excluded_frames', []))
+        selection = f" [{count} captures excluded]" if count else ""
+        return f"{pitch_str}{cam_str}{adaptive}{ai_str}{selection}"

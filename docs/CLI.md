@@ -52,7 +52,8 @@ Defaults below apply when neither a JSON config nor an explicit argument overrid
 | `--altitude-mode` | DJI source selection: `absolute` or `relative`. Relative altitude is omitted from EXIF; absolute also requires a verified orthometric reference. | `absolute` |
 | `--no-exif-intrinsics` | Disable synthetic calibration EXIF. Capture dates require an available container timestamp; travel direction is never optical heading. GPS export is controlled separately. | Calibration enabled |
 | `--export-colmap` | Write virtual calibration, rig configuration and a reconstruction runner for 360 output. Full reconstruction qualification is pending. | Disabled |
-| `--naming-mode` | `realityscan`, `simple` or `custom`. | `realityscan` |
+| `--mask-profile` | `realityscan`, `colmap`, `postshot` (Remove Occluders) or `custom`. Named profiles override mask polarity and naming, including saved/manual settings. | `custom` |
+| `--naming-mode` | `realityscan`, `colmap`, `postshot`, `simple` or `custom`; used directly only with the custom mask profile. | `realityscan` |
 | `--image-pattern` | Custom image pattern, e.g. `{filename}_{frame}_{camera}{ext}`. | See settings guide |
 | `--mask-pattern` | Custom mask pattern, e.g. `{image_name}.mask.png`. Providing a pattern implies custom mode unless a mode is explicit. | See settings guide |
 
@@ -77,6 +78,14 @@ Standard video without panorama projection:
 ```sh
 360extractor --input clips/interview.mp4 --output out/interview --flat
 ```
+
+Postshot's **Remove Occluders** mode needs white ignored regions and matching mask basenames. Import color images as images and masks in Postshot's Image Masks section. Do not select Remove Background for these occlusion masks:
+
+```sh
+360extractor --input videos/trip.mp4 --output out/postshot --layout cube --ai-mask --mask-profile postshot
+```
+
+Set JSON `export_colmap` to `false` for this run if a saved configuration enables it. For COLMAP, make a separate run with `--mask-profile colmap --export-colmap`. For manual polarity or patterns, explicitly select `--mask-profile custom`. A profile does not enable AI or nadir masking by itself. See the [mask contracts](SETTINGS.md#mask-profiles-and-storage) and [Postshot documentation](https://www.jawset.com/docs/d/Postshot%2BUser%2BGuide/Interface/Training%2BConfiguration).
 
 Use the JSON example in [SETTINGS.md](SETTINGS.md#configuration-files), which includes its input and output paths:
 

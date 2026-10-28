@@ -40,7 +40,7 @@ class MotionDetector:
             magnitude, _ = cv2.cartToPolar(flow[..., 0], flow[..., 1])
             
             # Return mean magnitude
-            return float(np.mean(magnitude))
+            return float(np.mean(np.asarray(magnitude)))
             
         except Exception as e:
             logger.error(f"Error calculating motion score: {e}")

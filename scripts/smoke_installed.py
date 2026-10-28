@@ -110,6 +110,51 @@ def exercise(root, version):
     if mask is None or mask.shape != (32, 32) or mask[16, 16] != 0 or mask[0, 0] != 255:
         raise RuntimeError("Installed nadir mask is missing or does not exclude the tripod disc")
 
+    from extractor360.core.job import Job
+    from extractor360.core.project import Project, read_project, write_project, source_identity, source_problem
+    job = Job(str(panorama), settings={'resolution': 32, 'layout_mode': 'cube', 'active_cameras': [0, 5], 'excluded_frames': [2]},
+              result={'status': 'completed', 'output_dir': str(dataset)}, source_identity=source_identity(str(panorama)),
+              diagnostic_settings={'mode': 'source', 'maximum': 3, 'resolution': 1024, 'frame_range': [1, 3]})
+    document = Project(jobs=[job], selected_job_ids=[job.job_id])
+    project_file = root / 'capture.360proj'
+    write_project(project_file, document)
+    reopened, _ = read_project(project_file)
+    if (reopened.jobs[0].job_id != job.job_id or reopened.jobs[0].status != 'Pending'
+            or reopened.jobs[0].settings['active_cameras'] != [0, 5]
+            or reopened.jobs[0].settings['excluded_frames'] != [2]
+            or reopened.jobs[0].diagnostic_settings != job.diagnostic_settings
+            or reopened.jobs[0].result['output_dir'] != str(dataset) or source_problem(reopened.jobs[0])):
+        raise RuntimeError('Installed project save/open did not preserve source, settings and result')
+
+    from extractor360.core.alignment import sample_frames, summarize
+    sample = sample_frames(range(10), [2], 3)
+    frames = {frame: {'frame': frame, 'images': [f'Front/frame{frame}.jpg']} for frame in sample}
+    report = summarize(frames, sample, set(), {'0': {frames[sample[0]]['images'][0]}})
+    if report['registered_captures'] != 1 or report['unregistered_captures'] != 2:
+        raise RuntimeError('Installed alignment summary counted virtual views as captures')
+
+    # Exercise the same helper entry used by a frozen app, without Qt or COLMAP.
+    # The source process must load this installed package, not the checkout.
+    sample_source = root / 'preflight.avi'
+    encoder = cv2.VideoWriter(str(sample_source), cv2.VideoWriter_fourcc(*'MJPG'), 10, (64, 32))
+    if not encoder.isOpened():
+        raise RuntimeError('Could not create the preflight video fixture')
+    for value in (20, 60, 100, 140, 180):
+        encoder.write(np.full((32, 64, 3), value, np.uint8))
+    encoder.release()
+    sample_root = root / 'preflight'
+    sample_root.mkdir()
+    request = sample_root / 'sample-request.json'
+    request.write_text(json.dumps({'source': str(sample_source), 'source_identity': source_identity(str(sample_source)),
+                                  'settings': {'layout_mode': 'cube', 'resolution': 32, 'exif_intrinsics': False},
+                                  'diagnostic_settings': job.diagnostic_settings,
+                                  'maximum': 3}), encoding='utf-8')
+    run_command([str(console), '--diagnostic-sample', str(request)], root, env)
+    sampled = json.loads((sample_root / 'sample-result.json').read_text(encoding='utf-8'))
+    if (sampled['requested_frames'] != [1, 2, 3] or sampled['result']['extraction']['images_written'] != 18
+            or sampled['settings']['resolution'] != 1024):
+        raise RuntimeError('Installed preflight helper did not export exactly the requested source frames')
+
     # Execute the exported, standalone runner in an isolated interpreter. Only
     # COLMAP discovery and its external processes are simulated.
     harness = '''import json, runpy, sys
@@ -131,7 +176,7 @@ namespace['main']()
         raise RuntimeError("Installed runner staged an incomplete confirmed image index")
     if not (workspace / "masks" / (next(name for name in names if name.startswith("Down/")) + ".png")).is_file():
         raise RuntimeError("Installed runner did not stage the separate COLMAP mask")
-    print("INSTALLED_SMOKE_OK: site-packages, QSS, module/console CLI, flat pixels, six cube views, nadir mask, standalone COLMAP staging/order")
+    print("INSTALLED_SMOKE_OK: site-packages, QSS, module/console CLI, flat pixels, six cube views, nadir mask, project roundtrip, standalone COLMAP staging/order")
 
 
 def main():

@@ -4,6 +4,33 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ## [Unreleased]
 
+- Lead alignment results with the largest individual model, frame/time span, tested gaps and explicit one-/two-capture fragments. Retain model alternatives and label historical results after diagnostic choices change.
+- Add inclusive source-frame windows, boundary preview buttons and a 1024 px diagnostic option. Save mode, capture limit, resolution and range per source in `.360proj`, independently of full-extraction settings. Retain the shared five-minute / monitored 256 MiB budget and avoid upscaling existing exports.
+
+### Studio projects
+
+- Run a preliminary alignment directly from a stitched 360 video, without a full export: supervised native decoding/AI, uniform bounded sampling, explicit preview adaptations and preserved project settings. Missing models never trigger a diagnostic download. Stop the sampling process tree on cancellation/time/space failure.
+- Report COLMAP's known no-model outcome as unregistered captures, while preserving other tool errors. Distinguish candidates filtered before alignment from registration failures. Qualify the source workflow on Cour and the more difficult Bobillot staircase; see [October 28 validation](docs/implementation-2026-10-28/PREFLIGHT_VALIDATION.md).
+
+- Add a bounded CPU COLMAP diagnostic from a completed 360 rig export: physical-capture counts, unregistered/unsampled states, overlapping models versus disjoint groups, source-frame navigation and persistent reversible frame exclusions. Keep exclusion decisions across new extractions and expose restoration even when excluded frames are absent from the new export.
+- Index source timestamps and their provenance. Check extraction save/close/reopen lifecycle and diagnostic cancellation/timeout/space failures. See [alignment scope and validation](docs/implementation-2026-10-27/ALIGNMENT_VALIDATION.md).
+
+- Save/open versioned `.360proj` documents with stable job IDs, per-job settings, defaults, selection and the latest result; preserve relative references when moving a project folder.
+- Keep missing/changed sources visible and provide explicit relocation. Check expected source size/mtime before processing; new runs preserve existing outputs.
+- Add unsaved-change prompts, validated staged writes and detection of external document changes. Project files cannot grant custom-model trust; explicit confirmation is available in Studio.
+- Validate document integrity, relocation, failed saves, UI lifecycle and installed-wheel round trips. See [project validation](docs/implementation-2026-10-27/PROJECTS_VALIDATION.md).
+
+### Fixed
+
+- Give Postshot Remove Occluders a white-ignore mask profile and matching `.mask.png` filenames. Studio's Postshot preset selects this convention, binary masks and no incompatible COLMAP mask export. Named profiles update every selected job while preserving unrelated settings.
+- Check free space on the output volume before creating a dataset and before writing each capture. Fail explicitly and preserve the confirmed index if space runs out. Studio estimates include masks and native flat-image dimensions; unknown duration remains unknown.
+- Normalize OpenCV motion magnitudes to a NumPy array for compatibility with the current type stubs.
+
+### Added
+
+- Explicit RealityScan, COLMAP, Postshot and custom/legacy mask profiles in Studio and CLI, with the effective convention recorded in each manifest. Existing configurations remain custom/legacy until a profile is selected.
+- A bounded sparse-reconstruction comparison script and [benchmark protocol](docs/BENCHMARK_PROTOCOL.md), with [October 27 results and qualification limits](docs/implementation-2026-10-27/VALIDATION.md).
+
 ## [4.0.3] - 2026-10-25
 
 Local reconstruction-fix candidate; no public release is implied. The existing 4.0.2 tag and draft assets remain unchanged.
