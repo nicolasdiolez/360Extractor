@@ -350,3 +350,51 @@ def test_source_preflight_routes_without_export_and_retains_settings(window, tmp
     assert job.settings == original and job.result['alignment']['mode'] == 'source_preflight'
     assert 'Source preflight' in dialog.summary.text() and not window.preview_widget._suspended
     dialog.close()
+
+
+def test_diagnostic_choices_roundtrip_separately_and_survive_extraction(window, tmp_path):
+    from extractor360.ui.alignment_dialog import AlignmentDialog
+    job = window.jobs[0]
+    original = copy.deepcopy(job.settings)
+    dialog = AlignmentDialog(window, job)
+    dialog.maximum.setValue(16)
+    dialog.resolution.setCurrentIndex(1)
+    dialog.range_check.setChecked(True)
+    dialog.end_frame.setValue(82)
+    assert job.diagnostic_settings == {'mode': 'source', 'resolution': 1024, 'maximum': 16, 'frame_range': [0, 82]}
+    assert job.settings == original and window.jobs[1].diagnostic_settings == {}
+    dialog.view_source_frame(82)
+    assert window.preview_widget._exact_frame == 82
+    path = tmp_path / 'windows.360proj'
+    window.project_actions.save_to(path)
+    window.project_actions.load_from(path)
+    job = window.jobs[0]
+    other = AlignmentDialog(window, job)
+    assert other.end_frame.value() == 82 and other.range_check.isChecked()
+    assert other.resolution.currentData() == 1024 and other.maximum.value() == 16
+    choices = copy.deepcopy(job.diagnostic_settings)
+    worker = ProcessingWorker([job])
+    worker.run()
+    assert worker.error_count == 0 and job.diagnostic_settings == choices
+    other.close()
+
+
+def test_diagnostic_summary_marks_fragments_and_changed_options_historical(window):
+    from extractor360.core.alignment import summarize, fingerprint
+    from extractor360.core.diagnostic import diagnostic_options
+    from extractor360.ui.alignment_dialog import AlignmentDialog
+    job = window.jobs[0]
+    job.diagnostic_settings = diagnostic_options()
+    frames = {n: {'frame': n, 'images': [str(n)], 'timestamp_seconds': n/10,
+                  'timestamp_source': 'decoder_timestamp'} for n in range(6)}
+    report = {**summarize(frames, list(frames), set(), {'0': {'0', '1'}, '1': {'2', '3'}, '2': {'4', '5'}}),
+              'schema_version': 1, 'fingerprint': fingerprint(job), 'mode': 'source_preflight', 'resolution': 512,
+              'diagnostic_settings': copy.deepcopy(job.diagnostic_settings)}
+    job.result['alignment'] = report
+    dialog = AlignmentDialog(window, job)
+    assert dialog.headline.text().startswith('Only fragments: 3')
+    assert dialog.model_table.rowCount() == 3 and '0.000–0.100 s (decoded)' in dialog.model_table.item(0, 2).text()
+    dialog.resolution.setCurrentIndex(1)
+    assert dialog.headline.text().startswith('Historical')
+    assert job.result['alignment']['resolution'] == 512 and job.diagnostic_settings['resolution'] == 1024
+    dialog.close()

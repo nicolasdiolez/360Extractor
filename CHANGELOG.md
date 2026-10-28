@@ -4,6 +4,9 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ## [Unreleased]
 
+- Lead alignment results with the largest individual model, frame/time span, tested gaps and explicit one-/two-capture fragments. Retain model alternatives and label historical results after diagnostic choices change.
+- Add inclusive source-frame windows, boundary preview buttons and a 1024 px diagnostic option. Save mode, capture limit, resolution and range per source in `.360proj`, independently of full-extraction settings. Retain the shared five-minute / monitored 256 MiB budget and avoid upscaling existing exports.
+
 ### Studio projects
 
 - Run a preliminary alignment directly from a stitched 360 video, without a full export: supervised native decoding/AI, uniform bounded sampling, explicit preview adaptations and preserved project settings. Missing models never trigger a diagnostic download. Stop the sampling process tree on cancellation/time/space failure.

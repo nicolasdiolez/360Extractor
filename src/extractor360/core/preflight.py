@@ -17,9 +17,11 @@ from extractor360.core.job import Job
 from extractor360.core.project import source_identity, source_problem
 from extractor360.core.storage import require_free_space
 from extractor360.core.validation import validate_settings
+from extractor360.core.diagnostic import diagnostic_options, model_overview
 
 
 def source_plan(job, maximum):
+    diagnostic_options({**diagnostic_options(job.diagnostic_settings), 'maximum': maximum})
     if type(maximum) is not int or not 3 <= maximum <= 16:
         raise ValueError('Choose between 3 and 16 physical captures.')
     settings = validate_settings(job.settings)
@@ -48,18 +50,22 @@ def source_plan(job, maximum):
     return settings, identity, model_directory
 
 
-def uniform_frames(total, excluded, maximum):
+def uniform_frames(total, excluded, maximum, frame_range=None):
     """Select ranks without allocating a set/list for the full source video."""
     if type(total) is not int or total < 3 or not 3 <= maximum <= 16:
         raise ValueError('Preflight needs a known source length and at least three frames.')
-    excluded = sorted({frame for frame in excluded if 0 <= frame < total})
-    available = total - len(excluded)
+    window = diagnostic_options({'maximum': maximum, 'frame_range': frame_range})['frame_range']
+    start, end = window if window is not None else (0, total - 1)
+    if end >= total:
+        raise ValueError('Diagnostic frame range exceeds the source length')
+    excluded = sorted({frame for frame in excluded if start <= frame <= end})
+    available = end - start + 1 - len(excluded)
     if available < 3:
         raise ValueError('At least three source frames must remain included.')
     count = min(maximum, available)
     frames = []
     for i in range(count):
-        frame = round(i * (available - 1) / (count - 1))
+        frame = start + round(i * (available - 1) / (count - 1))
         for excluded_frame in excluded:
             if excluded_frame > frame:
                 break
@@ -68,11 +74,12 @@ def uniform_frames(total, excluded, maximum):
     return frames
 
 
-def sampling_settings(settings, output):
+def sampling_settings(settings, output, resolution=512):
+    diagnostic_options({'resolution': resolution})
     result = copy.deepcopy(settings)
     # Thresholds calibrated at export resolution/motion cadence cannot be
     # silently reused on this coarse sample. Retain geometry and AI decisions.
-    result.update(resolution=min(512, settings['resolution']), output_format='jpg', quality=95,
+    result.update(resolution=resolution, output_format='jpg', quality=95,
                   mask_profile='colmap', export_colmap=True, custom_output_dir=str(output),
                   interval_unit='Frames', interval_value=1, adaptive_mode=False,
                   blur_filter_enabled=False, smart_blur_enabled=False,
@@ -88,7 +95,9 @@ def sample_source(request_path):
     request_path = Path(request_path).resolve(strict=True)
     root = request_path.parent
     request = _json(request_path)
-    job = Job(request['source'], settings=request['settings'], source_identity=request['source_identity'], source_check_required=True)
+    options = diagnostic_options(request.get('diagnostic_settings', {}))
+    job = Job(request['source'], settings=request['settings'], source_identity=request['source_identity'], source_check_required=True,
+              diagnostic_settings=options)
     settings, _, _ = source_plan(job, request['maximum'])
     cap = cv2.VideoCapture(job.file_path)
     try:
@@ -100,11 +109,11 @@ def sample_source(request_path):
             raise ValueError('The decoder cannot establish a source frame count for preflight')
         if not (width > 0 and height > 0 and width == 2 * height):
             raise ValueError('Preflight expects a stitched 2:1 equirectangular video')
-        frames = uniform_frames(int(raw_count), settings['excluded_frames'], request['maximum'])
+        frames = uniform_frames(int(raw_count), settings['excluded_frames'], request['maximum'], options['frame_range'])
     finally:
         cap.release()
     original = copy.deepcopy(settings)
-    job.settings = sampling_settings(settings, root / 'sample')
+    job.settings = sampling_settings(settings, root / 'sample', options['resolution'])
     worker = ProcessingWorker([job], diagnostic_frames=frames)
     worker.run()
     if worker.error_count or job.result.get('status') != 'completed':
@@ -121,6 +130,9 @@ def sample_source(request_path):
 
 def run_source(runner, job, destination, maximum):
     settings, identity, model_directory = source_plan(job, maximum)
+    options = diagnostic_options({**diagnostic_options(job.diagnostic_settings), 'mode': 'source', 'maximum': maximum})
+    # Validate the sampling projection before creating a workspace.
+    sampling_settings(settings, destination, options['resolution'])
     if not shutil.which('colmap'):
         raise FileNotFoundError('Install COLMAP 4.2 and make colmap available on PATH, then retry.')
     if runner.cancelled():
@@ -133,7 +145,7 @@ def run_source(runner, job, destination, maximum):
     try:
         request = runner.root / 'sample-request.json'
         request.write_text(json.dumps({'source': job.file_path, 'settings': settings, 'source_identity': identity,
-                                       'maximum': maximum}, allow_nan=False), encoding='utf-8')
+                                       'maximum': maximum, 'diagnostic_settings': options}, allow_nan=False), encoding='utf-8')
         temporary = runner.root / 'temporary'
         temporary.mkdir()
         env = dict(os.environ, EXTRACTOR360_OFFLINE_MODELS='1', EXTRACTOR360_DEVICE='cpu',
@@ -156,7 +168,7 @@ def run_source(runner, job, destination, maximum):
             raise
         sample = _json(runner.root / 'sample-result.json')
         sampled_job = Job(job.file_path, settings=sample['settings'], result=sample['result'],
-                          source_identity=identity, source_check_required=True)
+                          source_identity=identity, source_check_required=True, diagnostic_settings=options)
         requested = sample['requested_frames']
         index = Path(sampled_job.result['output_dir']) / 'images.jsonl'
         records = [json.loads(line) for line in index.read_text(encoding='utf-8').splitlines()] if index.is_file() else []
@@ -177,10 +189,12 @@ def run_source(runner, job, destination, maximum):
                                            'timestamp_source': 'unavailable'})
         report['captures'].sort(key=lambda item: item['frame'])
         report.update(mode='source_preflight', fingerprint=fingerprint(job),
+                      diagnostic_settings=options,
                       source_identity=identity, requested_frames=requested, filtered_captures=len(requested) - len(confirmed),
                       source_frame_count=sample['source_frame_count'], sampling='uniform source frame ranks, independent of export interval',
                       overrides=sample['overrides'], sample_run_id=sampled_job.result['run_id'],
                       elapsed_total_seconds=round(time.monotonic() - (runner.deadline - MAX_SECONDS), 3))
+        report['overview'] = model_overview(report)
         if source_identity(job.file_path) != identity:
             raise ValueError('Source changed during preflight; diagnostic discarded')
         runner._check()

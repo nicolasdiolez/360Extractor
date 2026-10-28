@@ -105,7 +105,7 @@ def test_project_never_grants_custom_model_trust(tmp_path, document):
         validate_settings(loaded.jobs[0].settings)
 
 
-@pytest.mark.parametrize('mutation', ['version', 'duplicate', 'selection', 'settings', 'identity', 'traversal'])
+@pytest.mark.parametrize('mutation', ['version', 'duplicate', 'selection', 'settings', 'identity', 'traversal', 'diagnostic'])
 def test_invalid_document_rejected(tmp_path, document, mutation):
     target = tmp_path / 'bad.360proj'
     write_project(target, document)
@@ -116,8 +116,19 @@ def test_invalid_document_rejected(tmp_path, document, mutation):
     if mutation == 'settings': data['jobs'][0]['settings']['resolution'] = 'bad'
     if mutation == 'identity': data['jobs'][0]['source_identity']['size_bytes'] = True
     if mutation == 'traversal': data['jobs'][0]['source'] = {'kind': 'relative', 'path': '../escape.png'}
+    if mutation == 'diagnostic': data['jobs'][0]['diagnostic_settings'] = None
     target.write_text(json.dumps(data))
     with pytest.raises(ValueError): read_project(target)
+
+
+def test_old_projects_without_diagnostic_choices_remain_readable(tmp_path, document):
+    target = tmp_path / 'old.360proj'
+    write_project(target, document)
+    data = json.loads(target.read_text())
+    del data['jobs'][0]['diagnostic_settings']
+    target.write_text(json.dumps(data))
+    loaded, _ = read_project(target)
+    assert loaded.jobs[0].diagnostic_settings == {}
 
 
 def test_failed_atomic_replacement_preserves_previous_project(tmp_path, document, monkeypatch):

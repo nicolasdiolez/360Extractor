@@ -18,6 +18,7 @@ import time
 from typing import Any, TypedDict
 
 from extractor360.core.project import source_identity, source_problem
+from extractor360.core.diagnostic import diagnostic_options, model_overview
 from extractor360.core.reconstruction import _read_index, _read_rig
 from extractor360.core.storage import require_free_space
 from extractor360.core.validation import validate_settings
@@ -181,11 +182,13 @@ def summarize(frames, sampled, excluded, models):
             merged['frames'] |= component['frames']
             components.remove(component)
         components.append(merged)
-    return {'captures': rows, 'models': groups,
+    report: dict[str, Any] = {'captures': rows, 'models': groups,
             'groups': [{'models': c['models'], 'frames': sorted(c['frames'])} for c in components],
             'sampled_frames': sampled,
             'registered_captures': sum(row['state'] == 'registered' for row in rows),
             'unregistered_captures': sum(row['state'] == 'unregistered' for row in rows)}
+    report['overview'] = model_overview(report)
+    return report
 
 
 class AlignmentRunner:
@@ -264,8 +267,15 @@ class AlignmentRunner:
         import cv2  # optional media dependency; no Qt or model imports
 
         dataset, manifest, entries, params, rig, frames = load_export(job)
+        options = diagnostic_options(job.diagnostic_settings)
+        options.update(mode='export', maximum=maximum)
+        options = diagnostic_options(options)
+        window = options['frame_range']
+        if window and window[1] >= manifest.get('video', {}).get('total_frames', 0):
+            raise ValueError('Diagnostic frame range exceeds the source length recorded in the export')
         excluded = set(job.settings.get('excluded_frames', []))
-        sampled = sample_frames(frames, excluded, maximum)
+        available = [f for f in frames if window is None or window[0] <= f <= window[1]]
+        sampled = sample_frames(available, excluded, maximum)
         selected_names = {name for frame in sampled for name in frames[frame]['images']}
         entries = [entry for entry in entries if entry[1].as_posix() in selected_names]
         if len(entries) > 128:
@@ -281,9 +291,9 @@ class AlignmentRunner:
         self.deadline = time.monotonic() + MAX_SECONDS
         self.commands = []
         try:
-            self.progress('Preparing confirmed images (maximum 512 pixels per view)')
+            self.progress(f'Preparing confirmed images (maximum {options["resolution"]} pixels per view)')
             resolution = manifest['settings']['resolution']
-            scale = min(1, 512 / resolution)
+            scale = min(1, options['resolution'] / resolution)
             dimension = round(resolution * scale)
             for camera in rig[0]['cameras']:
                 camera['camera_params'] = [value * scale for value in camera['camera_params']]
@@ -352,6 +362,7 @@ class AlignmentRunner:
             report = {**summarize(frames, sampled, excluded, models), 'schema_version': 1,
                       'fingerprint': fingerprint(job), 'run_id': manifest['run_id'], 'export_signature': export_signature,
                       'resolution': dimension, 'excluded_frames': sorted(excluded), 'mapper_status': mapper_status,
+                      'diagnostic_settings': options,
                       'limits': 'Sample only; unregistered does not establish a cause. Overlapping models are alternatives. '
                                 'No dense reconstruction, metric accuracy or Gaussian Splatting quality measured.',
                       'seconds': round(time.monotonic() - (self.deadline - MAX_SECONDS), 3)}

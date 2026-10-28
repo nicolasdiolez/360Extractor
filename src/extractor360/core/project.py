@@ -18,6 +18,7 @@ import uuid
 
 from extractor360.core.ai_classes import AI_MODEL_VARIANTS, resolve_ai_model_name
 from extractor360.core.job import Job
+from extractor360.core.diagnostic import diagnostic_options
 from extractor360.core.output_plan import MEDIA_EXTENSIONS
 from extractor360.core.validation import validate_settings
 from extractor360.core.version import VERSION
@@ -63,6 +64,8 @@ def relink_source(job: Job, path: str) -> None:
         # Existing results describe the old source; never relabel them as new.
         job.result = {}
         job.settings['excluded_frames'] = []
+        if job.diagnostic_settings:
+            job.diagnostic_settings['frame_range'] = None
     job.file_path = str(source)
     job.source_identity = identity
     job.source_check_required = True
@@ -152,12 +155,14 @@ def _decode_settings(value: Any, parent: Path) -> dict[str, Any]:
 def _document(project: Project, parent: Path) -> dict[str, Any]:
     jobs = []
     for job in project.jobs:
+        _object(job.diagnostic_settings, 'Diagnostic settings')
         result = copy.deepcopy(job.result)
         if result.get('output_dir'):
             result['output_dir'] = _encode_path(result['output_dir'], parent)
         jobs.append({'id': job.job_id, 'source': _encode_path(job.file_path, parent),
                      'source_identity': job.source_identity, 'settings': _encode_settings(job.settings, parent),
-                     'last_result': result})
+                     'last_result': result,
+                     'diagnostic_settings': diagnostic_options(job.diagnostic_settings) if job.diagnostic_settings else {}})
     return {'format': FORMAT, 'schema_version': 1, 'application_version': VERSION,
             'id': project.project_id, 'defaults': _encode_settings(project.default_settings, parent),
             'selected_job_ids': project.selected_job_ids, 'jobs': jobs}
@@ -186,8 +191,11 @@ def _parse(data: Any, parent: Path) -> Project:
         result = copy.deepcopy(_object(entry.get('last_result', {}), 'Last result'))
         if result.get('output_dir'):
             result['output_dir'] = _decode_path(result['output_dir'], parent)
+        diagnostic = _object(entry.get('diagnostic_settings', {}), 'Diagnostic settings')
+        diagnostic_options(diagnostic)  # Validate optional settings in old and new documents.
         project.jobs.append(Job(source, settings=_decode_settings(entry.get('settings'), parent), result=result,
-                                job_id=job_id, source_identity=_identity(entry.get('source_identity')), source_check_required=True))
+                                job_id=job_id, source_identity=_identity(entry.get('source_identity')), source_check_required=True,
+                                diagnostic_settings=diagnostic_options(diagnostic) if diagnostic else {}))
     selected = data.get('selected_job_ids', [])
     if not isinstance(selected, list) or any(not isinstance(i, str) or i not in ids for i in selected):
         raise ValueError('Selection contains an unknown job')

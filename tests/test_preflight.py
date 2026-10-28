@@ -35,6 +35,9 @@ def test_uniform_sampling_skips_exclusions_without_allocating_full_video():
     assert len(set(large)) == 16 and large[0] == 1 and large[-1] == 10**9 - 2
     with pytest.raises(ValueError, match='three'):
         preflight.uniform_frames(3, [1], 8)
+    assert preflight.uniform_frames(12, [0, 4, 9, 11], 4, [3, 10]) == [3, 6, 7, 10]
+    with pytest.raises(ValueError, match='source length'):
+        preflight.uniform_frames(12, [], 4, [3, 12])
 
 
 def test_sampling_adaptations_are_explicit_and_do_not_edit_project(video, tmp_path):
@@ -119,6 +122,26 @@ def test_real_sampling_subprocess_preserves_last_export_and_uses_global_budget(v
     assert manifest['diagnostic_sampling']['decoded_frames'] == report['requested_frames']
     with pytest.raises(FileExistsError):
         alignment.AlignmentRunner().run_source(video, root, 4)
+
+
+def test_source_window_and_1024_resolution_reach_real_helper_and_colmap(video, tmp_path, monkeypatch):
+    monkeypatch.setattr(preflight.shutil, 'which', lambda _: sys.executable)
+    monkeypatch.setattr(alignment.AlignmentRunner, '_command', lambda *a: None)
+    video.settings['excluded_frames'] = [5]
+    video.diagnostic_settings = {'mode': 'source', 'resolution': 1024, 'maximum': 4, 'frame_range': [2, 10]}
+    before = copy.deepcopy(video)
+    root = tmp_path / 'window'
+    report = alignment.AlignmentRunner().run_source(video, root, 4)
+    assert video == before
+    assert report['requested_frames'] == [2, 4, 8, 10]
+    assert report['diagnostic_settings'] == video.diagnostic_settings and report['resolution'] == 1024
+    assert report['captures'][0]['timestamp_seconds'] == pytest.approx(.2)
+    images = list((root / 'alignment/images').rglob('*.jpg'))
+    assert len(images) == 24 and cv2.imread(str(images[0])).shape[:2] == (1024, 1024)
+    video.diagnostic_settings['frame_range'] = [9, 15]
+    with pytest.raises(RuntimeError, match='source length'):
+        alignment.AlignmentRunner().run_source(video, tmp_path / 'outside', 4)
+    assert not (tmp_path / 'outside/sample').exists()
 
 
 def test_filtered_candidates_are_not_called_unregistered(video, tmp_path, monkeypatch):

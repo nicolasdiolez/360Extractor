@@ -34,7 +34,7 @@ jobs:
         run: mypy src
 
       - name: Critical contracts (blocking)
-        run: mypy --python-version 3.13 --check-untyped-defs --follow-imports=silent src/extractor360/ui/workers.py src/extractor360/core/validation.py src/extractor360/core/output_plan.py src/extractor360/core/reconstruction.py src/extractor360/core/project.py src/extractor360/ui/project_actions.py src/extractor360/core/alignment.py src/extractor360/core/preflight.py src/extractor360/ui/alignment_dialog.py
+        run: mypy --python-version 3.13 --check-untyped-defs --follow-imports=silent src/extractor360/ui/workers.py src/extractor360/core/validation.py src/extractor360/core/output_plan.py src/extractor360/core/reconstruction.py src/extractor360/core/project.py src/extractor360/ui/project_actions.py src/extractor360/core/alignment.py src/extractor360/core/preflight.py src/extractor360/core/diagnostic.py src/extractor360/ui/alignment_dialog.py
 
       # Cheap guard against the recurring release-metadata drift (version.py vs
       # pyproject vs CHANGELOG). No tag here — that part is checked in release.yml.

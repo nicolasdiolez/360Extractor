@@ -56,14 +56,18 @@ def test_invalid_selection_is_rejected(value):
 
 def test_selection_survives_project_but_not_replacement_source(exported, tmp_path):
     exported.settings['excluded_frames'] = [2, 4]
+    exported.diagnostic_settings = {'mode': 'source', 'resolution': 1024, 'maximum': 3, 'frame_range': [0, 6]}
     target = tmp_path / 'decision.360proj'
     write_project(target, Project(jobs=[exported]))
     reopened, _ = read_project(target)
     assert reopened.jobs[0].settings['excluded_frames'] == [2, 4]
+    assert reopened.jobs[0].diagnostic_settings == exported.diagnostic_settings
     replacement = tmp_path / 'other.png'
     cv2.imwrite(str(replacement), np.zeros((32, 64, 3), np.uint8))
     relink_source(reopened.jobs[0], str(replacement))
     assert not reopened.jobs[0].settings.get('excluded_frames')
+    assert reopened.jobs[0].diagnostic_settings['frame_range'] is None
+    assert reopened.jobs[0].diagnostic_settings['resolution'] == 1024
 
 
 def test_preflight_refuses_stale_and_partial_export(exported, tmp_path):
@@ -131,6 +135,19 @@ def test_runner_uses_fresh_workspace_and_stages_only_selected_views(exported, tm
     assert len(list((root / 'images').rglob('*.jpg'))) == 18
     with pytest.raises(FileExistsError):
         alignment.AlignmentRunner().run(exported, root, 3)
+
+
+def test_export_window_samples_only_confirmed_captures_without_upscaling(exported, tmp_path, monkeypatch):
+    monkeypatch.setattr(alignment.shutil, 'which', lambda _: '/fake/colmap')
+    monkeypatch.setattr(alignment.AlignmentRunner, '_command', lambda *a: None)
+    exported.diagnostic_settings = {'resolution': 1024, 'frame_range': [1, 6]}
+    report = alignment.AlignmentRunner().run(exported, tmp_path / 'window', 3)
+    assert report['sampled_frames'] == [2, 4, 6] and report['resolution'] == 32
+    assert report['captures'][0]['state'] == 'not_sampled'
+    exported.diagnostic_settings['frame_range'] = [0, 10]
+    with pytest.raises(ValueError, match='source length'):
+        alignment.AlignmentRunner().run(exported, tmp_path / 'outside', 3)
+    assert not (tmp_path / 'outside').exists()
 
 
 def test_diagnostic_preserves_mixed_mask_polarity_and_inputs(exported, tmp_path, monkeypatch):

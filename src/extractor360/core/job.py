@@ -12,6 +12,7 @@ class Job:
     job_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     source_identity: Optional[Dict[str, int]] = None
     source_check_required: bool = False
+    diagnostic_settings: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def active_cameras(self) -> Optional[List[int]]:

@@ -113,7 +113,8 @@ def exercise(root, version):
     from extractor360.core.job import Job
     from extractor360.core.project import Project, read_project, write_project, source_identity, source_problem
     job = Job(str(panorama), settings={'resolution': 32, 'layout_mode': 'cube', 'active_cameras': [0, 5], 'excluded_frames': [2]},
-              result={'status': 'completed', 'output_dir': str(dataset)}, source_identity=source_identity(str(panorama)))
+              result={'status': 'completed', 'output_dir': str(dataset)}, source_identity=source_identity(str(panorama)),
+              diagnostic_settings={'mode': 'source', 'maximum': 3, 'resolution': 1024, 'frame_range': [1, 3]})
     document = Project(jobs=[job], selected_job_ids=[job.job_id])
     project_file = root / 'capture.360proj'
     write_project(project_file, document)
@@ -121,6 +122,7 @@ def exercise(root, version):
     if (reopened.jobs[0].job_id != job.job_id or reopened.jobs[0].status != 'Pending'
             or reopened.jobs[0].settings['active_cameras'] != [0, 5]
             or reopened.jobs[0].settings['excluded_frames'] != [2]
+            or reopened.jobs[0].diagnostic_settings != job.diagnostic_settings
             or reopened.jobs[0].result['output_dir'] != str(dataset) or source_problem(reopened.jobs[0])):
         raise RuntimeError('Installed project save/open did not preserve source, settings and result')
 
@@ -145,10 +147,12 @@ def exercise(root, version):
     request = sample_root / 'sample-request.json'
     request.write_text(json.dumps({'source': str(sample_source), 'source_identity': source_identity(str(sample_source)),
                                   'settings': {'layout_mode': 'cube', 'resolution': 32, 'exif_intrinsics': False},
+                                  'diagnostic_settings': job.diagnostic_settings,
                                   'maximum': 3}), encoding='utf-8')
     run_command([str(console), '--diagnostic-sample', str(request)], root, env)
     sampled = json.loads((sample_root / 'sample-result.json').read_text(encoding='utf-8'))
-    if sampled['requested_frames'] != [0, 2, 4] or sampled['result']['extraction']['images_written'] != 18:
+    if (sampled['requested_frames'] != [1, 2, 3] or sampled['result']['extraction']['images_written'] != 18
+            or sampled['settings']['resolution'] != 1024):
         raise RuntimeError('Installed preflight helper did not export exactly the requested source frames')
 
     # Execute the exported, standalone runner in an isolated interpreter. Only
