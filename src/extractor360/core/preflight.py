@@ -18,6 +18,7 @@ from extractor360.core.project import source_identity, source_problem
 from extractor360.core.storage import require_free_space
 from extractor360.core.validation import validate_settings
 from extractor360.core.diagnostic import diagnostic_options, model_overview
+from extractor360.core.selection import FrameSelection
 
 
 def source_plan(job, maximum):
@@ -50,7 +51,7 @@ def source_plan(job, maximum):
     return settings, identity, model_directory
 
 
-def uniform_frames(total, excluded, maximum, frame_range=None):
+def uniform_frames(total, excluded, maximum, frame_range=None, included_ranges=None):
     """Select ranks without allocating a set/list for the full source video."""
     if type(total) is not int or total < 3 or not 3 <= maximum <= 16:
         raise ValueError('Preflight needs a known source length and at least three frames.')
@@ -58,19 +59,27 @@ def uniform_frames(total, excluded, maximum, frame_range=None):
     start, end = window if window is not None else (0, total - 1)
     if end >= total:
         raise ValueError('Diagnostic frame range exceeds the source length')
-    excluded = sorted({frame for frame in excluded if start <= frame <= end})
-    available = end - start + 1 - len(excluded)
+    intervals = FrameSelection(included_ranges or []).intervals(total, [start, end])
+    eligible = [(low, high, sorted({f for f in excluded if low <= f <= high})) for low, high in intervals]
+    available = sum(high - low + 1 - len(blocked) for low, high, blocked in eligible)
     if available < 3:
         raise ValueError('At least three source frames must remain included.')
     count = min(maximum, available)
     frames = []
     for i in range(count):
-        frame = start + round(i * (available - 1) / (count - 1))
-        for excluded_frame in excluded:
-            if excluded_frame > frame:
-                break
-            frame += 1
-        frames.append(frame)
+        rank = round(i * (available - 1) / (count - 1))
+        for low, high, blocked in eligible:
+            length = high - low + 1 - len(blocked)
+            if rank >= length:
+                rank -= length
+                continue
+            frame = low + rank
+            for excluded_frame in blocked:
+                if excluded_frame > frame:
+                    break
+                frame += 1
+            frames.append(frame)
+            break
     return frames
 
 
@@ -109,7 +118,8 @@ def sample_source(request_path):
             raise ValueError('The decoder cannot establish a source frame count for preflight')
         if not (width > 0 and height > 0 and width == 2 * height):
             raise ValueError('Preflight expects a stitched 2:1 equirectangular video')
-        frames = uniform_frames(int(raw_count), settings['excluded_frames'], request['maximum'], options['frame_range'])
+        frames = uniform_frames(int(raw_count), settings['excluded_frames'], request['maximum'], options['frame_range'],
+                                settings['included_frame_ranges'])
     finally:
         cap.release()
     original = copy.deepcopy(settings)

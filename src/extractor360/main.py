@@ -32,6 +32,8 @@ def parse_arguments():
     parser.add_argument("--input", "-i", type=str, help="Path to input video file or directory (CLI mode)")
     parser.add_argument("--output", "-o", type=str, help="Path to output directory (CLI mode)")
     parser.add_argument("--interval", type=float, help="Extraction interval in seconds (default: 1.0)")
+    parser.add_argument('--frame-range', type=int, nargs=2, action='append', metavar=('START', 'END'),
+                        help='Include an inclusive source-frame range (zero-based); repeat for several ranges. Sampling stays anchored at source start.')
     parser.add_argument("--format", type=str, choices=['jpg', 'png', 'tiff'], help="Output image format (default: jpg)")
     parser.add_argument("--ai", action="store_true", help="Enable AI masking (Legacy alias for --ai-mask)")
     parser.add_argument("--ai-mask", action="store_true", help="Enable AI masking (Generate Mask)")

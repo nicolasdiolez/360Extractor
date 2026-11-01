@@ -10,6 +10,7 @@ class SettingsManager:
     
     DEFAULT_SETTINGS = {
         "excluded_frames": [],
+        "included_frame_ranges": [],
         "is_360": True,
         "resolution": 2048,
         "fov": 90,
@@ -168,6 +169,7 @@ def build_settings(args, config, active_cameras=None, output_path=""):
         'image_pattern': args.image_pattern,
         'mask_pattern': args.mask_pattern,
         'mask_profile': getattr(args, 'mask_profile', None),
+        'included_frame_ranges': getattr(args, 'frame_range', None),
     }
     for key, value in cli_overrides.items():
         if value is not None:

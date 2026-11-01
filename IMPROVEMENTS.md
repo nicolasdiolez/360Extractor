@@ -1,6 +1,6 @@
 # Improvement roadmap
 
-Updated 2026-11-01 after reconciling development sources and the retained October 28 consumer trials. This is the active roadmap for reliable, inspectable dataset preparation: prepare, diagnose, correct, export and verify in the target application. Dated reports retain their original scope; new evidence updates this roadmap rather than rewriting earlier results.
+Updated 2026-11-01 after consolidating the October 28 trials and executing the paired 16/31-capture staircase pilot. This is the active roadmap for reliable, inspectable dataset preparation: prepare, diagnose, correct, export and verify in the target application. Dated reports retain their original scope; new evidence updates this roadmap rather than rewriting earlier results.
 
 ## Implemented, exercised and distributed
 
@@ -11,7 +11,7 @@ The functional baseline is `dev` at `5fec65c` (PR #26). The public [v4.0.3 prere
 | Destination mask profiles and storage guard | Implemented in Studio/CLI | Written mask conventions checked; RealityScan/Postshot pilots executed. No guarantee that the whole extraction, models and reconstruction fit on disk. |
 | `.360proj` save/open, relocation and frame exclusions | Implemented | Save/reopen and source checks exercised. No autosave, full run history, recovery or verified extraction resume. |
 | Source/export alignment diagnostic | Implemented, including frame windows and 512/1024 px | Cour, Louvre and staircase windows exercised with COLMAP on macOS. A positive diagnostic does not qualify another reconstruction engine or the whole video. |
-| RealityScan/Postshot consumer workflow | Four baseline cases plus one paired FOV trial in each application | Cour is a positive integration reference; Louvre and both staircase windows remain fragmented or fail. Final geometric quality remains unqualified. |
+| RealityScan/Postshot consumer workflow | Four baseline cases, one FOV trial and a fresh 16/31-capture sampling pair per consumer | Cour remains positive; denser staircase sampling unlocked Postshot training (121/186 views, 5 kSteps), while RealityScan remained fragmented. Final geometry and mask persistence remain unqualified. |
 | Downloadable macOS v4.0.3 | Signed and notarized | Existing-Mac artifact checks passed. Clean-machine acceptance and binaries containing the newer development features remain open. |
 | Downloadable Windows / CUDA | Experimental | Hosted CI passes. Consumer trials on a Windows GPU machine do not qualify the 360 Extractor Windows executable or its CUDA inference. |
 
@@ -19,8 +19,10 @@ The [consumer report](docs/implementation-2026-10-28/CONSUMER_VALIDATION.md) and
 
 ## Current order of work
 
-1. **Measure denser sampling before changing defaults.** The 90°/110° staircase comparison is complete: 110° increased registered faces in RealityScan but reduced distinct captures in its largest component from 9/16 to 7/16; Postshot failed at both FOVs. Keep the current default. The next experiment, not yet executed, interleaves one capture between each of the existing 16 at 90° (31 total), keeping the same source window, resolution, masks and consumer settings. Compare largest-component capture fraction, temporal span, gaps, fragmentation, visual result and resource cost. This is a bounded benchmark, not an automatic increase to Studio's 16-capture diagnostic limit.
-2. **Make extraction selections inspectable and editable.** Add a timeline with inclusion/exclusion ranges and selection/rejection reasons. Existing diagnostic bounds do not limit full extraction; existing exclusions address exact frames only. Preserve decisions in the project. Evaluate better window-based selection against fixed sampling on the same corpus; the current optical-flow filter demonstrated no benefit in the initial pilot.
+The first follow-up implementation ([PR #28](https://github.com/nicolasdiolez/360Extractor/pull/28)) adds per-model directional coverage and missing views, plus saved per-video extraction ranges in Studio/CLI. See the [implementation checks and limits](docs/implementation-2026-11-01/SELECTION_VALIDATION.md). This does not change the 16-capture diagnostic limit or qualify another reconstruction engine.
+
+1. **Turn the sampling pilot into a repeatable diagnostic.** The [16/31-capture comparison at 90°](docs/implementation-2026-11-01/SAMPLING_COMPARISON.md) is executed: Postshot changed from tracking failure to 121/186 accepted views and a reopened 5 kStep splat. RealityScan's largest component grew from 17 to 31 views, but remained almost exclusively Left, amid 14/15 fragments. The follow-up branch now reports COLMAP coverage by virtual-camera direction as well as physical timestamp. Next, repeat the pair, enumerate Postshot capture coverage and investigate five unmatched-mask warnings on reopen. Keep current defaults and diagnostic limits; an explicit denser diagnostic needs its own resource qualification. No complete-scene or held-out quality claim is established.
+2. **Complete inspectable extraction selection.** Saved inclusion ranges now restrict full extraction on the follow-up branch, preserve global cadence and combine with existing exact-frame exclusions. The editor provides boundary previews; diagnostics respect both extraction ranges and their separate test window. Remaining: graphical timeline editing, an inspectable candidate list with selection/rejection reasons, and controlled densification preserving the baseline frames. Evaluate better window-based selection against fixed sampling on the same corpus; the current optical-flow filter demonstrated no benefit in the initial pilot.
 3. **Add persistent manual mask correction.** Brush/polygon corrections and controllable margins should survive reopening and export through each destination profile. Measure missed occluders and false removal on annotated examples, including artwork, hands and poles. The consumer pilots verified association/mode, not the per-pixel effect of every mask.
 4. **Complete project recovery and resource planning.** Add autosave/recovery, complete run history and verified resume using source/settings checks plus a validated output index. Retain fresh run folders as the current safe behavior. Extend planning to model caches and reconstruction workspaces, with measured RAM/VRAM and disk use.
 5. **Qualify an identifiable next distribution candidate.** Prepare version/build identification and accurate notes for the implemented features; test the exact downloaded binaries, projects, diagnostics, AI and cancel/close behavior on clean target machines. Qualify Windows/CUDA separately and retain its experimental status until supported by evidence. A stable release remains a separate maintainer decision.
@@ -69,7 +71,8 @@ These implementations are not all qualified on real camera/GPU/software combinat
 - [ ] Separate core/gui/ai distributions and offline provisioning profiles.
 - [x] Explicit mask naming/polarity profiles and recorded contracts (development sources).
 - [x] Four RealityScan 2.2 and four Postshot 1.0.1 baseline pilots; one additional FOV110 trial per consumer. Results and limits recorded, not general compatibility certification.
-- [ ] Controlled 16-versus-31-capture experiment at 90° on the beginning of the staircase.
+- [x] Paired 16-versus-31-capture pilot at 90° on the beginning of the staircase; one run per case/consumer, with results and limits recorded.
+- [ ] Repeatability, directional diagnostic coverage, Postshot physical-capture counts and unmatched-mask warnings on reopen.
 - [ ] Repeated consumer quality comparisons, mask-effect checks and complete-scene acceptance.
 - [ ] Explicit HDR/ICC/alpha handling.
 

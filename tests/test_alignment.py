@@ -150,6 +150,17 @@ def test_export_window_samples_only_confirmed_captures_without_upscaling(exporte
     assert not (tmp_path / 'outside').exists()
 
 
+def test_export_diagnostic_respects_new_extraction_ranges(exported, tmp_path, monkeypatch):
+    monkeypatch.setattr(alignment.shutil, 'which', lambda _: '/fake/colmap')
+    monkeypatch.setattr(alignment.AlignmentRunner, '_command', lambda *a: None)
+    previous = alignment.fingerprint(exported)
+    exported.settings['included_frame_ranges'] = [[2, 6]]
+    assert alignment.fingerprint(exported) != previous
+    report = alignment.AlignmentRunner().run(exported, tmp_path / 'ranges', 3)
+    assert report['sampled_frames'] == [2, 4, 6]
+    assert report['captures'][0]['state'] == 'not_sampled'
+
+
 def test_diagnostic_preserves_mixed_mask_polarity_and_inputs(exported, tmp_path, monkeypatch):
     exported.settings.update(nadir_mask_enabled=True, nadir_mask_radius=30)
     worker = ProcessingWorker([exported])

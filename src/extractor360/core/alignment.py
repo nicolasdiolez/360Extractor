@@ -22,6 +22,7 @@ from extractor360.core.diagnostic import diagnostic_options, model_overview
 from extractor360.core.reconstruction import _read_index, _read_rig
 from extractor360.core.storage import require_free_space
 from extractor360.core.validation import validate_settings
+from extractor360.core.selection import FrameSelection
 
 MAX_BYTES = 256 * 1024**2
 MAX_SECONDS = 300
@@ -59,7 +60,7 @@ def settings_key(settings):
     value = copy.deepcopy(settings)
     value['trust_custom_model'] = True
     value = validate_settings(value)
-    for key in ('custom_output_dir', 'trust_custom_model', 'excluded_frames'):
+    for key in ('custom_output_dir', 'trust_custom_model', 'excluded_frames', 'included_frame_ranges'):
         value.pop(key, None)
     return value
 
@@ -101,6 +102,7 @@ def load_export(job):
                                         'timestamp_seconds': record.get('timestamp_seconds'),
                                         'timestamp_source': record.get('timestamp_source', 'unavailable')})
         item['images'].append(entry[1].as_posix())
+        item.setdefault('image_cameras', {})[entry[1].as_posix()] = record['camera']
     if len(frames) > 10000:
         raise ValueError('Diagnostic is limited to exports of 10000 physical captures.')
     return dataset, manifest, entries, params, _json(rig_path), frames
@@ -109,6 +111,7 @@ def load_export(job):
 def fingerprint(job):
     return hashlib.sha256(json.dumps({'run': job.result.get('run_id'), 'source': job.source_identity,
                                      'settings': settings_key(job.settings),
+                                     'included_ranges': job.settings.get('included_frame_ranges', []),
                                      'excluded': sorted(job.settings.get('excluded_frames', []))},
                                     sort_keys=True, allow_nan=False).encode()).hexdigest()
 
@@ -163,7 +166,8 @@ def summarize(frames, sampled, excluded, models):
     groups: list[dict[str, Any]] = []
     for model, names in models.items():
         group_frames = sorted(frame for frame in sampled if set(frames[frame]['images']) & names)
-        groups.append({'model': model, 'frames': group_frames, 'registered_images': len(names)})
+        groups.append({'model': model, 'frames': group_frames, 'registered_images': len(names),
+                       'image_names': sorted(names)})
     for frame, item in sorted(frames.items()):
         memberships = {model: len(set(item['images']) & names) for model, names in models.items()
                        if set(item['images']) & names}
@@ -274,7 +278,9 @@ class AlignmentRunner:
         if window and window[1] >= manifest.get('video', {}).get('total_frames', 0):
             raise ValueError('Diagnostic frame range exceeds the source length recorded in the export')
         excluded = set(job.settings.get('excluded_frames', []))
-        available = [f for f in frames if window is None or window[0] <= f <= window[1]]
+        selection = FrameSelection(job.settings.get('included_frame_ranges', []))
+        selection.validate_source(manifest.get('video', {}).get('total_frames', 0))
+        available = [f for f in frames if selection.contains(f) and (window is None or window[0] <= f <= window[1])]
         sampled = sample_frames(available, excluded, maximum)
         selected_names = {name for frame in sampled for name in frames[frame]['images']}
         entries = [entry for entry in entries if entry[1].as_posix() in selected_names]
@@ -325,6 +331,8 @@ class AlignmentRunner:
             # Use standardized names in the report as well as COLMAP's image list.
             for item in frames.values():
                 item['images'] = [Path(name).with_suffix('.jpg').as_posix() for name in item['images']]
+                item['image_cameras'] = {Path(name).with_suffix('.jpg').as_posix(): camera
+                                         for name, camera in item['image_cameras'].items()}
             selected_names = {name for frame in sampled for name in frames[frame]['images']}
             (self.root / 'image_list.txt').write_text('\n'.join(sorted(selected_names)) + '\n', encoding='utf-8')
             db, images = self.root / 'database.db', self.root / 'images'

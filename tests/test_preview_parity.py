@@ -368,7 +368,9 @@ def test_suspend_keeps_image_defers_latest_request_and_resume_refreshes(monkeypa
 
 
 @pytest.mark.parametrize('actual', [2, 1])
-def test_exact_source_navigation_confirms_requested_frame(monkeypatch, actual):
+@pytest.mark.parametrize('selection,message', [({'excluded_frames': [2]}, 'Capture excluded in project'),
+    ({'included_frame_ranges': [[3, 8]]}, 'Outside extraction ranges')])
+def test_exact_source_navigation_confirms_requested_frame(monkeypatch, actual, selection, message):
     class Capture:
         def isOpened(self): return True
         def set(self, prop, value): assert prop == cv2.CAP_PROP_POS_FRAMES and value == 2
@@ -378,7 +380,7 @@ def test_exact_source_navigation_confirms_requested_frame(monkeypatch, actual):
         def read(self): return True, np.zeros((16, 32, 3), np.uint8)
         def release(self): pass
     monkeypatch.setattr(cv2, 'VideoCapture', lambda path: Capture())
-    worker = PreviewWorker('source.mp4', {'is_360': False, 'excluded_frames': [2]}, exact_frame=2)
+    worker = PreviewWorker('source.mp4', {'is_360': False, **selection}, exact_frame=2)
     errors, times, states, images = [], [], [], []
     worker.signals.error.connect(errors.append)
     worker.signals.duration_info.connect(lambda *values: times.append(values))
@@ -387,6 +389,6 @@ def test_exact_source_navigation_confirms_requested_frame(monkeypatch, actual):
     worker.run()
     if actual == 2:
         assert not errors and times[0][1] == 2 and len(images) == 1
-        assert states == ['Capture excluded in project']
+        assert states == [message]
     else:
         assert errors and 'could not confirm' in errors[0] and not images

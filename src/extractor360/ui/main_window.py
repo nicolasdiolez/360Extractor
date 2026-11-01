@@ -10,6 +10,7 @@ Unified 3-column Studio architecture with:
 from __future__ import annotations
 
 import copy
+import math
 import os
 from pathlib import Path
 
@@ -19,7 +20,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame,
+    QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFrame,
     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QProgressBar, QPushButton, QScrollArea, QSlider,
     QSpinBox, QSplitter, QVBoxLayout, QWidget
@@ -116,6 +117,35 @@ class MainWindow(QMainWindow):
             self.alignment_dialog.deleteLater()
         self.alignment_dialog = AlignmentDialog(self, self._selected_cards[0].job)
         self.alignment_dialog.show()
+
+    def open_extraction_ranges(self):
+        if self.project_actions.busy():
+            return
+        if len(self._selected_cards) != 1:
+            QMessageBox.information(self, 'Extraction ranges', 'Select exactly one video in the queue.')
+            return
+        job = self._selected_cards[0].job
+        problem = source_problem(job)
+        if problem or Path(job.file_path).suffix.lower() in ('.jpg', '.jpeg', '.png', '.tif', '.tiff'):
+            QMessageBox.information(self, 'Extraction ranges', problem or 'Ranges apply to videos only.')
+            return
+        cap = cv2.VideoCapture(job.file_path)
+        try:
+            frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT) if cap.isOpened() else 0
+            total = int(frame_count) if math.isfinite(frame_count) and frame_count > 0 else 0
+        finally:
+            cap.release()
+        if total <= 0:
+            QMessageBox.warning(self, 'Extraction ranges', 'The decoder cannot establish the video length.')
+            return
+        from extractor360.ui.selection_dialog import SelectionDialog
+        dialog = SelectionDialog(self, job, total)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            changes = {'included_frame_ranges': dialog.ranges}
+            self._commit_ui_settings({**job.settings, **changes}, changes)
+            if self.alignment_dialog and self.alignment_dialog.job is job:
+                self.alignment_dialog.update_summary()
+        dialog.deleteLater()
 
     def load_stylesheet(self, filename: str):
         qss_path = os.path.join(os.path.dirname(__file__), filename)
@@ -677,6 +707,9 @@ class MainWindow(QMainWindow):
         layout.addLayout(grid)
 
         # Essential Export Priors
+        self.ranges_button = QPushButton('Extraction ranges for selected video…')
+        self.ranges_button.clicked.connect(self.open_extraction_ranges)
+        layout.addWidget(self.ranges_button)
         profile_row = QHBoxLayout()
         profile_row.addWidget(QLabel("Mask profile:"))
         self.mask_profile_combo = QComboBox()
@@ -1156,6 +1189,7 @@ class MainWindow(QMainWindow):
     def _create_job_for_path(self, path: str) -> Job:
         job = Job(path)
         job.settings = copy.deepcopy(self.default_settings)
+        job.settings['included_frame_ranges'] = []
         job.source_check_required = True
         try:
             job.source_identity = source_identity(path)

@@ -31,6 +31,28 @@ def window(qapp, tmp_path, monkeypatch):
     return instance
 
 
+@pytest.mark.parametrize('frame_count', [float('nan'), float('inf'), -1, 0])
+def test_range_editor_handles_unknown_video_length(window, tmp_path, monkeypatch, frame_count):
+    window.select_card(window._video_cards[0])
+    job = window.jobs[0]
+    source = tmp_path / 'unknown-length.mp4'
+    source.write_bytes(b'fixture')
+    job.file_path = str(source)
+    job.source_identity = source_identity(str(source))
+    original_settings = copy.deepcopy(job.settings)
+    released = []
+    class Capture:
+        def isOpened(self): return True
+        def get(self, key): return frame_count
+        def release(self): released.append(True)
+    monkeypatch.setattr(cv2, 'VideoCapture', lambda path: Capture())
+    warnings = []
+    monkeypatch.setattr(QMessageBox, 'warning', lambda *args: warnings.append(args[-1]))
+    window.open_extraction_ranges()
+    assert warnings == ['The decoder cannot establish the video length.']
+    assert released == [True] and job.settings == original_settings
+
+
 def test_save_open_keeps_per_job_choices_and_preferences(window, tmp_path):
     first, second = window.jobs
     first.settings.update(quality=80, active_cameras=[0, 5], mask_profile='postshot')
@@ -393,8 +415,85 @@ def test_diagnostic_summary_marks_fragments_and_changed_options_historical(windo
     job.result['alignment'] = report
     dialog = AlignmentDialog(window, job)
     assert dialog.headline.text().startswith('Only fragments: 3')
-    assert dialog.model_table.rowCount() == 3 and '0.000–0.100 s (decoded)' in dialog.model_table.item(0, 2).text()
+    assert dialog.model_table.rowCount() == 3 and '0.000–0.100 s (decoded)' in dialog.model_table.item(0, 5).text()
     dialog.resolution.setCurrentIndex(1)
     assert dialog.headline.text().startswith('Historical')
     assert job.result['alignment']['resolution'] == 512 and job.diagnostic_settings['resolution'] == 1024
     dialog.close()
+
+
+def test_direction_report_exposes_missing_views_and_legacy_unknown(window):
+    from extractor360.core.alignment import summarize, fingerprint
+    from extractor360.ui.alignment_dialog import AlignmentDialog
+    job = window.jobs[0]
+    frames = {n: {'frame': n, 'images': [f'Left/{n}.jpg', f'Right/{n}.jpg']} for n in range(3)}
+    report = {**summarize(frames, list(frames), set(), {'0': {f'Left/{n}.jpg' for n in frames}}),
+              'schema_version': 1, 'fingerprint': fingerprint(job)}
+    dialog = AlignmentDialog(window, job)
+    dialog.show_report(report)
+    assert '3/6 tested views; 1/2 tested directions' in dialog.headline.text()
+    assert dialog.model_table.item(0, 4).text() == 'Right'
+    assert 'Right/0.jpg' in dialog.model_views.toPlainText()
+    del report['models'][0]['image_names']
+    dialog.show_report(report)
+    assert 'direction coverage unavailable' in dialog.headline.text()
+    assert 'older report' in dialog.model_views.toPlainText()
+    dialog.close()
+
+
+def test_ranges_ui_save_reopen_and_unrelated_edits_keep_other_jobs(window, tmp_path, monkeypatch):
+    from extractor360.core.project import relink_source
+    from extractor360.ui.selection_dialog import SelectionDialog
+    video = tmp_path / 'source.avi'
+    writer = cv2.VideoWriter(str(video), cv2.VideoWriter_fourcc(*'MJPG'), 10, (64, 32))
+    assert writer.isOpened()
+    for n in range(10):
+        writer.write(np.full((32, 64, 3), n * 20, np.uint8))
+    writer.release()
+    first, other = window.jobs
+    relink_source(first, str(video))
+    window.select_card(window._video_cards[0])
+    defaults = copy.deepcopy(window.default_settings)
+    other_settings = copy.deepcopy(other.settings)
+    def choose(dialog):
+        dialog.all_source.setChecked(False)
+        dialog.table.cellWidget(0, 0).setValue(1)
+        dialog.table.cellWidget(0, 1).setValue(7)
+        dialog.accept()
+        return dialog.result()
+    monkeypatch.setattr(SelectionDialog, 'exec', choose)
+    window.open_extraction_ranges()
+    assert first.settings['included_frame_ranges'] == [[1, 7]]
+    assert other.settings == other_settings and window.default_settings == defaults
+    assert window.project_actions.dirty
+    window.toggle_card_selection(window._video_cards[1])
+    window.quality_spin.setValue(78)
+    assert first.settings['included_frame_ranges'] == [[1, 7]]
+    assert other.settings.get('included_frame_ranges') == []
+    target = tmp_path / 'ranges.360proj'
+    window.project_actions.save_to(target)
+    window.project_actions.load_from(target)
+    assert window.jobs[0].settings['included_frame_ranges'] == [[1, 7]]
+    assert window.jobs[1].settings['included_frame_ranges'] == []
+    dialog = SelectionDialog(window, window.jobs[0], 10)
+    assert not dialog.all_source.isChecked()
+    dialog.preview(0)
+    assert window.preview_widget._exact_frame == 1
+    dialog.all_source.setChecked(True)
+    dialog.accept()
+    assert dialog.ranges == []
+
+
+def test_ranges_ui_invalid_endpoints_and_cancel_leave_job_unchanged(window, monkeypatch):
+    from extractor360.ui.selection_dialog import SelectionDialog
+    job = window.jobs[0]
+    before = copy.deepcopy(job.settings)
+    errors = []
+    monkeypatch.setattr(QMessageBox, 'warning', lambda *args: errors.append(args[-1]))
+    dialog = SelectionDialog(window, job, 10)
+    dialog.all_source.setChecked(False)
+    dialog.table.cellWidget(0, 1).setValue(10)
+    dialog.accept()
+    assert errors and not dialog.result() and job.settings == before
+    dialog.reject()
+    assert job.settings == before

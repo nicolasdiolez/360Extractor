@@ -211,6 +211,8 @@ class ProcessingWorker:
         if self.diagnostic_frames is not None and is_image:
             raise ValueError('A source diagnostic requires a video')
 
+        from extractor360.core.selection import FrameSelection
+        selection = FrameSelection(job.settings.get('included_frame_ranges', []))
         cap = None
         current_image_frame = None
         skipped_blur_count = 0
@@ -248,6 +250,9 @@ class ProcessingWorker:
                     # Round instead of truncating: at 29.97 fps a 1s interval
                     # means 30 frames, not 29 (which would drift over time).
                     interval = max(1, round(fps * interval_value))
+
+            selection.validate_source(1 if is_image else int(cap.get(cv2.CAP_PROP_FRAME_COUNT)), is_image)
+            selection_end = selection.ranges[-1][1] if selection.ranges else None
 
             # Geometry Settings
             out_res = job.resolution
@@ -444,6 +449,7 @@ class ProcessingWorker:
             next_extract_time = 0.0
             excluded_frames = set(job.settings.get('excluded_frames', []))
             frames_excluded = 0
+            frames_outside_ranges = 0
             views_skipped_ai = 0       # views dropped by AI "Skip Frame"
 
             frame_idx = 0
@@ -454,6 +460,8 @@ class ProcessingWorker:
                 job.result['diagnostic_sampling'] = {'requested_frames': self.diagnostic_frames, 'decoded_frames': []}
 
             while self.is_running:
+                if self.diagnostic_frames is None and selection_end is not None and frame_idx > selection_end:
+                    break
                 if is_image:
                     if frame_idx > 0:
                         break
@@ -490,6 +498,10 @@ class ProcessingWorker:
                         continue
                     if interval_unit == 'Seconds':
                         next_extract_time = (int(sample_time / interval_value) + 1) * interval_value
+                    if not selection.contains(frame_idx):
+                        frames_outside_ranges += 1
+                        frame_idx += 1
+                        continue
                     if frame_idx in excluded_frames:
                         frames_excluded += 1
                         frame_idx += 1
@@ -697,6 +709,7 @@ class ProcessingWorker:
                         interval_frames=interval, frames_processed=frames_processed,
                         frames_skipped_motion=frames_skipped_motion,
                         frames_excluded=frames_excluded,
+                        frames_outside_ranges=frames_outside_ranges,
                         views_skipped_blur=skipped_blur_count, views_skipped_ai=views_skipped_ai,
                     )
                     accepted = self._drain_writes(job, output_dir, futures, written_view_names)
@@ -706,8 +719,11 @@ class ProcessingWorker:
                 frame_idx += 1
             if not is_image and self.is_running and self.diagnostic_frames is None:
                 expected = telemetry_handler.metadata.get('frame_count', total_frames_video)
+                if selection_end is not None:
+                    expected = min(expected, selection_end + 1)
                 count_source = telemetry_handler.metadata.get('frame_count_source', 'decoder_reported')
                 job.result['frame_count_check'] = dict(expected=expected, decoded=frame_idx, source=count_source)
+                job.result['frame_count_check']['scope'] = 'selected end' if selection_end is not None else 'whole source'
                 if frame_idx < expected:
                     message = f"Decoder stopped at frame {frame_idx}, expected {expected}; output may be partial"
                     if count_source == 'container_estimate':
@@ -735,6 +751,7 @@ class ProcessingWorker:
                 if cap:
                     cap.release()
 
+        job.result['extraction'].update(frames_excluded=frames_excluded, frames_outside_ranges=frames_outside_ranges)
         images_written = job.result['extraction']['images_written']
         if skipped_blur_count > 0:
             logger.info(f"Total blurry views skipped for {filename}: {skipped_blur_count}")
@@ -765,6 +782,7 @@ class ProcessingWorker:
                 "frames_processed": frames_processed,
                 "frames_skipped_motion": frames_skipped_motion,
                 "frames_excluded": frames_excluded,
+                "frames_outside_ranges": frames_outside_ranges,
                 "images_written": images_written,
                 "views_skipped_blur": skipped_blur_count,
                 "views_skipped_ai": views_skipped_ai,

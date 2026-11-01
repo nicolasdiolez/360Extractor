@@ -64,6 +64,7 @@ def relink_source(job: Job, path: str) -> None:
         # Existing results describe the old source; never relabel them as new.
         job.result = {}
         job.settings['excluded_frames'] = []
+        job.settings['included_frame_ranges'] = []
         if job.diagnostic_settings:
             job.diagnostic_settings['frame_range'] = None
     job.file_path = str(source)
