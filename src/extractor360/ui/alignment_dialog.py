@@ -9,12 +9,13 @@ import threading
 import uuid
 from typing import Any, TYPE_CHECKING
 
-from PySide6.QtCore import QThread, Signal, Qt, QTimer
+from PySide6.QtCore import QThread, Signal, Qt, QTimer, QSignalBlocker
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout, QLabel, QMessageBox,
                                QPlainTextEdit, QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout)
 
 from extractor360.core.alignment import AlignmentRunner, fingerprint, load_export
 from extractor360.core.diagnostic import diagnostic_options, model_overview
+from extractor360.core.capture_plan import planned_frames
 
 if TYPE_CHECKING:
     from extractor360.ui.main_window import MainWindow
@@ -389,7 +390,15 @@ class AlignmentDialog(QDialog):
                              if coverage['unknown_direction_views'] else
                              f'{sum(v["registered"] > 0 for v in coverage["directions"].values())}/{len(coverage["directions"])} tested directions')
         options = report.get('diagnostic_settings')
-        stale = (report.get('fingerprint') != fingerprint(self.job)
+        settings_error = None
+        try:
+            current_fingerprint = fingerprint(self.job)
+        except ValueError as exc:
+            # Inspector edits can temporarily conflict with a frozen plan.
+            # Those settings cannot be run, but the saved report is still valid.
+            settings_error = str(exc)
+            current_fingerprint = None
+        stale = (settings_error is not None or report.get('fingerprint') != current_fingerprint
                  or (options is not None and options != self.current_options())
                  or (options is None and bool(self.job.diagnostic_settings)))
         self.headline.setText(('Historical — ' if stale else '') + headline)
@@ -408,6 +417,7 @@ class AlignmentDialog(QDialog):
                + report.get('alignment_not_run', '') + '\n'
                if report.get('filtered_captures') or report.get('alignment_not_run') else '')
             + ('Historical result: selection/settings changed. Run again to measure their effect. ' if stale else '')
+            + (f'Current extraction settings are invalid: {settings_error}\n' if settings_error is not None else '')
             + 'Checkboxes apply to all views of that frame in future extractions. Save the project to retain decisions.')
 
     @staticmethod
@@ -429,6 +439,14 @@ class AlignmentDialog(QDialog):
         if item.checkState() == Qt.CheckState.Checked:
             excluded.discard(frame)
         else:
+            if frame in (planned_frames(self.job.settings.get('capture_plan')) or []):
+                with QSignalBlocker(self.table):
+                    item.setCheckState(Qt.CheckState.Checked)
+                QMessageBox.warning(self, 'Capture plan',
+                                    f'Frame {frame} belongs to the active capture plan. '
+                                    'Switch to current interval sampling in Project > Extraction Ranges '
+                                    'before excluding this capture.')
+                return
             excluded.add(frame)
         self.job.settings['excluded_frames'] = sorted(excluded)
         self.selection_updated()

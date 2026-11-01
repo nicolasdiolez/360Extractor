@@ -563,3 +563,73 @@ def test_controlled_plan_ui_refuses_excluded_midpoint_without_moving_reference(w
     assert dialog.read_plan()['baseline_frames'] == baseline_from_window(0, 82)
     dialog.reject()
     assert job.settings == before
+
+
+@pytest.fixture
+def planned_video_job(window, tmp_path):
+    from extractor360.core.capture_plan import baseline_from_window
+    from extractor360.core.project import relink_source
+    source = tmp_path / 'controlled.avi'
+    writer = cv2.VideoWriter(str(source), cv2.VideoWriter_fourcc(*'MJPG'), 25, (64, 32))
+    assert writer.isOpened()
+    for frame in range(83):
+        writer.write(np.full((32, 64, 3), frame * 3, np.uint8))
+    writer.release()
+    job = window.jobs[0]
+    relink_source(job, str(source))
+    job.settings['capture_plan'] = {'mode': 'baseline', 'baseline_frames': baseline_from_window(0, 82)}
+    window.select_card(window._video_cards[0])
+    return job
+
+
+@pytest.mark.parametrize('mode,row', [('baseline', 0), ('densified', 0), ('densified', 1)])
+def test_diagnostic_refuses_excluding_a_planned_capture(window, planned_video_job, tmp_path, monkeypatch, mode, row):
+    from PySide6.QtCore import QSignalBlocker, Qt
+    from extractor360.ui.alignment_dialog import AlignmentDialog
+    job = planned_video_job
+    job.settings['capture_plan']['mode'] = mode
+    job.result['alignment'] = alignment_report(job)
+    target = tmp_path / 'controlled.360proj'
+    window.project_actions.save_to(target)
+    before = copy.deepcopy(job.settings)
+    warnings = []
+    monkeypatch.setattr(QMessageBox, 'warning', lambda *args: warnings.append(args[-1]))
+    dialog = AlignmentDialog(window, job)
+    item = dialog.table.item(row, 0)
+    with QSignalBlocker(dialog.table):
+        item.setCheckState(Qt.CheckState.Unchecked)
+    dialog.selection_changed(item)
+    assert item.checkState() == Qt.CheckState.Checked and job.settings == before
+    assert not window.project_actions.dirty and len(warnings) == 1 and 'capture plan' in warnings[0]
+    assert window.project_actions.save()  # The refused edit must not make the project unsaveable.
+
+
+def test_diagnostic_allows_excluding_an_unplanned_capture(window, planned_video_job):
+    from PySide6.QtCore import Qt
+    from extractor360.ui.alignment_dialog import AlignmentDialog
+    job = planned_video_job
+    job.result['alignment'] = alignment_report(job)
+    dialog = AlignmentDialog(window, job)
+    dialog.table.item(1, 0).setCheckState(Qt.CheckState.Unchecked)  # Frame 2 is not in the 16-frame reference.
+    assert job.settings['excluded_frames'] == [2]
+    assert window.project_actions.dirty and dialog.headline.text().startswith('Historical')
+
+
+def test_diagnostic_keeps_valid_report_readable_when_current_plan_settings_conflict(window, planned_video_job):
+    from extractor360.ui.alignment_dialog import AlignmentDialog
+    job = planned_video_job
+    report = alignment_report(job)
+    job.result['alignment'] = report
+    dialog = AlignmentDialog(window, job)
+    job.settings['adaptive_mode'] = True
+    dialog.update_summary()
+    assert dialog.report == report and dialog.table.rowCount() == 2
+    assert dialog.headline.text().startswith('Historical')
+    assert 'Current extraction settings are invalid' in dialog.summary.text()
+    assert 'Capture plan requires' in dialog.summary.text()
+    reopened = AlignmentDialog(window, job)
+    assert reopened.report == report and reopened.table.rowCount() == 2
+    job.settings['adaptive_mode'] = False
+    reopened.update_summary()
+    assert not reopened.headline.text().startswith('Historical')
+    assert 'Current extraction settings are invalid' not in reopened.summary.text()

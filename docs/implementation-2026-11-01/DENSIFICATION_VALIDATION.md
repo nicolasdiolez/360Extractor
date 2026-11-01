@@ -14,13 +14,15 @@ Projects preserve the plan per source. Relocation keeps it; replacement clears i
 
 Environment: macOS arm64, Python 3.13.16, offscreen Qt with isolated preferences. Tiny synthetic MJPEG sources are decoded by OpenCV; no original footage was copied.
 
-- **480 tests and 20 subtests passed**, with no skips. Includes the existing lifecycle, AI contracts, source helper and project regressions.
+- **485 tests and 20 subtests passed** after PR #29 review fixes, with no skips. Includes the existing lifecycle, AI contracts, source helper and project regressions.
 - Paired exports exercised both frame/seconds interval settings and RealityScan/Postshot mask profiles. They produce exactly **96/186 confirmed images** and **16/31 Down masks**. All 16 common captures' JPEG and mask bytes are identical within each synthetic pair; timestamps match decoded source positions. Original video bytes remain unchanged.
 - The historical 0–82 frame lists and checked-in configuration are asserted against the pilot. Invalid/duplicate/out-of-order references, impossible gaps, bounds, exclusions, rejection filters, partial writes, early decode failure and cancellation are covered.
 - Real CLI subprocesses generate both modes from one saved config. Studio tests cover reference freezing, mode switching, project save/reopen, other-job isolation, unrelated multi-selection edits and source-specific reset. Preview labels distinguish unplanned frames.
 - Source helper and export diagnostics with a 31-capture plan retain their 16-frame bound and sample the original 16 in the complete staircase window. COLMAP command execution is stubbed in this regression; it does not measure alignment quality.
 - Whole-project mypy: **54 source files**. Additional body checks: **14 critical modules**, including the new plan implementation; the CI command includes it. Ruff, unchanged version 4.0.3 release consistency and whitespace checks pass.
 - A rendered Qt range editor with the dense staircase plan was inspected for contrast, frame-list readability and accessible Save/Cancel controls. This is synthetic layout evidence.
+
+PR review reproduced a conflict between diagnostic exclusions and the frozen plan: unchecking a planned frame mutated the settings, then raised an error while refreshing the summary and left an unsaveable selection. The diagnostic now refuses that edit without changing the checkbox/project. It also retains a valid historical report when current inspector settings conflict with the plan, instead of raising or treating the report as unreadable. Five added regression cases cover original/inserted frames, allowed exclusions outside the plan and conflicting settings followed by recovery. The focused diagnostic/project/plan suite passed 74 tests; final CI repeats the blocking type and platform checks.
 
 ## Limits and next measurement
 
