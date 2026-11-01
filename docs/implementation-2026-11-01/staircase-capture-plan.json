@@ -24,6 +24,6 @@
   "adaptive_mode": false,
   "sharpening_enabled": false,
   "export_telemetry": false,
-  "exif_intrinsics": false,
+  "exif_intrinsics": true,
   "export_colmap": false
 }

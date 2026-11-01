@@ -2,6 +2,8 @@
 
 Executed on 2026-11-01 from development commit `9b26c77cd8a49dd2b71c3eb288d5b54a70abd81e`. **Denser sampling unlocked Postshot training in this paired pilot; RealityScan still reconstructed disconnected fragments.** This does not qualify a complete staircase asset or justify changing extraction defaults.
 
+Follow-up using the merged capture-plan implementation: [dev revalidation at `3bba6be`](DEV_REVALIDATION.md). The measurements below remain the original pilot results.
+
 ## Controlled inputs
 
 Both cases cover source frames 0–82, or 0–3.28 seconds, from the same stitched 7680 × 3840, 25 fps staircase video. The 16 original captures are retained byte for byte. The 31-capture case adds the floor midpoint of each of the 15 original gaps: frames 2, 8, 13, 19, 24, 30, 35, 41, 46, 52, 57, 63, 68, 74 and 79. Decoded timestamps were recorded; the maximum gap decreases from 0.24 to 0.12 seconds.
