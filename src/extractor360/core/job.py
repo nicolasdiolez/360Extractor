@@ -13,6 +13,7 @@ class Job:
     source_identity: Optional[Dict[str, int]] = None
     source_check_required: bool = False
     diagnostic_settings: Dict[str, Any] = field(default_factory=dict)
+    consumer_reports: List[Dict[str, Any]] = field(default_factory=list)
 
     @property
     def active_cameras(self) -> Optional[List[int]]:

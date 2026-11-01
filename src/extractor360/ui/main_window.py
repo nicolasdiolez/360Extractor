@@ -100,10 +100,30 @@ class MainWindow(QMainWindow):
         self._blur_thread = None
         self._blur_worker = None
         self.alignment_dialog = None
+        self.consumer_dialog = None
         self.project_actions = ProjectActions(self)
 
     def alignment_busy(self):
-        return self.alignment_dialog is not None and self.alignment_dialog.busy
+        # All diagnostic imports participate in the same save/run/close guard.
+        return ((self.alignment_dialog is not None and self.alignment_dialog.busy)
+                or (self.consumer_dialog is not None and self.consumer_dialog.busy))
+
+    def open_consumer_reports(self):
+        if self.project_actions.busy():
+            return
+        if len(self._selected_cards) != 1:
+            QMessageBox.information(self, 'Consumer reports', 'Select exactly one source in the queue.')
+            return
+        from extractor360.ui.consumer_dialog import ConsumerReportDialog
+        if self.consumer_dialog:
+            self.consumer_dialog.close()
+            self.consumer_dialog.deleteLater()
+            self.consumer_dialog = None
+        try:
+            self.consumer_dialog = ConsumerReportDialog(self, self._selected_cards[0].job)
+            self.consumer_dialog.show()
+        except (ValueError, TypeError, KeyError) as exc:
+            QMessageBox.warning(self, 'Consumer reports', str(exc))
 
     def open_alignment(self):
         if self.project_actions.busy():
@@ -115,6 +135,8 @@ class MainWindow(QMainWindow):
         if self.alignment_dialog:
             self.alignment_dialog.close()
             self.alignment_dialog.deleteLater()
+        if self.consumer_dialog:
+            self.consumer_dialog.close()
         self.alignment_dialog = AlignmentDialog(self, self._selected_cards[0].job)
         self.alignment_dialog.show()
 
@@ -1562,6 +1584,8 @@ class MainWindow(QMainWindow):
             self._blur_worker.stop()
         if self.alignment_dialog:
             self.alignment_dialog.close()
+        if self.consumer_dialog:
+            self.consumer_dialog.close()
         self.preview_widget.suspend()
         for card in self._video_cards:
             card._cleanup_thread()

@@ -31,6 +31,13 @@ def parse_arguments():
     parser.add_argument("--config", type=str, help="Path to JSON configuration file")
     parser.add_argument("--input", "-i", type=str, help="Path to input video file or directory (CLI mode)")
     parser.add_argument("--output", "-o", type=str, help="Path to output directory (CLI mode)")
+    parser.add_argument('--import-consumer-report', choices=['realityscan', 'postshot'],
+                        help='Import reconstruction evidence without extracting media')
+    parser.add_argument('--dataset', help='Completed extraction folder with manifest.json and images.jsonl')
+    parser.add_argument('--camera-report', help='RealityScan registration CSV/input-state report, or Postshot COLMAP images.txt/images.bin')
+    parser.add_argument('--consumer-log', help='Optional log; inspect the last UTC session, or the whole file without a header')
+    parser.add_argument('--report-output', help='New normalized JSON report filename (never overwrite)')
+    parser.add_argument('--write-realityscan-template', metavar='PATH', help='Write a new RealityScan input-state report template')
     parser.add_argument("--interval", type=float, help="Extraction interval in seconds (default: 1.0)")
     parser.add_argument('--frame-range', type=int, nargs=2, action='append', metavar=('START', 'END'),
                         help='Include an inclusive source-frame range (zero-based); repeat for several ranges. Sampling stays anchored at source start.')
@@ -240,6 +247,30 @@ def main():
         sample_main(sys.argv[2])
         return
     args = parse_arguments()
+
+    if args.import_consumer_report or args.write_realityscan_template:
+        from extractor360.core.consumer_reports import import_report, write_report, write_template
+        try:
+            if args.input or args.config or args.output:
+                raise ValueError('Report import/template export cannot be combined with media extraction')
+            if args.write_realityscan_template:
+                if args.import_consumer_report or any((args.dataset, args.camera_report, args.consumer_log, args.report_output)):
+                    raise ValueError('Template export cannot be combined with report import')
+                write_template(args.write_realityscan_template)
+            else:
+                if not args.dataset or not args.report_output:
+                    raise ValueError('Report import requires --dataset and --report-output')
+                report = import_report(args.dataset, args.import_consumer_report, args.camera_report, args.consumer_log)
+                write_report(args.report_output, report)
+                print(f"Imported {len(report['models'])} component(s)/Image Set(s), {len(report['views'])} confirmed views, "
+                      f"{len(report['warnings'])} warning(s). Saved {args.report_output}")
+        except (OSError, ValueError) as exc:
+            logger.error(str(exc))
+            sys.exit(1)
+        return
+    if any((args.dataset, args.camera_report, args.consumer_log, args.report_output)):
+        logger.error('Report options require --import-consumer-report')
+        sys.exit(1)
     
     # Check if CLI required arguments are present (input is strictly required via CLI or Config)
     # But here we only check if we should go to CLI mode vs GUI mode.

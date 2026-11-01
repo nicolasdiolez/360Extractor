@@ -633,3 +633,67 @@ def test_diagnostic_keeps_valid_report_readable_when_current_plan_settings_confl
     reopened.update_summary()
     assert not reopened.headline.text().startswith('Historical')
     assert 'Current extraction settings are invalid' not in reopened.summary.text()
+
+
+def test_consumer_import_persists_views_and_masks_in_project(window, tmp_path, monkeypatch):
+    import json
+    import time
+    from PySide6.QtTest import QTest
+    window.select_card(window._video_cards[0])
+    job = window.jobs[0]
+    root = tmp_path / 'consumer-dataset';root.mkdir()
+    (root / 'manifest.json').write_text(json.dumps(dict(status='completed', run_id='consumer-run', source_identity=job.source_identity,
+                                                     extraction={'images_written': 2})))
+    rows = [dict(image=f'{d}.jpg', mask=f'{d}.mask.png' if d == 'Down' else None, frame=0, camera=d) for d in ['Left', 'Down']]
+    (root / 'images.jsonl').write_text('\n'.join(json.dumps(r) for r in rows))
+    cameras = tmp_path / 'images.txt';cameras.write_text('# Number of images: 1\n1 1 0 0 0 0 0 0 1 Left.jpg\n\n')
+    log = tmp_path / 'Postshot.log';log.write_text("WARNING: no matching image found for image mask 'C:\\data\\Down.mask.png'\n")
+    warnings = []
+    monkeypatch.setattr(QMessageBox, 'warning', lambda *args: warnings.append(args[-1]))
+    window.open_consumer_reports()
+    dialog = window.consumer_dialog
+    dialog.consumer.setCurrentIndex(dialog.consumer.findData('postshot'))
+    dialog.dataset.setText(str(root));dialog.cameras.setText(str(cameras));dialog.log.setText(str(log))
+    dialog.start_import()
+    assert window.project_actions.busy()
+    deadline = time.monotonic() + 5
+    while dialog.busy and time.monotonic() < deadline:
+        QTest.qWait(10)
+    assert not dialog.busy and not warnings
+    assert len(job.consumer_reports) == 1 and window.project_actions.dirty
+    assert dialog.table.rowCount() == 2
+    assert dialog.table.item(1, 3).text() == 'Not retained (reason unknown)'
+    assert dialog.table.item(1, 5).text() == '1'
+    saved = tmp_path / 'consumer.360proj'
+    window.project_actions.save_to(saved)
+    from extractor360.core.project import read_project
+    assert read_project(saved)[0].jobs[0].consumer_reports == job.consumer_reports
+    dialog.remove_selected()
+    assert not job.consumer_reports and dialog.table.rowCount() == 0
+
+
+@pytest.mark.parametrize('dismiss', ['close', 'escape'])
+def test_consumer_import_cancels_before_close_without_publishing(window, tmp_path, monkeypatch, dismiss):
+    import time
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    import extractor360.ui.consumer_dialog as module
+    def slow_import(*args, cancelled):
+        while not cancelled():
+            time.sleep(0.005)
+        raise InterruptedError('cancelled')
+    monkeypatch.setattr(module, 'import_report', slow_import)
+    window.select_card(window._video_cards[0])
+    window.open_consumer_reports()
+    dialog = window.consumer_dialog
+    dialog.start_import()
+    assert dialog.busy
+    if dismiss == 'escape':
+        QTest.keyClick(dialog, Qt.Key.Key_Escape)
+    else:
+        dialog.close()
+    deadline = time.monotonic() + 5
+    while dialog.busy and time.monotonic() < deadline:
+        QTest.qWait(10)
+    assert not dialog.busy and not dialog.isVisible()
+    assert window.jobs[0].consumer_reports == []
