@@ -2,6 +2,8 @@
 
 Implemented on 2026-11-01 on `codex/controlled-densification`, based on `dev` at `c5f901d` (PR #28). This qualifies source behavior with synthetic media; external consumer reconstruction has not been repeated for this implementation.
 
+Subsequent real-media follow-up on merged `dev` at `3bba6be`: [paired consumer revalidation](DEV_REVALIDATION.md). It verifies all common image/mask hashes and records fresh RealityScan/Postshot results, solver variation and the remaining mask warnings. The staircase example's EXIF-intrinsics setting was corrected from false to true to match the original manifests.
+
 ## Contract and reproduction
 
 The saved reference is an explicit ordered list of 16 source frames. `baseline` exports that list; `densified` retains every reference frame and inserts the floor midpoint of each of its 15 gaps. No frame is shifted to fill exclusions, disjoint ranges or an impossible gap. Conflicts and rejection filters fail before output/model allocation. Interval settings are preserved but bypassed. All active virtual-camera views stay together, with decoded timestamps and explicit timestamp fallback as before.
