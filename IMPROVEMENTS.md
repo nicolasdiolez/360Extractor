@@ -75,7 +75,7 @@ These implementations are not all qualified on real camera/GPU/software combinat
 - [x] Four RealityScan 2.2 and four Postshot 1.0.1 baseline pilots; one additional FOV110 trial per consumer. Results and limits recorded, not general compatibility certification.
 - [x] Paired 16-versus-31-capture pilot at 90° on the beginning of the staircase; one run per case/consumer, with results and limits recorded.
 - [x] Repeat the staircase pair with merged `dev`, verify common image/mask hashes and retain native consumer projects.
-- [x] Initial durable consumer-result import in Studio/CLI: RealityScan input states/registration, Postshot COLMAP camera identities, per-component capture/direction coverage and mapped/unmapped mask warnings. See [formats and limits](docs/CONSUMER_REPORTS.md) and [source validation](docs/implementation-2026-11-01/CONSUMER_IMPORT_VALIDATION.md); currently implemented on the feature branch based on PR #30.
+- [x] Initial durable consumer-result import in Studio/CLI ([PR #31](https://github.com/nicolasdiolez/360Extractor/pull/31)): RealityScan input states/registration, Postshot COLMAP camera identities, per-component capture/direction coverage and mapped/unmapped mask warnings. See [formats and limits](docs/CONSUMER_REPORTS.md) and [source validation and review](docs/implementation-2026-11-01/CONSUMER_IMPORT_VALIDATION.md).
 - [ ] Qualify real exported reports across supported consumer versions and verify mask association/persistence per pixel. Postshot logs alone still cannot establish capture coverage.
 - [ ] Controlled repeatability qualification with at least three runs per arm; record cache state and seed availability.
 - [ ] Repeated consumer quality comparisons, mask-effect checks and complete-scene acceptance.

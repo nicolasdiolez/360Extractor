@@ -5,6 +5,7 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 ## [Unreleased]
 
 - Import RealityScan registration/input-state reports and Postshot COLMAP camera exports with optional mask-warning logs in Studio and CLI. Persist per-source evidence across extractions, report coverage per component, capture and direction, and distinguish explicit rejection, absence and unknown membership.
+- Preserve the documented dotted filename extension in the RealityScan report template and cancel active report imports when the dialog is dismissed with Escape.
 
 - Revalidate the merged capture-plan implementation on the staircase: all common JPEG/mask hashes match; the fresh Postshot pair fails at 16 captures and trains 118/186 views to 5,000 steps at 31. Record RealityScan fragmentation, run-to-run variation and recurring mask warnings separately from the pilot. Correct the example's EXIF-intrinsics setting to match the measured inputs; keep product defaults unchanged.
 

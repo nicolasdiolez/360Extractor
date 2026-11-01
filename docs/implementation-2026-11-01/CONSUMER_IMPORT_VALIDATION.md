@@ -27,6 +27,15 @@ Environment: macOS arm64, Python 3.13, Qt offscreen. Temporary fixtures, test me
 
 The initial sandboxed full-suite run could not execute `ps` in the existing process-tree cancellation test. The final full suite was run with that access and passed. This was an execution-environment restriction, not an ignored test. CI is configured to include the new modules in its blocking type checks; remote CI has not been run for this local feature branch.
 
+## PR #31 review
+
+Review identified and corrected two issues before merge:
+
+- The RealityScan template inserted an extra dot between `inputImageName` and `inputImageExt`. It now follows the [documented SaveImage example](https://rshelp.capturingreality.com/en-US/appbasics/reports_fav_images.htm), concatenating the name and dotted extension directly. A regression expands the generated template's data row with documented variable values and imports it against the confirmed index; this is still a fixture, not a native RealityScan execution.
+- Pressing Escape hid the dialog without cancelling its active import because Qt invokes `reject()` instead of `closeEvent()`. Escape now cancels and waits for completion before dismissal, just like closing the window. Both paths are covered by the cancellation regression.
+
+The corrected complete local suite passed **504 tests and 20 subtests** in 20.98 seconds. Ruff, release consistency and whitespace checks passed. The updated commit requires fresh remote CI before merge; the original implementation's results above remain the baseline checks.
+
 ## Qualification still required
 
 Fixtures follow the documented RealityScan report variables/registration format and Postshot COLMAP export. The custom RealityScan template has not yet been executed in RealityScan during this implementation session, and newly exported native Windows reports have not been round-tripped through this importer. Qualify those exports on the retained staircase projects before treating version compatibility as established.

@@ -29,7 +29,7 @@ $IterateComponents(
 COMPONENT\t$(componentGUID)\t$(componentName)
 $SelectComponent("$(componentGUID)")
 $IterateImages(
-IMAGE\t$(componentGUID)\t$(inputImageName).$(inputImageExt)\t$(inputIsAligned)\t$(inputAlignmentEnabled)
+IMAGE\t$(componentGUID)\t$(inputImageName)$(inputImageExt)\t$(inputIsAligned)\t$(inputAlignmentEnabled)
 )
 )
 '''

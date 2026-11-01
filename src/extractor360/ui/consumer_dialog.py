@@ -286,6 +286,15 @@ class ConsumerReportDialog(QDialog):
         else:
             event.accept()
 
+    def reject(self):
+        # Escape uses reject(), bypassing closeEvent. Keep the same cancellation
+        # contract and wait for the worker before dismissing the dialog.
+        if self.busy:
+            self.closing = True
+            self.cancel()
+        else:
+            super().reject()
+
     def save_template(self):
         path = QFileDialog.getSaveFileName(self, 'Save RealityScan input-state template', '360extractor-realityscan.txt', 'Text (*.txt)')[0]
         if path:

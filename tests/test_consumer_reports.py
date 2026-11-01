@@ -65,6 +65,24 @@ def test_realityscan_native_csv_and_windows_paths(dataset, tmp_path):
     assert report['log_scope'] is None
 
 
+def test_realityscan_template_preserves_documented_filename_extension(dataset, tmp_path):
+    template = tmp_path / 'template.txt'
+    write_template(template)
+    # RealityScan's documented SaveImage example concatenates name and extension
+    # directly: inputImageExt includes the leading dot. Exercise the emitted row
+    # through the importer, rather than using a separately hand-written filename.
+    rows = [line for line in template.read_text().splitlines() if line.startswith(('COMPONENT\t', 'IMAGE\t'))]
+    content = '360EXTRACTOR_REALITYSCAN_V1\n' + '\n'.join(rows)
+    values = dict(componentGUID='a', componentName='Main', inputImageName='capture 0_Left',
+                  inputImageExt='.jpg', inputIsAligned='true', inputAlignmentEnabled='true')
+    for key, value in values.items():
+        content = content.replace('$(' + key + ')', value)
+    path = tmp_path / 'input-states.txt'
+    path.write_text(content)
+    report = import_report(dataset, 'realityscan', path)
+    assert report['models'][0]['states'] == {'capture 0_Left.jpg': 'retained'}
+
+
 @pytest.mark.parametrize('binary', [False, True])
 def test_postshot_camera_exports_and_mask_log(dataset, tmp_path, binary):
     name = 'capture 5_Down.jpg'

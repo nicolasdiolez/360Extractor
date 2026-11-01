@@ -672,8 +672,10 @@ def test_consumer_import_persists_views_and_masks_in_project(window, tmp_path, m
     assert not job.consumer_reports and dialog.table.rowCount() == 0
 
 
-def test_consumer_import_cancels_before_close_without_publishing(window, tmp_path, monkeypatch):
+@pytest.mark.parametrize('dismiss', ['close', 'escape'])
+def test_consumer_import_cancels_before_close_without_publishing(window, tmp_path, monkeypatch, dismiss):
     import time
+    from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
     import extractor360.ui.consumer_dialog as module
     def slow_import(*args, cancelled):
@@ -686,7 +688,10 @@ def test_consumer_import_cancels_before_close_without_publishing(window, tmp_pat
     dialog = window.consumer_dialog
     dialog.start_import()
     assert dialog.busy
-    dialog.close()
+    if dismiss == 'escape':
+        QTest.keyClick(dialog, Qt.Key.Key_Escape)
+    else:
+        dialog.close()
     deadline = time.monotonic() + 5
     while dialog.busy and time.monotonic() < deadline:
         QTest.qWait(10)
