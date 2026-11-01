@@ -369,7 +369,8 @@ def test_suspend_keeps_image_defers_latest_request_and_resume_refreshes(monkeypa
 
 @pytest.mark.parametrize('actual', [2, 1])
 @pytest.mark.parametrize('selection,message', [({'excluded_frames': [2]}, 'Capture excluded in project'),
-    ({'included_frame_ranges': [[3, 8]]}, 'Outside extraction ranges')])
+    ({'included_frame_ranges': [[3, 8]]}, 'Outside extraction ranges'),
+    ({'capture_plan': {'mode': 'baseline', 'baseline_frames': list(range(0, 80, 5))}}, 'Outside controlled capture plan')])
 def test_exact_source_navigation_confirms_requested_frame(monkeypatch, actual, selection, message):
     class Capture:
         def isOpened(self): return True

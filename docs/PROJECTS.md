@@ -46,6 +46,29 @@ The existing interval controls density within the selected portions. Sampling re
 
 CLI accepts repeated `--frame-range START END`, for example `--frame-range 0 82 --frame-range 100 150`, or JSON `"included_frame_ranges": [[0, 82], [100, 150]]`. An empty list means the whole source. Ranges require a video with a known decoder frame count. They are recorded in settings/manifest; counts distinguish sampled frames outside ranges from individual exclusions. Storage estimates account for ranges; seconds remain nominal-FPS estimates before filtering. Decoding proceeds from source start to retain timestamp/cadence checks, then stops after the last included endpoint. This is selective export, not a promise of fast seeking through long videos. Earlier decode failures still fail the run.
 
+## Controlled 16-to-31 densification
+
+In **Project → Extraction Ranges**, keep one continuous source-frame range, then **Create 16 from the selected range**. Alternatively paste the original 16 increasing indices, or use **Use last diagnostic's 16** to retain that diagnostic's requested frame list. Save **Sampling: 16 reference captures**, export, then reopen the editor and choose **Sampling: 31 captures (16 reference + 15 midpoints)**. Save the project and export again with the same geometry, resolution, masks and other settings. Each export gets its own fresh folder. The reference remains fixed when toggling modes or reopening the project; it is never recalculated from the new count.
+
+The dense case keeps all 16 reference indices and adds `floor((a + b) / 2)` between each neighboring pair. A gap without an interior frame is rejected rather than producing fewer than 31 or moving the original frames. Creating a new reference from a range is an explicit action and does not skip exclusions. Every planned frame must remain inside the extraction ranges and outside the exclusion list. Conflicts are errors before export. Disable blur/motion rejection and AI **Skip Frame**; nadir and AI mask generation remain available. Switching back to **Sampling: current interval** clears the plan and restores ordinary interval/exclusion behavior.
+
+The plan bypasses the interval value without changing it. Estimates count exactly 16 or 31 captures; compression/storage sizes remain estimates. Preview marks frames outside the plan. Source relocation preserves it; source replacement and adding a new video clear it. Other jobs and global preferences retain their choices. A controlled CLI run requires one input video.
+
+The diagnostic refuses to uncheck a frame belonging to the active plan and restores its checkbox without changing the project. Switch to current interval sampling before excluding that frame. Unplanned frames can still be excluded. If inspector edits introduce incompatible settings, the saved diagnostic remains readable as historical evidence with an explicit settings error; correct those settings before running or saving.
+
+`manifest.json` records the frozen `settings.capture_plan` and `capture_sampling`: method, original/added/requested/fully confirmed frame lists and a `comparison_signature`. The signature should match between the pair: it covers the baseline, other settings and source size/mtime, excluding the mode and output destination. It does not hash the source contents or prove pixel identity. `images.jsonl` identifies each confirmed view as `baseline` or `inserted`, with its decoded timestamp. A capture is confirmed only after all its active views are written; failure/cancellation remains explicit. Both modes regenerate pixels, so preserve the same source, application/environment and settings and check common image/mask hashes for strict comparisons, especially with AI.
+
+For the staircase window, use the checked-in [reference configuration](implementation-2026-11-01/staircase-capture-plan.json):
+
+```sh
+360extractor --input /path/to/staircase.mp4 --config docs/implementation-2026-11-01/staircase-capture-plan.json --capture-mode baseline --output /path/to/pair/control16
+360extractor --input /path/to/staircase.mp4 --config docs/implementation-2026-11-01/staircase-capture-plan.json --capture-mode densified --output /path/to/pair/dense31
+```
+
+Both use 90° Cube, 1024 px, JPEG 95 and the same Down nadir mask. The configuration uses the Postshot profile; repeat both commands with `--mask-profile realityscan` for that consumer. For a new window, `--capture-window START END` creates and records its 16-frame reference; `--capture-baseline` accepts exactly 16 explicit indices. `--capture-mode interval` clears a saved plan. These flags override JSON configuration. Save/reuse the recorded reference to compare later runs.
+
+COLMAP diagnostics still test **at most 16 captures / 128 views**. With a plan active they sample only planned frames within the diagnostic window; they do not qualify the whole 31-capture export. The external RealityScan/Postshot comparison remains a separate step. See the [densification validation](implementation-2026-11-01/DENSIFICATION_VALIDATION.md).
+
 ## Alignment diagnostic and capture decisions
 
 Select one source and choose **Project → Alignment Diagnostic**. Two modes are available for a single stitched 360 video:

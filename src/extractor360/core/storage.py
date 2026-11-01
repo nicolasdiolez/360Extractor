@@ -11,6 +11,7 @@ import shutil
 from extractor360.core.frame_timing import frame_step
 from extractor360.core.settings_manager import normalize_mask_faces
 from extractor360.core.selection import FrameSelection
+from extractor360.core.capture_plan import validate_plan_selection
 
 
 RESERVE_BYTES = 256 * 1024 * 1024
@@ -36,6 +37,7 @@ def estimate_output(settings, width, height, frame_count, fps, is_image, view_na
         raise ValueError('Cannot estimate storage without valid output dimensions')
     selection = FrameSelection(settings.get('included_frame_ranges', []))
     selection.validate_source(frame_count, is_image)
+    planned = validate_plan_selection(settings, frame_count, is_image)
     scope = normalize_mask_faces(settings.get('ai_mask_cameras'))
     masked_views = sum(
         (settings.get('ai_mode') == 'Generate Mask'
@@ -43,7 +45,9 @@ def estimate_output(settings, width, height, frame_count, fps, is_image, view_na
         or (settings.get('nadir_mask_enabled', False) and name.lower() == 'down')
         for name in view_names
     )
-    if is_image:
+    if planned is not None:
+        captures = len(planned)
+    elif is_image:
         captures = 1
     elif frame_count <= 0:
         captures = None
@@ -76,9 +80,10 @@ def estimate_output(settings, width, height, frame_count, fps, is_image, view_na
         'bytes_high': captures * upper if captures is not None else None,
         'capture_budget_bytes': capture_write_budget(width, height, views, masked_views),
         'reserve_bytes': RESERVE_BYTES,
-        'assumptions': 'Within extraction ranges; before filters. Seconds use nominal FPS for planning only '
-                       'and do not deduct individual exclusions. '
-                       'Includes images and masks; excludes models and reconstruction workspaces.',
+        'assumptions': ('Exact planned capture count; interval sampling is bypassed. ' if planned is not None else
+                        'Within extraction ranges; before filters. Seconds use nominal FPS for planning only '
+                        'and do not deduct individual exclusions. ')
+                       + 'Includes images and masks; excludes models and reconstruction workspaces.',
     }
 
 

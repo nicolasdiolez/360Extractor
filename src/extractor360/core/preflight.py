@@ -11,7 +11,7 @@ import sys
 import time
 
 from extractor360.core.ai_classes import AI_MODEL_VARIANTS
-from extractor360.core.alignment import AlignmentRunner, MAX_BYTES, MAX_SECONDS, _json, fingerprint, summarize
+from extractor360.core.alignment import AlignmentRunner, MAX_BYTES, MAX_SECONDS, _json, fingerprint, summarize, sample_frames
 from extractor360.core.geometry import GeometryProcessor
 from extractor360.core.job import Job
 from extractor360.core.project import source_identity, source_problem
@@ -19,6 +19,7 @@ from extractor360.core.storage import require_free_space
 from extractor360.core.validation import validate_settings
 from extractor360.core.diagnostic import diagnostic_options, model_overview
 from extractor360.core.selection import FrameSelection
+from extractor360.core.capture_plan import validate_plan_selection
 
 
 def source_plan(job, maximum):
@@ -92,7 +93,7 @@ def sampling_settings(settings, output, resolution=512):
                   mask_profile='colmap', export_colmap=True, custom_output_dir=str(output),
                   interval_unit='Frames', interval_value=1, adaptive_mode=False,
                   blur_filter_enabled=False, smart_blur_enabled=False,
-                  export_telemetry=False, exif_intrinsics=False)
+                  export_telemetry=False, exif_intrinsics=False, capture_plan=None)
     return validate_settings(result)
 
 
@@ -120,6 +121,11 @@ def sample_source(request_path):
             raise ValueError('Preflight expects a stitched 2:1 equirectangular video')
         frames = uniform_frames(int(raw_count), settings['excluded_frames'], request['maximum'], options['frame_range'],
                                 settings['included_frame_ranges'])
+        planned = validate_plan_selection(settings, int(raw_count))
+        if planned is not None:
+            window = options['frame_range']
+            candidates = [f for f in planned if window is None or window[0] <= f <= window[1]]
+            frames = sample_frames(candidates, [], request['maximum'])
     finally:
         cap.release()
     original = copy.deepcopy(settings)

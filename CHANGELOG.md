@@ -4,6 +4,7 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ## [Unreleased]
 
+- Add controlled 16-to-31 capture plans in Studio and CLI. Freeze the original 16 source frames and insert the floor midpoint of each gap without moving them. Persist the reference/mode in projects, record requested/confirmed frames and comparison signatures in manifests, and reject exclusions, bounds or rejection filters that would invalidate the plan. Keep COLMAP diagnostics capped at 16 captures.
 - Report aligned/tested views and virtual-camera directions per diagnostic model, list missing directions and exact missing views, and preserve unknown coverage in older reports. Physical capture coverage alone no longer leads the summary without view coverage.
 - Add per-video inclusive extraction ranges in Studio, projects, CLI and manifests. Preserve source sampling cadence and individual exclusions, intersect diagnostic windows with ranges, account for them in estimates and mark outside-range previews. Clear source-specific ranges on source replacement; retain existing full-source defaults and diagnostic limits.
 
@@ -29,6 +30,7 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ### Fixed
 
+- Refuse diagnostic exclusions that would remove a capture from the active 16/31 plan, preserving the checkbox and saveable project state. Keep historical diagnostic reports readable when current extraction settings conflict with a plan, and display the settings error separately.
 - Count source-anchored sampling thresholds correctly when estimating short extraction ranges with fractional-second intervals. Refuse unknown/nonfinite video lengths in the range editor with a warning instead of raising a conversion error.
 - Give Postshot Remove Occluders a white-ignore mask profile and matching `.mask.png` filenames. Studio's Postshot preset selects this convention, binary masks and no incompatible COLMAP mask export. Named profiles update every selected job while preserving unrelated settings.
 - Check free space on the output volume before creating a dataset and before writing each capture. Fail explicitly and preserve the confirmed index if space runs out. Studio estimates include masks and native flat-image dimensions; unknown duration remains unknown.

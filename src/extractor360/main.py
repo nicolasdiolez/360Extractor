@@ -34,6 +34,13 @@ def parse_arguments():
     parser.add_argument("--interval", type=float, help="Extraction interval in seconds (default: 1.0)")
     parser.add_argument('--frame-range', type=int, nargs=2, action='append', metavar=('START', 'END'),
                         help='Include an inclusive source-frame range (zero-based); repeat for several ranges. Sampling stays anchored at source start.')
+    capture_reference = parser.add_mutually_exclusive_group()
+    capture_reference.add_argument('--capture-window', type=int, nargs=2, metavar=('START', 'END'),
+                                   help='Freeze 16 evenly spaced reference frames in this inclusive window (one video only).')
+    capture_reference.add_argument('--capture-baseline', type=int, nargs=16, metavar='FRAME',
+                                   help='Use these exact 16 increasing source frames as the comparison reference.')
+    parser.add_argument('--capture-mode', choices=['baseline', 'densified', 'interval'],
+                        help='Export the frozen 16, or 31 including all 16 plus floor midpoints; interval clears the plan.')
     parser.add_argument("--format", type=str, choices=['jpg', 'png', 'tiff'], help="Output image format (default: jpg)")
     parser.add_argument("--ai", action="store_true", help="Enable AI masking (Legacy alias for --ai-mask)")
     parser.add_argument("--ai-mask", action="store_true", help="Enable AI masking (Generate Mask)")
@@ -139,6 +146,8 @@ def run_cli(args):
     # Precedence: DEFAULT_SETTINGS < config file < explicit CLI arguments.
     try:
         settings = validate_settings(build_settings(args, config, active_cameras, output_path))
+        if settings['capture_plan'] is not None and len(files_to_process) != 1:
+            raise ValueError('A source-specific capture plan requires exactly one input video')
     except ValueError as exc:
         logger.error(f"Invalid settings: {exc}")
         sys.exit(2)
