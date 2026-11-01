@@ -4,6 +4,8 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ## [Unreleased]
 
+- Import RealityScan registration/input-state reports and Postshot COLMAP camera exports with optional mask-warning logs in Studio and CLI. Persist per-source evidence across extractions, report coverage per component, capture and direction, and distinguish explicit rejection, absence and unknown membership.
+
 - Revalidate the merged capture-plan implementation on the staircase: all common JPEG/mask hashes match; the fresh Postshot pair fails at 16 captures and trains 118/186 views to 5,000 steps at 31. Record RealityScan fragmentation, run-to-run variation and recurring mask warnings separately from the pilot. Correct the example's EXIF-intrinsics setting to match the measured inputs; keep product defaults unchanged.
 
 - Add controlled 16-to-31 capture plans in Studio and CLI. Freeze the original 16 source frames and insert the floor midpoint of each gap without moving them. Persist the reference/mode in projects, record requested/confirmed frames and comparison signatures in manifests, and reject exclusions, bounds or rejection filters that would invalidate the plan. Keep COLMAP diagnostics capped at 16 captures.

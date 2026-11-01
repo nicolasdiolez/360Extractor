@@ -130,3 +130,7 @@ Seconds sampling uses decoder timestamps, with an identified FPS fallback when u
 Configuration validation precedes model loading and image writes, but the CLI can create the parent output folder earlier. Image/mask pairs are staged before publication; a power cut can still leave partial state. Do not treat a `running` manifest from an interrupted process as complete. Automatic resume is not implemented.
 
 For a repeatable manual check, use the [acceptance protocol](CLI_TESTING_PROTOCOL.md). Current qualification limits are tracked in the [implementation status](implementation-2026-09-07/PROGRESSION.md).
+
+## Import external reconstruction evidence
+
+Use `--import-consumer-report realityscan|postshot` with `--dataset`, `--camera-report` and/or `--consumer-log`, plus a new `--report-output` JSON filename. `--write-realityscan-template PATH` writes a new input-state template. These modes do not extract media or edit projects. See the [consumer report guide](CONSUMER_REPORTS.md) for exact formats and unknown-coverage rules.

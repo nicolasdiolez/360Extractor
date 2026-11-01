@@ -39,6 +39,7 @@ class ProjectActions:
         menu.addSeparator()
         self.locate_action = menu.addAction('Locate Selected Source…', self.locate_source)
         menu.addAction('Alignment Diagnostic…', window.open_alignment)
+        menu.addAction('RealityScan / Postshot Reports…', window.open_consumer_reports)
         menu.addAction('Extraction Ranges…', window.open_extraction_ranges)
         self.update_title()
 

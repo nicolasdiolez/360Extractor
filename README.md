@@ -87,6 +87,8 @@ Free space is checked on the destination volume before output creation and befor
 
 Run `python reconstruct.py` from an exported `colmap/` folder to prepare a new workspace and invoke COLMAP. It requires a COLMAP build with native `rig_configurator` support. This pipeline follows the [COLMAP rig workflow](https://colmap.github.io/rigs.html). Short real-media sparse reconstructions are recorded in the [COLMAP validation](docs/implementation-2026-10-25/COLMAP_VALIDATION.md). Later [RealityScan/Postshot pilots from development sources](docs/implementation-2026-10-28/CONSUMER_VALIDATION.md) succeeded on Cour but remained fragmented or failed on the difficult windows; complete-scene geometry and general compatibility remain unqualified.
 
+Development sources can also [import RealityScan/Postshot reports](docs/CONSUMER_REPORTS.md) to inspect retained or rejected views, capture/direction coverage and mask warnings. Imports are saved in projects and do not launch reconstruction.
+
 ## Quality and metadata limits
 
 Feather means smoothing of a binary segmentation mask, not native model probabilities. The segmentation output uses the original image dimensions through Ultralytics' [retina mask option](https://docs.ultralytics.com/modes/predict/). Precision on real operators, partial limbs, posters and tripod scenes remains to be measured.

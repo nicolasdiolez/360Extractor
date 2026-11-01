@@ -19,6 +19,7 @@ import uuid
 from extractor360.core.ai_classes import AI_MODEL_VARIANTS, resolve_ai_model_name
 from extractor360.core.job import Job
 from extractor360.core.diagnostic import diagnostic_options
+from extractor360.core.consumer_reports import validate_reports
 from extractor360.core.output_plan import MEDIA_EXTENSIONS
 from extractor360.core.validation import validate_settings
 from extractor360.core.version import VERSION
@@ -63,6 +64,7 @@ def relink_source(job: Job, path: str) -> None:
     if job.source_identity != identity:
         # Existing results describe the old source; never relabel them as new.
         job.result = {}
+        job.consumer_reports = []
         job.settings['excluded_frames'] = []
         job.settings['included_frame_ranges'] = []
         job.settings['capture_plan'] = None
@@ -163,7 +165,7 @@ def _document(project: Project, parent: Path) -> dict[str, Any]:
             result['output_dir'] = _encode_path(result['output_dir'], parent)
         jobs.append({'id': job.job_id, 'source': _encode_path(job.file_path, parent),
                      'source_identity': job.source_identity, 'settings': _encode_settings(job.settings, parent),
-                     'last_result': result,
+                     'last_result': result, 'consumer_reports': validate_reports(job.consumer_reports),
                      'diagnostic_settings': diagnostic_options(job.diagnostic_settings) if job.diagnostic_settings else {}})
     return {'format': FORMAT, 'schema_version': 1, 'application_version': VERSION,
             'id': project.project_id, 'defaults': _encode_settings(project.default_settings, parent),
@@ -197,7 +199,8 @@ def _parse(data: Any, parent: Path) -> Project:
         diagnostic_options(diagnostic)  # Validate optional settings in old and new documents.
         project.jobs.append(Job(source, settings=_decode_settings(entry.get('settings'), parent), result=result,
                                 job_id=job_id, source_identity=_identity(entry.get('source_identity')), source_check_required=True,
-                                diagnostic_settings=diagnostic_options(diagnostic) if diagnostic else {}))
+                                diagnostic_settings=diagnostic_options(diagnostic) if diagnostic else {},
+                                consumer_reports=validate_reports(entry.get('consumer_reports', []))))
     selected = data.get('selected_job_ids', [])
     if not isinstance(selected, list) or any(not isinstance(i, str) or i not in ids for i in selected):
         raise ValueError('Selection contains an unknown job')
