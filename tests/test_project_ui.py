@@ -31,6 +31,28 @@ def window(qapp, tmp_path, monkeypatch):
     return instance
 
 
+@pytest.mark.parametrize('frame_count', [float('nan'), float('inf'), -1, 0])
+def test_range_editor_handles_unknown_video_length(window, tmp_path, monkeypatch, frame_count):
+    window.select_card(window._video_cards[0])
+    job = window.jobs[0]
+    source = tmp_path / 'unknown-length.mp4'
+    source.write_bytes(b'fixture')
+    job.file_path = str(source)
+    job.source_identity = source_identity(str(source))
+    original_settings = copy.deepcopy(job.settings)
+    released = []
+    class Capture:
+        def isOpened(self): return True
+        def get(self, key): return frame_count
+        def release(self): released.append(True)
+    monkeypatch.setattr(cv2, 'VideoCapture', lambda path: Capture())
+    warnings = []
+    monkeypatch.setattr(QMessageBox, 'warning', lambda *args: warnings.append(args[-1]))
+    window.open_extraction_ranges()
+    assert warnings == ['The decoder cannot establish the video length.']
+    assert released == [True] and job.settings == original_settings
+
+
 def test_save_open_keeps_per_job_choices_and_preferences(window, tmp_path):
     first, second = window.jobs
     first.settings.update(quality=80, active_cameras=[0, 5], mask_profile='postshot')

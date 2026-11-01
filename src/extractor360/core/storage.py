@@ -50,8 +50,14 @@ def estimate_output(settings, width, height, frame_count, fps, is_image, view_na
     elif settings['interval_unit'] == 'Frames':
         captures = selection.sampled_count(frame_count, frame_step(settings['interval_value']), settings.get('excluded_frames', []))
     elif fps > 0 and math.isfinite(fps):
-        captures = sum(min(end - start + 1, max(0, math.ceil((end + 1) / fps / settings['interval_value'])
-                                              - math.ceil(start / fps / settings['interval_value'])))
+        def captures_through(frame: int) -> int:
+            if frame < 0:
+                return 0
+            # A threshold between frames selects the following frame. Count
+            # source-anchored thresholds reached by this frame's timestamp,
+            # including frame zero and at most one capture per source frame.
+            return min(frame + 1, math.floor((frame / fps + 1e-8) / settings['interval_value']) + 1)
+        captures = sum(captures_through(end) - captures_through(start - 1)
                        for start, end in selection.intervals(frame_count))
     else:
         captures = None

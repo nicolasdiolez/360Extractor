@@ -1,6 +1,6 @@
 # Directional diagnostics and extraction ranges
 
-Implemented on 2026-11-01 on `codex/directional-diagnostics-extraction-ranges`, based on development commit `9b26c77`. This is source implementation and local validation, pending integration and distribution qualification.
+Implemented on 2026-11-01 on `codex/directional-diagnostics-extraction-ranges`, based on development commit `9b26c77`, and reviewed in [PR #28](https://github.com/nicolasdiolez/360Extractor/pull/28). Source validation and integration do not establish distribution qualification.
 
 ## Behavior
 
@@ -14,11 +14,14 @@ Implemented on 2026-11-01 on `codex/directional-diagnostics-extraction-ranges`, 
 
 Local environment: macOS arm64, Python 3.13.16; Qt tests use `QT_QPA_PLATFORM=offscreen` with isolated preferences and synthetic small media.
 
-- Full suite: **437 tests and 20 subtests passed**, no skips. The first sandboxed focused run could not use `ps` in the child-process lifecycle check; the complete run with process-inspection access passed.
-- Subsequent UI changes received a focused Qt/preview rerun: **48 tests passed**, including missing-direction details, legacy reports, range save/open, other-job isolation, invalid bounds, cancellation and outside-range preview labels.
-- Whole-project mypy: **53 source files** passed. Strict body checks: **13 critical modules**, including selection, storage and the range editor, passed; CI now includes these modules.
+- Full suite after PR review fixes: **450 tests and 20 subtests passed**, no skips. The complete run had process-inspection access for child-process lifecycle checks.
+- Focused selection/storage/project-UI checks after review: **54 tests passed**. Regression cases compare nominal seconds estimates with actual synthetic video exports (single-frame ranges, source start, disjoint ranges, intervals faster/slower than FPS), and exercise NaN/infinite/zero/negative video lengths in the range editor. The editor releases the decoder and warns without changing job settings.
+- The earlier UI/preview rerun passed **48 tests**, including missing-direction details, legacy reports, range save/open, other-job isolation, invalid bounds, cancellation and outside-range preview labels.
+- Before review, whole-project mypy passed **53 source files**, and strict body checks passed **13 critical modules**, including selection, storage and the range editor. CI repeats these blocking checks on the final branch revision.
 - Ruff, release consistency (unchanged version 4.0.3) and whitespace checks passed.
 - Isolated Qt component renders were inspected with synthetic data. Fixed the range editor's contrast/header sizing and the missing-view panel's background. These renders are layout checks, not actual staircase reconstruction evidence.
+
+Review corrected two reproduced defects: at 10 FPS and a 0.15-second interval, range `[2, 2]` exported one capture but estimated zero; nonfinite frame counts raised conversion errors when opening the editor. The new tests fail on the original PR implementation and pass with the fixes.
 
 ## Remaining scope
 

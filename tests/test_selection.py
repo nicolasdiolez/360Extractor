@@ -46,6 +46,31 @@ def test_export_preserves_source_cadence_timestamps_and_all_faces(video, tmp_pat
     assert json.loads(Path(job.result['output_dir'], 'manifest.json').read_text())['settings']['included_frame_ranges'] == [[1, 2], [4, 7]]
 
 
+@pytest.mark.parametrize('ranges,interval,expected', [
+    ([[2, 2]], .15, {2}),
+    ([[1, 1]], .15, set()),
+    ([[0, 0]], .15, {0}),
+    ([], .15, {0, 2, 3, 5, 6, 8, 9}),
+    ([[1, 2], [7, 9]], .15, {2, 8, 9}),
+    ([[2, 4]], .05, {2, 3, 4}),
+    ([[1, 9]], 2, set()),
+])
+def test_seconds_estimate_counts_source_anchored_samples(video, ranges, interval, expected):
+    settings = validate_settings({'resolution': 32, 'is_360': False, 'exif_intrinsics': False,
+                                  'interval_unit': 'Seconds', 'interval_value': interval,
+                                  'included_frame_ranges': ranges})
+    estimate = estimate_output(settings, 64, 32, 10, 10, False, ['flat'])
+    assert estimate['captures_estimated'] == len(expected)
+    job = Job(str(video), settings=settings)
+    worker = ProcessingWorker([job])
+    worker.run()
+    assert worker.error_count == 0
+    index = Path(job.result['output_dir'], 'images.jsonl')
+    records = [json.loads(line) for line in index.read_text().splitlines()] if index.exists() else []
+    assert job.result['extraction']['images_written'] == len(expected)
+    assert {record['frame'] for record in records} == expected
+
+
 @pytest.mark.parametrize('ranges', [None, '0-8', [[True, 5]], [[-1, 3]], [[5, 3]], [[1.5, 4]], [[0, 2**31]], [[0]]])
 def test_invalid_ranges_fail_settings_validation(ranges):
     with pytest.raises(ValueError, match='included_frame_ranges'):

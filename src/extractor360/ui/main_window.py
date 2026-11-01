@@ -10,6 +10,7 @@ Unified 3-column Studio architecture with:
 from __future__ import annotations
 
 import copy
+import math
 import os
 from pathlib import Path
 
@@ -130,7 +131,8 @@ class MainWindow(QMainWindow):
             return
         cap = cv2.VideoCapture(job.file_path)
         try:
-            total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) if cap.isOpened() else 0
+            frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT) if cap.isOpened() else 0
+            total = int(frame_count) if math.isfinite(frame_count) and frame_count > 0 else 0
         finally:
             cap.release()
         if total <= 0:
