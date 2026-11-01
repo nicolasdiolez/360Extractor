@@ -60,3 +60,5 @@ For the proper comparison, run both an equal pixel/feature budget experiment and
 - Qualify Windows/CUDA and actual target applications separately from local macOS source tests. A passing source benchmark does not qualify a downloadable binary.
 
 First results: [2026-10-27 validation](implementation-2026-10-27/VALIDATION.md).
+
+Consumer follow-up: the [October 28 RealityScan/Postshot pilots](implementation-2026-10-28/CONSUMER_VALIDATION.md) cover four baseline cases and a paired staircase FOV90/FOV110 trial in each consumer. Cour succeeds as an integration reference; the other cases remain fragmented or fail. The FOV trial does not support changing the default to 110°. The next unexecuted comparison is 16 versus 31 interleaved captures at 90° on the same beginning-of-staircase window, with the existing controls and explicit resource budget. Native panorama and optical-flow comparisons remain separate experiments.

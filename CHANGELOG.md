@@ -4,6 +4,8 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ## [Unreleased]
 
+- Integrate shared assistant instructions and reconcile the active roadmap with the retained October 28 RealityScan/Postshot pilots, including the FOV90/FOV110 comparison and its limits. Preserve a public summary and compact measurements; the proposed 31-capture experiment remains unexecuted. Documentation only, with no change to extraction defaults or release status.
+
 - Lead alignment results with the largest individual model, frame/time span, tested gaps and explicit one-/two-capture fragments. Retain model alternatives and label historical results after diagnostic choices change.
 - Add inclusive source-frame windows, boundary preview buttons and a 1024 px diagnostic option. Save mode, capture limit, resolution and range per source in `.360proj`, independently of full-extraction settings. Retain the shared five-minute / monitored 256 MiB budget and avoid upscaling existing exports.
 

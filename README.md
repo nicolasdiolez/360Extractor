@@ -85,7 +85,7 @@ Development sources also provide `--mask-profile realityscan|colmap|postshot|cus
 
 Free space is checked on the destination volume before output creation and before each capture, retaining a 256 MiB reserve. This protects the next write batch; it does not guarantee that the full run, model downloads or reconstruction will fit. The [comparison protocol](docs/BENCHMARK_PROTOCOL.md) defines how future selection and export changes will be measured.
 
-Run `python reconstruct.py` from an exported `colmap/` folder to prepare a new workspace and invoke COLMAP. It requires a COLMAP build with native `rig_configurator` support. This pipeline follows the [COLMAP rig workflow](https://colmap.github.io/rigs.html); it has not yet been qualified through a full real reconstruction on this branch.
+Run `python reconstruct.py` from an exported `colmap/` folder to prepare a new workspace and invoke COLMAP. It requires a COLMAP build with native `rig_configurator` support. This pipeline follows the [COLMAP rig workflow](https://colmap.github.io/rigs.html). Short real-media sparse reconstructions are recorded in the [COLMAP validation](docs/implementation-2026-10-25/COLMAP_VALIDATION.md). Later [RealityScan/Postshot pilots from development sources](docs/implementation-2026-10-28/CONSUMER_VALIDATION.md) succeeded on Cour but remained fragmented or failed on the difficult windows; complete-scene geometry and general compatibility remain unqualified.
 
 ## Quality and metadata limits
 
