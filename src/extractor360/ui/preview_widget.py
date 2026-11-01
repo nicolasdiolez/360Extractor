@@ -200,7 +200,10 @@ class PreviewWorker(QRunnable):
                 else:
                     mask = result
             self._checkpoint()
+            from extractor360.core.selection import FrameSelection
             self.signals.view_status.emit(
+                "Outside extraction ranges" if not FrameSelection(settings.get('included_frame_ranges', [])).contains(current_frame)
+                else
                 "Capture excluded in project" if current_frame in settings.get('excluded_frames', [])
                 else "Rejected by AI · excluded from export" if rejected else "")
             if self.show_nadir_disc and settings['nadir_mask_enabled'] and name.lower() == 'down':

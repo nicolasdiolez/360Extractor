@@ -10,6 +10,7 @@ import shutil
 
 from extractor360.core.frame_timing import frame_step
 from extractor360.core.settings_manager import normalize_mask_faces
+from extractor360.core.selection import FrameSelection
 
 
 RESERVE_BYTES = 256 * 1024 * 1024
@@ -33,6 +34,8 @@ def capture_write_budget(width, height, views, masked_views):
 def estimate_output(settings, width, height, frame_count, fps, is_image, view_names):
     if width <= 0 or height <= 0:
         raise ValueError('Cannot estimate storage without valid output dimensions')
+    selection = FrameSelection(settings.get('included_frame_ranges', []))
+    selection.validate_source(frame_count, is_image)
     scope = normalize_mask_faces(settings.get('ai_mask_cameras'))
     masked_views = sum(
         (settings.get('ai_mode') == 'Generate Mask'
@@ -45,9 +48,11 @@ def estimate_output(settings, width, height, frame_count, fps, is_image, view_na
     elif frame_count <= 0:
         captures = None
     elif settings['interval_unit'] == 'Frames':
-        captures = math.ceil(frame_count / frame_step(settings['interval_value']))
+        captures = selection.sampled_count(frame_count, frame_step(settings['interval_value']), settings.get('excluded_frames', []))
     elif fps > 0 and math.isfinite(fps):
-        captures = min(frame_count, max(1, math.ceil(frame_count / fps / settings['interval_value'])))
+        captures = sum(min(end - start + 1, max(0, math.ceil((end + 1) / fps / settings['interval_value'])
+                                              - math.ceil(start / fps / settings['interval_value'])))
+                       for start, end in selection.intervals(frame_count))
     else:
         captures = None
     views = len(view_names)
@@ -65,7 +70,8 @@ def estimate_output(settings, width, height, frame_count, fps, is_image, view_na
         'bytes_high': captures * upper if captures is not None else None,
         'capture_budget_bytes': capture_write_budget(width, height, views, masked_views),
         'reserve_bytes': RESERVE_BYTES,
-        'assumptions': 'Before filters; seconds use nominal FPS for planning only. '
+        'assumptions': 'Within extraction ranges; before filters. Seconds use nominal FPS for planning only '
+                       'and do not deduct individual exclusions. '
                        'Includes images and masks; excludes models and reconstruction workspaces.',
     }
 

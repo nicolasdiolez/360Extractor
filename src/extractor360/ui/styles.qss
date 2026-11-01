@@ -10,14 +10,16 @@ QMainWindow {
     color: #E6E6EA;
 }
 
-QDialog#alignmentDiagnostic {
+QDialog#alignmentDiagnostic, QDialog#extractionRanges {
     background-color: #141417;
 }
-QDialog#alignmentDiagnostic QLabel, QDialog#alignmentDiagnostic QPushButton {
+QDialog#alignmentDiagnostic QLabel, QDialog#alignmentDiagnostic QPushButton,
+QDialog#extractionRanges QLabel, QDialog#extractionRanges QPushButton, QDialog#extractionRanges QCheckBox {
     color: #E6E6EA;
     font-size: 12px;
 }
-QDialog#alignmentDiagnostic QTableWidget {
+QDialog#alignmentDiagnostic QTableWidget, QDialog#alignmentDiagnostic QPlainTextEdit,
+QDialog#extractionRanges QTableWidget {
     background-color: #1D1D23;
     color: #E6E6EA;
     gridline-color: #3A3A46;
@@ -25,22 +27,23 @@ QDialog#alignmentDiagnostic QTableWidget {
     selection-color: #FFFFFF;
     font-size: 12px;
 }
-QDialog#alignmentDiagnostic QHeaderView {
+QDialog#alignmentDiagnostic QHeaderView, QDialog#extractionRanges QHeaderView {
     background-color: #1D1D23;
 }
-QDialog#alignmentDiagnostic QHeaderView::section, QDialog#alignmentDiagnostic QTableCornerButton::section {
+QDialog#alignmentDiagnostic QHeaderView::section, QDialog#alignmentDiagnostic QTableCornerButton::section,
+QDialog#extractionRanges QHeaderView::section, QDialog#extractionRanges QTableCornerButton::section {
     background-color: #2A2A33;
     color: #E6E6EA;
     padding: 5px;
     border: 1px solid #3A3A46;
 }
-QDialog#alignmentDiagnostic QPushButton {
+QDialog#alignmentDiagnostic QPushButton, QDialog#extractionRanges QPushButton {
     background-color: #2A2A33;
     border: 1px solid #4A4A56;
     padding: 6px;
     border-radius: 4px;
 }
-QDialog#alignmentDiagnostic QPushButton:disabled {
+QDialog#alignmentDiagnostic QPushButton:disabled, QDialog#extractionRanges QPushButton:disabled {
     color: #74747E;
     background-color: #1D1D23;
 }

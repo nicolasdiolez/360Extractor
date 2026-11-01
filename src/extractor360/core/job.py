@@ -96,4 +96,7 @@ class Job:
             
         count = len(self.settings.get('excluded_frames', []))
         selection = f" [{count} captures excluded]" if count else ""
+        ranges = self.settings.get('included_frame_ranges', [])
+        if ranges:
+            selection += ' [frames ' + ', '.join(f'{a}–{b}' for a, b in ranges[:3]) + ('…' if len(ranges) > 3 else '') + ']'
         return f"{pitch_str}{cam_str}{adaptive}{ai_str}{selection}"

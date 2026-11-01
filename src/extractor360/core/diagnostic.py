@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import math
+from collections import Counter
+from pathlib import PurePosixPath
 from typing import Any
 
 
@@ -65,6 +67,7 @@ def model_overview(report) -> dict[str, Any]:
         timing = ('decoded' if sources == {'decoder_timestamp'} else
                   'FPS estimate' if sources <= {'decoder_timestamp', 'fps_estimate'} else 'unavailable')
         rows.append({'model': name, 'capture_count': len(frames), 'frames': frames,
+                     **view_coverage(report, model),
                      'frame_span': [frames[0], frames[-1]], 'missing_tested_frames': missing,
                      'time_span': [seconds[0], seconds[-1]] if valid_time and timing != 'unavailable' else None,
                      'timing': timing if valid_time else 'unavailable', 'fragment': len(frames) <= 2})
@@ -74,3 +77,47 @@ def model_overview(report) -> dict[str, Any]:
             'largest_ties': [row['model'] for row in rows if largest and row['capture_count'] == largest['capture_count']],
             'fragment_models': sum(row['fragment'] for row in rows),
             'only_fragments': bool(rows) and all(row['fragment'] for row in rows)}
+
+
+def view_coverage(report, model):
+    """Count confirmed tested views in one model; old reports remain unknown.
+
+    Direction names describe virtual cameras, not measured solid-angle coverage.
+    Rejected views are relative to this model, not necessarily to all models.
+    """
+    sampled = set(report['sampled_frames'])
+    directions = {}
+    for row in report['captures']:
+        if row['frame'] not in sampled:
+            continue
+        for image in row['images']:
+            if not isinstance(image, str) or image in directions:
+                raise ValueError('Invalid or duplicate tested image')
+            camera = row.get('image_cameras', {}).get(image)
+            if camera is None:
+                parts = PurePosixPath(image).parts
+                camera = parts[0] if len(parts) == 2 else None
+            if camera is not None and (not isinstance(camera, str) or not camera):
+                raise ValueError('Invalid tested camera')
+            directions[image] = camera
+    names = model.get('image_names')
+    if names is None:
+        return {'view_coverage': None}
+    if (not isinstance(names, list) or len(names) > len(directions)
+            or any(not isinstance(n, str) or n not in directions for n in names)
+            or len(set(names)) != len(names)):
+        raise ValueError('Invalid registered image membership')
+    registered = set(names)
+    member_frames = sorted(row['frame'] for row in report['captures']
+                           if row['frame'] in sampled and registered.intersection(row['images']))
+    if member_frames != sorted(model['frames']):
+        raise ValueError('Image and capture membership disagree')
+    totals = Counter(d for d in directions.values() if d is not None)
+    counts = Counter(directions[n] for n in registered if directions[n] is not None)
+    return {'view_coverage': {
+        'registered': len(registered), 'tested': len(directions),
+        'directions': {d: {'registered': counts[d], 'tested': totals[d]} for d in sorted(totals)},
+        'missing_directions': sorted(d for d in totals if not counts[d]),
+        'unknown_direction_views': sum(d is None for d in directions.values()),
+        'unregistered_images': sorted(set(directions) - registered),
+    }}

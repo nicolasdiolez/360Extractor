@@ -45,3 +45,31 @@ def test_registered_total_does_not_promote_two_capture_fragments():
 def test_invalid_diagnostic_options_are_not_silently_reset(value):
     with pytest.raises(ValueError):
         diagnostic_options(value)
+
+
+def test_all_timestamps_in_one_direction_are_not_full_view_coverage():
+    directions = ('Front', 'Right', 'Back', 'Left', 'Up', 'Down')
+    frames = {n: {'frame': n, 'images': [f'{d}/{n}.jpg' for d in directions]} for n in range(16)}
+    report = summarize(frames, list(frames), set(), {'left': {f'Left/{n}.jpg' for n in frames},
+                                                   'right': {f'Right/{n}.jpg' for n in frames}})
+    largest = report['overview']['largest']
+    coverage = largest['view_coverage']
+    assert largest['capture_count'] == 16
+    assert coverage['registered'] == 16 and coverage['tested'] == 96
+    assert coverage['directions']['Left'] == {'registered': 16, 'tested': 16}
+    assert coverage['missing_directions'] == ['Back', 'Down', 'Front', 'Right', 'Up']
+    assert len(coverage['unregistered_images']) == 80
+    assert 'Right/0.jpg' in coverage['unregistered_images']
+    for model in report['models']:
+        del model['image_names']
+    assert model_overview(report)['largest']['view_coverage'] is None
+
+
+def test_saved_direction_details_are_validated_and_derived_again():
+    frames = {n: {'frame': n, 'images': [f'Left/{n}.jpg']} for n in range(3)}
+    report = summarize(frames, list(frames), set(), {'0': {'Left/0.jpg', 'Left/1.jpg'}})
+    report['overview']['largest']['view_coverage']['registered'] = 999
+    assert model_overview(report)['largest']['view_coverage']['registered'] == 2
+    report['models'][0]['image_names'] = ['Left/2.jpg']
+    with pytest.raises(ValueError, match='membership'):
+        model_overview(report)

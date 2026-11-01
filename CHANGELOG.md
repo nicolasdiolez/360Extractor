@@ -4,7 +4,12 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ## [Unreleased]
 
-- Integrate shared assistant instructions and reconcile the active roadmap with the retained October 28 RealityScan/Postshot pilots, including the FOV90/FOV110 comparison and its limits. Preserve a public summary and compact measurements; the proposed 31-capture experiment remains unexecuted. Documentation only, with no change to extraction defaults or release status.
+- Report aligned/tested views and virtual-camera directions per diagnostic model, list missing directions and exact missing views, and preserve unknown coverage in older reports. Physical capture coverage alone no longer leads the summary without view coverage.
+- Add per-video inclusive extraction ranges in Studio, projects, CLI and manifests. Preserve source sampling cadence and individual exclusions, intersect diagnostic windows with ranges, account for them in estimates and mark outside-range previews. Clear source-specific ranges on source replacement; retain existing full-source defaults and diagnostic limits.
+
+- Record the November 1 staircase sampling pilot: at unchanged 90° FOV, 31 captures enabled Postshot training (121/186 views, 5,000 steps; project reopened), whereas the fresh 16-capture control failed. RealityScan remained fragmented in both cases. Preserve mask-reload warnings and repeatability limits; update the roadmap without changing product defaults or release status.
+
+- Integrate shared assistant instructions and reconcile the active roadmap with the retained October 28 RealityScan/Postshot pilots, including the FOV90/FOV110 comparison and its limits. Preserve a public summary and compact measurements; the sampling proposal at consolidation is retained as historical context. Documentation only, with no change to extraction defaults or release status.
 
 - Lead alignment results with the largest individual model, frame/time span, tested gaps and explicit one-/two-capture fragments. Retain model alternatives and label historical results after diagnostic choices change.
 - Add inclusive source-frame windows, boundary preview buttons and a 1024 px diagnostic option. Save mode, capture limit, resolution and range per source in `.360proj`, independently of full-extraction settings. Retain the shared five-minute / monitored 256 MiB budget and avoid upscaling existing exports.

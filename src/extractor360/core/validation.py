@@ -6,6 +6,7 @@ from typing import Any
 from extractor360.core.geometry import GeometryProcessor
 from extractor360.core.settings_manager import SettingsManager, normalize_mask_faces
 from extractor360.core.mask_profiles import MASK_PROFILES, profile_settings
+from extractor360.core.selection import normalize_ranges
 
 
 def validate_settings(settings: dict[str, Any]) -> dict[str, Any]:
@@ -13,6 +14,7 @@ def validate_settings(settings: dict[str, Any]) -> dict[str, Any]:
         raise ValueError('Settings must be a JSON object')
     result: dict[str, Any] = copy.deepcopy(SettingsManager.DEFAULT_SETTINGS)
     result.update(copy.deepcopy(settings))
+    result['included_frame_ranges'] = normalize_ranges(result['included_frame_ranges'])
     excluded = result.get('excluded_frames', [])
     if (not isinstance(excluded, list) or len(excluded) > 100000
             or any(type(frame) is not int or frame < 0 for frame in excluded)):

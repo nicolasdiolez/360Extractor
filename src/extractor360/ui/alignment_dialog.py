@@ -11,7 +11,7 @@ from typing import Any, TYPE_CHECKING
 
 from PySide6.QtCore import QThread, Signal, Qt, QTimer
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout, QLabel, QMessageBox,
-                               QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout)
+                               QPlainTextEdit, QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout)
 
 from extractor360.core.alignment import AlignmentRunner, fingerprint, load_export
 from extractor360.core.diagnostic import diagnostic_options, model_overview
@@ -121,12 +121,21 @@ class AlignmentDialog(QDialog):
         self.summary.setTextFormat(Qt.TextFormat.PlainText)
         self.summary.setWordWrap(True)
         layout.addWidget(self.summary)
-        self.model_table = QTableWidget(0, 5)
-        self.model_table.setHorizontalHeaderLabels(['Model', 'Captures', 'Source span', 'Missing tested captures', 'Kind'])
+        self.model_table = QTableWidget(0, 8)
+        self.model_table.setHorizontalHeaderLabels(['Model', 'Captures', 'Aligned / tested views', 'Directions (aligned / tested)',
+                                                    'Missing directions', 'Source span', 'Missing tested captures', 'Kind'])
         self.model_table.horizontalHeader().setStretchLastSection(True)
         self.model_table.setMaximumHeight(140)
         self.model_table.setVisible(False)
+        self.model_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.model_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.model_table.itemSelectionChanged.connect(self.show_model_views)
         layout.addWidget(self.model_table)
+        self.model_views = QPlainTextEdit()
+        self.model_views.setReadOnly(True)
+        self.model_views.setMaximumHeight(110)
+        self.model_views.setPlaceholderText('Select a model to inspect its missing views.')
+        layout.addWidget(self.model_views)
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(['Include', 'Source frame', 'Source time', 'Alignment', 'Views / models'])
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -166,11 +175,11 @@ class AlignmentDialog(QDialog):
 
     def update_scope(self):
         window = (f'frames {self.start_frame.value()}–{self.end_frame.value()}' if self.range_check.isChecked() else 'the whole video')
-        self.scope.setText(f'Source preflight samples {window} uniformly, independently of the export interval. '
+        self.scope.setText(f'Source preflight samples {window} within extraction ranges, independently of the export interval. '
                            'Current geometry/AI/nadir choices are retained; blur and motion rejection are disabled. '
                            'AI uses a local model on CPU. Extraction settings stay unchanged.'
                            if self.mode.currentData() == 'source' else
-                           f'Test confirmed captures from {window} in the last matching completed export. '
+                           f'Test confirmed captures from {window} within extraction ranges in the last matching completed export. '
                            'Pixels and masks are reused, without upscaling.')
         for widget in (self.start_frame, self.end_frame, self.view_start, self.view_end):
             widget.setEnabled(self.range_check.isChecked() and not self.busy)
@@ -286,16 +295,27 @@ class AlignmentDialog(QDialog):
                 raise ValueError('Invalid capture in saved diagnostic')
         overview = model_overview(report)
         self.report = report
+        self.model_table.blockSignals(True)
         self.model_table.setRowCount(len(overview['models']))
         self.model_table.setVisible(bool(overview['models']))
         for row, model in enumerate(overview['models']):
             kind = f'{model["capture_count"]}-capture fragment' if model['fragment'] else ('Largest' if model['model'] in overview['largest_ties'] else 'Separate / alternative model')
-            values = (model['model'], str(model['capture_count']), self.span_text(model), str(len(model['missing_tested_frames'])), kind)
+            coverage = model['view_coverage']
+            counts = f'{coverage["registered"]}/{coverage["tested"]}' if coverage is not None else 'Unknown (older report)'
+            directions = (f'{sum(n["registered"] > 0 for n in coverage["directions"].values())}/{len(coverage["directions"])}'
+                          if coverage and not coverage['unknown_direction_views'] else 'Unknown')
+            missing = ', '.join(coverage['missing_directions']) or 'None among tested directions' if coverage else 'Unknown'
+            values = (model['model'], str(model['capture_count']), counts, directions, missing,
+                      self.span_text(model), str(len(model['missing_tested_frames'])), kind)
             for column, value in enumerate(values):
                 cell = QTableWidgetItem(value)
                 cell.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
                 self.model_table.setItem(row, column, cell)
         self.model_table.resizeColumnsToContents()
+        self.model_table.blockSignals(False)
+        if overview['models']:
+            self.model_table.selectRow(0)
+        self.show_model_views()
         shown = list(report['captures'])
         known = {item['frame'] for item in shown}
         shown += [{'frame': frame, 'images': [], 'models': {}, 'state': 'excluded'}
@@ -324,6 +344,26 @@ class AlignmentDialog(QDialog):
             self.table.blockSignals(False)
         self.update_summary()
 
+    def show_model_views(self):
+        self.model_views.clear()
+        row = self.model_table.currentRow()
+        if not self.report or row < 0:
+            return
+        models = model_overview(self.report)['models']
+        if row >= len(models):
+            return
+        coverage = models[row]['view_coverage']
+        if coverage is None:
+            self.model_views.setPlainText('Direction coverage unavailable in this older report. Run the diagnostic again.')
+            return
+        self.model_views.setPlainText(
+            'Directions (aligned / confirmed tested views): '
+            + (', '.join(f'{d}: {n["registered"]}/{n["tested"]}' for d, n in coverage['directions'].items()) or 'Unavailable')
+            + '\nConfirmed tested views absent from this model (they may belong to another model):\n'
+            + ('\n'.join(coverage['unregistered_images']) or 'None')
+            + f'\nViews with unknown direction: {coverage["unknown_direction_views"]}. '
+            'Untested or filtered-out directions are not qualified.')
+
     def update_summary(self):
         self.restore_button.setEnabled(not self.busy and bool(self.job.settings.get('excluded_frames')))
         if not self.report:
@@ -339,6 +379,15 @@ class AlignmentDialog(QDialog):
             headline = f'Largest model: {largest["capture_count"]}/{len(report["sampled_frames"])} tested captures — {self.span_text(largest)}'
             if len(overview['largest_ties']) > 1:
                 headline += ' (tied)'
+        if largest:
+            coverage = largest['view_coverage']
+            if coverage is None:
+                headline += ' — direction coverage unavailable (older report)'
+            else:
+                headline += f' — {coverage["registered"]}/{coverage["tested"]} tested views; '
+                headline += (f'direction unavailable for {coverage["unknown_direction_views"]} tested views'
+                             if coverage['unknown_direction_views'] else
+                             f'{sum(v["registered"] > 0 for v in coverage["directions"].values())}/{len(coverage["directions"])} tested directions')
         options = report.get('diagnostic_settings')
         stale = (report.get('fingerprint') != fingerprint(self.job)
                  or (options is not None and options != self.current_options())
@@ -351,7 +400,7 @@ class AlignmentDialog(QDialog):
             + scope + f'{report["registered_captures"]}/{len(report["sampled_frames"])} captures in any model; '
             f'{report["unregistered_captures"]} unregistered. '
             f'{len(report["models"])} model(s), including {overview["fragment_models"]} fragment(s) of 1–2 captures.\n'
-            'Spans do not prove continuity between sampled captures. Overlapping models remain alternatives; '
+            'Capture counts do not prove directional coverage. Spans do not prove continuity between sampled captures. Overlapping models remain alternatives; '
             'fragments and low reprojection errors do not qualify 3D quality.\n'
             + ('COLMAP did not create a sparse model. A coarse sample can fail even when a larger export aligns.\n'
                if report.get('mapper_status') == 'no_model' else '')
