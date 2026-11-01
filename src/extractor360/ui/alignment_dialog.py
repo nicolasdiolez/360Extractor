@@ -175,11 +175,11 @@ class AlignmentDialog(QDialog):
 
     def update_scope(self):
         window = (f'frames {self.start_frame.value()}–{self.end_frame.value()}' if self.range_check.isChecked() else 'the whole video')
-        self.scope.setText(f'Source preflight samples {window} within extraction ranges, independently of the export interval. '
+        self.scope.setText(f'Source preflight samples {window} within extraction ranges and any capture plan, up to 16 captures, independently of the export interval. '
                            'Current geometry/AI/nadir choices are retained; blur and motion rejection are disabled. '
                            'AI uses a local model on CPU. Extraction settings stay unchanged.'
                            if self.mode.currentData() == 'source' else
-                           f'Test confirmed captures from {window} within extraction ranges in the last matching completed export. '
+                           f'Test confirmed captures from {window} within extraction ranges and any capture plan in the last matching completed export. '
                            'Pixels and masks are reused, without upscaling.')
         for widget in (self.start_frame, self.end_frame, self.view_start, self.view_end):
             widget.setEnabled(self.range_check.isChecked() and not self.busy)

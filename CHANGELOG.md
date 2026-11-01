@@ -4,6 +4,7 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ## [Unreleased]
 
+- Add controlled 16-to-31 capture plans in Studio and CLI. Freeze the original 16 source frames and insert the floor midpoint of each gap without moving them. Persist the reference/mode in projects, record requested/confirmed frames and comparison signatures in manifests, and reject exclusions, bounds or rejection filters that would invalidate the plan. Keep COLMAP diagnostics capped at 16 captures.
 - Report aligned/tested views and virtual-camera directions per diagnostic model, list missing directions and exact missing views, and preserve unknown coverage in older reports. Physical capture coverage alone no longer leads the summary without view coverage.
 - Add per-video inclusive extraction ranges in Studio, projects, CLI and manifests. Preserve source sampling cadence and individual exclusions, intersect diagnostic windows with ranges, account for them in estimates and mark outside-range previews. Clear source-specific ranges on source replacement; retain existing full-source defaults and diagnostic limits.
 

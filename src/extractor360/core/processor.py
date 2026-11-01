@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from extractor360.core import colmap_export, exif_writer
 from extractor360.core.events import Event
 from extractor360.core.frame_timing import FrameClock, frame_step
+from extractor360.core.capture_plan import sampling_record, validate_plan_selection
 from extractor360.core.validation import validate_settings
 from extractor360.core.mask_profiles import mask_contract
 from extractor360.core.project import source_problem
@@ -252,7 +253,14 @@ class ProcessingWorker:
                     interval = max(1, round(fps * interval_value))
 
             selection.validate_source(1 if is_image else int(cap.get(cv2.CAP_PROP_FRAME_COUNT)), is_image)
+            planned = validate_plan_selection(job.settings, 1 if is_image else int(cap.get(cv2.CAP_PROP_FRAME_COUNT)), is_image)
+            if planned is not None and self.diagnostic_frames is not None:
+                raise ValueError('An explicit diagnostic sample cannot also use an extraction capture plan')
+            planned_set = set(planned) if planned is not None else None
             selection_end = selection.ranges[-1][1] if selection.ranges else None
+            if planned is not None:
+                selection_end = planned[-1]
+                job.result['capture_sampling'] = sampling_record(job.settings, job.result['source_identity'])
 
             # Geometry Settings
             out_res = job.resolution
@@ -492,7 +500,8 @@ class ProcessingWorker:
                         job.result['timestamp_fallback'] = 'Decoder timestamps unavailable or nonmonotonic; FPS estimation used'
                         logger.warning(job.result['timestamp_fallback'])
                     due = (self.diagnostic_frames is not None or
-                           (frame_idx % interval == 0 if interval_unit == 'Frames' else sample_time + 1e-8 >= next_extract_time))
+                           (frame_idx in planned_set if planned_set is not None else
+                            frame_idx % interval == 0 if interval_unit == 'Frames' else sample_time + 1e-8 >= next_extract_time))
                     if not due:
                         frame_idx += 1
                         continue
@@ -510,7 +519,7 @@ class ProcessingWorker:
                     if not ret or frame is None:
                         raise IOError(f'Could not decode selected frame {frame_idx}')
                 # Reached only on extraction points (or the single image frame).
-                if self.diagnostic_frames is not None or is_image or interval_unit == 'Seconds' or frame_idx % interval == 0:
+                if planned is not None or self.diagnostic_frames is not None or is_image or interval_unit == 'Seconds' or frame_idx % interval == 0:
                     frame_time = 0.0 if is_image else sample_time
 
                     # Update GPS fix and travel heading for the current time
@@ -703,7 +712,9 @@ class ProcessingWorker:
                             mask_or_skip if isinstance(mask_or_skip, np.ndarray) else None
                         ), {"image": save_name, "mask": mask_name if isinstance(mask_or_skip, np.ndarray) else None,
                             "camera": name, "frame": frame_idx, "timestamp_seconds": frame_time,
-                            "timestamp_source": 'still_image' if is_image else time_source}))
+                            "timestamp_source": 'still_image' if is_image else time_source,
+                            **({'sampling_role': 'baseline' if frame_idx in job.settings['capture_plan']['baseline_frames'] else 'inserted'}
+                               if planned is not None else {})}))
 
                     job.result['extraction'].update(
                         interval_frames=interval, frames_processed=frames_processed,
@@ -713,6 +724,8 @@ class ProcessingWorker:
                         views_skipped_blur=skipped_blur_count, views_skipped_ai=views_skipped_ai,
                     )
                     accepted = self._drain_writes(job, output_dir, futures, written_view_names)
+                    if planned is not None and accepted == len(active_view_names):
+                        job.result['capture_sampling']['confirmed_frames'].append(frame_idx)
                     if accepted and adaptive_mode:
                         last_extracted_frame = frame.copy()
 
@@ -751,6 +764,8 @@ class ProcessingWorker:
                 if cap:
                     cap.release()
 
+        if planned is not None and self.is_running and job.result['capture_sampling']['confirmed_frames'] != planned:
+            raise IOError('Controlled capture plan incomplete: not every planned capture has all confirmed views')
         job.result['extraction'].update(frames_excluded=frames_excluded, frames_outside_ranges=frames_outside_ranges)
         images_written = job.result['extraction']['images_written']
         if skipped_blur_count > 0:

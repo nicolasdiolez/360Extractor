@@ -201,10 +201,13 @@ class PreviewWorker(QRunnable):
                     mask = result
             self._checkpoint()
             from extractor360.core.selection import FrameSelection
+            from extractor360.core.capture_plan import planned_frames
+            planned = planned_frames(settings.get('capture_plan'))
             self.signals.view_status.emit(
                 "Outside extraction ranges" if not FrameSelection(settings.get('included_frame_ranges', [])).contains(current_frame)
                 else
                 "Capture excluded in project" if current_frame in settings.get('excluded_frames', [])
+                else "Outside controlled capture plan" if planned is not None and current_frame not in planned
                 else "Rejected by AI · excluded from export" if rejected else "")
             if self.show_nadir_disc and settings['nadir_mask_enabled'] and name.lower() == 'down':
                 disc = ProcessingWorker._build_nadir_mask(remapped.shape, settings['nadir_mask_radius'], settings['ai_invert_mask'])

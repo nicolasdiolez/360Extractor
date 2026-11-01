@@ -99,4 +99,7 @@ class Job:
         ranges = self.settings.get('included_frame_ranges', [])
         if ranges:
             selection += ' [frames ' + ', '.join(f'{a}–{b}' for a, b in ranges[:3]) + ('…' if len(ranges) > 3 else '') + ']'
+        plan = self.settings.get('capture_plan')
+        if plan:
+            selection += ' [16 reference captures]' if plan['mode'] == 'baseline' else ' [31 captures: 16 reference + 15 inserted]'
         return f"{pitch_str}{cam_str}{adaptive}{ai_str}{selection}"

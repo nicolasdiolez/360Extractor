@@ -23,6 +23,7 @@ from extractor360.core.reconstruction import _read_index, _read_rig
 from extractor360.core.storage import require_free_space
 from extractor360.core.validation import validate_settings
 from extractor360.core.selection import FrameSelection
+from extractor360.core.capture_plan import validate_plan_selection
 
 MAX_BYTES = 256 * 1024**2
 MAX_SECONDS = 300
@@ -60,7 +61,7 @@ def settings_key(settings):
     value = copy.deepcopy(settings)
     value['trust_custom_model'] = True
     value = validate_settings(value)
-    for key in ('custom_output_dir', 'trust_custom_model', 'excluded_frames', 'included_frame_ranges'):
+    for key in ('custom_output_dir', 'trust_custom_model', 'excluded_frames', 'included_frame_ranges', 'capture_plan'):
         value.pop(key, None)
     return value
 
@@ -112,6 +113,7 @@ def fingerprint(job):
     return hashlib.sha256(json.dumps({'run': job.result.get('run_id'), 'source': job.source_identity,
                                      'settings': settings_key(job.settings),
                                      'included_ranges': job.settings.get('included_frame_ranges', []),
+                                     'capture_plan': job.settings.get('capture_plan'),
                                      'excluded': sorted(job.settings.get('excluded_frames', []))},
                                     sort_keys=True, allow_nan=False).encode()).hexdigest()
 
@@ -280,7 +282,10 @@ class AlignmentRunner:
         excluded = set(job.settings.get('excluded_frames', []))
         selection = FrameSelection(job.settings.get('included_frame_ranges', []))
         selection.validate_source(manifest.get('video', {}).get('total_frames', 0))
+        planned = validate_plan_selection(job.settings, manifest.get('video', {}).get('total_frames', 0))
         available = [f for f in frames if selection.contains(f) and (window is None or window[0] <= f <= window[1])]
+        if planned is not None:
+            available = [f for f in available if f in planned]
         sampled = sample_frames(available, excluded, maximum)
         selected_names = {name for frame in sampled for name in frames[frame]['images']}
         entries = [entry for entry in entries if entry[1].as_posix() in selected_names]

@@ -141,7 +141,7 @@ class MainWindow(QMainWindow):
         from extractor360.ui.selection_dialog import SelectionDialog
         dialog = SelectionDialog(self, job, total)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            changes = {'included_frame_ranges': dialog.ranges}
+            changes = {'included_frame_ranges': dialog.ranges, 'capture_plan': dialog.capture_plan}
             self._commit_ui_settings({**job.settings, **changes}, changes)
             if self.alignment_dialog and self.alignment_dialog.job is job:
                 self.alignment_dialog.update_summary()
@@ -1190,6 +1190,7 @@ class MainWindow(QMainWindow):
         job = Job(path)
         job.settings = copy.deepcopy(self.default_settings)
         job.settings['included_frame_ranges'] = []
+        job.settings['capture_plan'] = None
         job.source_check_required = True
         try:
             job.source_identity = source_identity(path)

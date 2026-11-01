@@ -7,6 +7,7 @@ from extractor360.core.geometry import GeometryProcessor
 from extractor360.core.settings_manager import SettingsManager, normalize_mask_faces
 from extractor360.core.mask_profiles import MASK_PROFILES, profile_settings
 from extractor360.core.selection import normalize_ranges
+from extractor360.core.capture_plan import normalize_capture_plan, validate_plan_selection
 
 
 def validate_settings(settings: dict[str, Any]) -> dict[str, Any]:
@@ -15,6 +16,7 @@ def validate_settings(settings: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = copy.deepcopy(SettingsManager.DEFAULT_SETTINGS)
     result.update(copy.deepcopy(settings))
     result['included_frame_ranges'] = normalize_ranges(result['included_frame_ranges'])
+    result['capture_plan'] = normalize_capture_plan(result['capture_plan'])
     excluded = result.get('excluded_frames', [])
     if (not isinstance(excluded, list) or len(excluded) > 100000
             or any(type(frame) is not int or frame < 0 for frame in excluded)):
@@ -92,4 +94,5 @@ def validate_settings(settings: dict[str, Any]) -> dict[str, Any]:
         predicted = (result['resolution'] ** 2 * (len(views) * 10 + 8) + min(256, result['resolution']) * result['resolution'] * 145) / 1024**2
         if predicted > result['memory_budget_mb']:
             raise ValueError(f'Projection needs approximately {predicted:.0f} MiB; lower resolution/camera count or increase memory_budget_mb')
+    validate_plan_selection(result)
     return result
