@@ -1,10 +1,101 @@
 # Changelog
 
-Versioned entries describe their historical candidates/releases. Version 4.0.1 prepares the Studio feedback preview after a frozen-launcher failure in the unpublished 4.0.0 draft. Availability and qualification are described on the corresponding GitHub release.
+Versioned entries describe their historical candidates/releases. Availability, artifact fingerprints and qualification are described on the corresponding GitHub release. The 4.1.0 entry prepares the next feedback preview; it does not itself establish public availability.
 
 ## [Unreleased]
 
-No changes recorded after the 4.0.1 candidate.
+## [4.1.0] - 2026-11-02
+
+Feedback-preview candidate bringing the project, diagnostic, controlled-sampling and consumer-report workflows into the next distribution. Preserve published 4.0.x tags and assets. Final downloaded binaries require their own acceptance; Windows remains experimental and this candidate is not a stable-release declaration.
+
+### Consumer evidence and controlled sampling
+
+- Qualify native RealityScan 2.2 input-state reports and Postshot 1.1.69 COLMAP text/binary exports on retained staircase projects. Accept zero-based unsigned camera/image IDs, scope appended logs before UTF-8 decoding, and apply the dark dialog theme to consumer reports. Preserve unknown coverage when a failed Postshot project cannot export camera poses; document the exact correspondence between five mask warnings and five absent Down views.
+
+- Import RealityScan registration/input-state reports and Postshot COLMAP camera exports with optional mask-warning logs in Studio and CLI. Persist per-source evidence across extractions, report coverage per component, capture and direction, and distinguish explicit rejection, absence and unknown membership.
+- Preserve the documented dotted filename extension in the RealityScan report template and cancel active report imports when the dialog is dismissed with Escape.
+
+- Revalidate the merged capture-plan implementation on the staircase: all common JPEG/mask hashes match; the fresh Postshot pair fails at 16 captures and trains 118/186 views to 5,000 steps at 31. Record RealityScan fragmentation, run-to-run variation and recurring mask warnings separately from the pilot. Correct the example's EXIF-intrinsics setting to match the measured inputs; keep product defaults unchanged.
+
+- Add controlled 16-to-31 capture plans in Studio and CLI. Freeze the original 16 source frames and insert the floor midpoint of each gap without moving them. Persist the reference/mode in projects, record requested/confirmed frames and comparison signatures in manifests, and reject exclusions, bounds or rejection filters that would invalidate the plan. Keep COLMAP diagnostics capped at 16 captures.
+- Report aligned/tested views and virtual-camera directions per diagnostic model, list missing directions and exact missing views, and preserve unknown coverage in older reports. Physical capture coverage alone no longer leads the summary without view coverage.
+- Add per-video inclusive extraction ranges in Studio, projects, CLI and manifests. Preserve source sampling cadence and individual exclusions, intersect diagnostic windows with ranges, account for them in estimates and mark outside-range previews. Clear source-specific ranges on source replacement; retain existing full-source defaults and diagnostic limits.
+
+- Record the November 1 staircase sampling pilot: at unchanged 90° FOV, 31 captures enabled Postshot training (121/186 views, 5,000 steps; project reopened), whereas the fresh 16-capture control failed. RealityScan remained fragmented in both cases. Preserve mask-reload warnings and repeatability limits; update the roadmap without changing product defaults or release status.
+
+- Integrate shared assistant instructions and reconcile the active roadmap with the retained October 28 RealityScan/Postshot pilots, including the FOV90/FOV110 comparison and its limits. Preserve a public summary and compact measurements; the sampling proposal at consolidation is retained as historical context. Documentation only, with no change to extraction defaults or release status.
+
+- Lead alignment results with the largest individual model, frame/time span, tested gaps and explicit one-/two-capture fragments. Retain model alternatives and label historical results after diagnostic choices change.
+- Add inclusive source-frame windows, boundary preview buttons and a 1024 px diagnostic option. Save mode, capture limit, resolution and range per source in `.360proj`, independently of full-extraction settings. Retain the shared five-minute / monitored 256 MiB budget and avoid upscaling existing exports.
+
+### Studio projects
+
+- Run a preliminary alignment directly from a stitched 360 video, without a full export: supervised native decoding/AI, uniform bounded sampling, explicit preview adaptations and preserved project settings. Missing models never trigger a diagnostic download. Stop the sampling process tree on cancellation/time/space failure.
+- Report COLMAP's known no-model outcome as unregistered captures, while preserving other tool errors. Distinguish candidates filtered before alignment from registration failures. Qualify the source workflow on Cour and the more difficult Bobillot staircase; see [October 28 validation](docs/implementation-2026-10-28/PREFLIGHT_VALIDATION.md).
+
+- Add a bounded CPU COLMAP diagnostic from a completed 360 rig export: physical-capture counts, unregistered/unsampled states, overlapping models versus disjoint groups, source-frame navigation and persistent reversible frame exclusions. Keep exclusion decisions across new extractions and expose restoration even when excluded frames are absent from the new export.
+- Index source timestamps and their provenance. Check extraction save/close/reopen lifecycle and diagnostic cancellation/timeout/space failures. See [alignment scope and validation](docs/implementation-2026-10-27/ALIGNMENT_VALIDATION.md).
+
+- Save/open versioned `.360proj` documents with stable job IDs, per-job settings, defaults, selection and the latest result; preserve relative references when moving a project folder.
+- Keep missing/changed sources visible and provide explicit relocation. Check expected source size/mtime before processing; new runs preserve existing outputs.
+- Add unsaved-change prompts, validated staged writes and detection of external document changes. Project files cannot grant custom-model trust; explicit confirmation is available in Studio.
+- Validate document integrity, relocation, failed saves, UI lifecycle and installed-wheel round trips. See [project validation](docs/implementation-2026-10-27/PROJECTS_VALIDATION.md).
+
+### Fixed
+
+- Refuse diagnostic exclusions that would remove a capture from the active 16/31 plan, preserving the checkbox and saveable project state. Keep historical diagnostic reports readable when current extraction settings conflict with a plan, and display the settings error separately.
+- Count source-anchored sampling thresholds correctly when estimating short extraction ranges with fractional-second intervals. Refuse unknown/nonfinite video lengths in the range editor with a warning instead of raising a conversion error.
+- Give Postshot Remove Occluders a white-ignore mask profile and matching `.mask.png` filenames. Studio's Postshot preset selects this convention, binary masks and no incompatible COLMAP mask export. Named profiles update every selected job while preserving unrelated settings.
+- Check free space on the output volume before creating a dataset and before writing each capture. Fail explicitly and preserve the confirmed index if space runs out. Studio estimates include masks and native flat-image dimensions; unknown duration remains unknown.
+- Normalize OpenCV motion magnitudes to a NumPy array for compatibility with the current type stubs.
+
+### Added
+
+- Explicit RealityScan, COLMAP, Postshot and custom/legacy mask profiles in Studio and CLI, with the effective convention recorded in each manifest. Existing configurations remain custom/legacy until a profile is selected.
+- A bounded sparse-reconstruction comparison script and [benchmark protocol](docs/BENCHMARK_PROTOCOL.md), with [October 27 results and qualification limits](docs/implementation-2026-10-27/VALIDATION.md).
+
+## [4.0.3] - 2026-10-25
+
+Local reconstruction-fix candidate; no public release is implied. The existing 4.0.2 tag and draft assets remain unchanged.
+
+### Fixed
+
+- Omit COLMAP's mask path for exports without masks. For mixed exports, stage white keep-all PNG masks for unmasked views while preserving the original masks, so COLMAP can import every confirmed image.
+- Validate mixed-mask dimensions before creating the reconstruction workspace. Keep the exported runner standalone, using only Python's standard library.
+
+### Validation
+
+- Add standalone runner regressions for exports without masks, fully masked exports and mixed exports, including mask dimensions and preservation of originals. Local validation passed 312 tests and 20 subtests with no skips, lint/type checks, installed-wheel and frozen CPU smoke tests.
+- Rebuilt and re-extracted the macOS ZIP. Real 8K panorama exports completed COLMAP 4.2 reconstruction without masks, with Down-only masks and with all views masked: 18 registered images, six cameras and three captures in each case. See [COLMAP correction validation](docs/implementation-2026-10-25/COLMAP_VALIDATION.md) for scope and limits.
+- macOS Developer ID signing/notarization and clean-machine qualification remain open. Windows is not qualified on a physical machine by this change.
+
+## [4.0.2] - 2026-10-25
+
+Draft candidate for the October audit corrections. This entry records preparation of the candidate, not public availability or stable-release qualification. Published 4.0.1 assets remain unchanged.
+
+### Fixed
+
+- Keep longitude periodic without wrapping between the poles, including Lanczos interpolation; share the projection between extraction, preview and blur analysis.
+- Drain and index confirmed writes before finalizing cancellation. Preserve timestamp fallback provenance, report premature decoder stops and validate output names before creating a run folder.
+- Apply workflow preset fields to every selected job while retaining custom model trust and unrelated settings. Preserve numeric precision, refresh mask controls and discard blur analyses after settings change.
+- Reject detection-only models and missing segmentation masks in Generate Mask mode. Cancel preview work cooperatively, release model references and suspend preview inference during extraction.
+- Preserve missing/relative altitude provenance, encode high-altitude EXIF rationals safely, report embedded SRT status and select sidecars deterministically. Read container capture dates independently of GPS export.
+- Read JSON as UTF-8 and reject malformed camera/face lists. Validate the COLMAP index and rig before staging, confine source paths and prevent duplicate or raced destinations from overwriting original hardlinks.
+- Provide a Windows console launcher sharing the GUI bundle. Verify visible version/help output and decode frozen smoke-test output explicitly.
+
+### Dependencies and validation
+
+- Require Python 3.11 or later for Pillow 13 security fixes. Refresh the macOS arm64/Python 3.13 dependency lock and build tools; raise certifi and urllib3 security floors.
+- Add regression coverage for geometry, interruption, Studio settings, metadata, adaptive motion and reconstruction safety. Require an installed-wheel smoke outside the checkout in CI on Linux/macOS/Windows.
+- Resolve the project-wide type diagnostics and make that CI check blocking, while retaining the stricter checks on critical modules.
+- See [October correction validation](docs/implementation-2026-10-23/VALIDATION.md) for local evidence and remaining platform, GPU and real-media qualification. No new release is published by these changes.
+
+### Validation and remaining limits
+
+- The correction commit `71e3d7d` passed all ten [PR #22 CI checks](https://github.com/nicolasdiolez/360Extractor/actions/runs/40216615868): core tests and installed wheels on Linux/macOS/Windows, Studio on macOS/Windows, lint/type checks and the aggregate gate. The Windows job completed 100 extraction/shutdown lifecycle repetitions without reproducing the historical crash in that run.
+- Local macOS arm64/Python 3.13 validation recorded 304 tests and 20 subtests with no skips, an installed-wheel smoke and real CPU inference. These results describe the correction sources; the versioned candidate and frozen binaries require their own build checks.
+- GPU inference, representative camera/GPS media, segmentation accuracy and full COLMAP reconstruction remain unqualified. The historical intermittent Windows native crash is not established as resolved by one successful stress run.
+- Downloaded draft binaries still require clean-machine launch, extraction, settings persistence and cancellation checks. macOS signing/notarization and a complete third-party distribution-license inventory remain open. Keep this candidate in draft pending that qualification.
 
 ## [4.0.1] - 2026-09-07
 

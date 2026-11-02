@@ -22,10 +22,11 @@ class MotionDetector:
             gray2 = cv2.cvtColor(cv2.resize(frame2, size), cv2.COLOR_BGR2GRAY)
 
             # Calculate Optical Flow (Farneback)
+            flow_buffer = np.empty((*gray1.shape, 2), dtype=np.float32)
             flow = cv2.calcOpticalFlowFarneback(
                 prev=gray1,
                 next=gray2,
-                flow=None,
+                flow=flow_buffer,
                 pyr_scale=0.5,
                 levels=3,
                 winsize=15,
@@ -39,7 +40,7 @@ class MotionDetector:
             magnitude, _ = cv2.cartToPolar(flow[..., 0], flow[..., 1])
             
             # Return mean magnitude
-            return float(np.mean(magnitude))
+            return float(np.mean(np.asarray(magnitude)))
             
         except Exception as e:
             logger.error(f"Error calculating motion score: {e}")

@@ -31,6 +31,9 @@ def isolated_preferences(tmp_path, monkeypatch):
         app = QApplication.instance()
         if app:
             for widget in app.topLevelWidgets():
+                if hasattr(widget, 'project_actions'):
+                    # Teardown does not exercise the save/discard dialog.
+                    widget.project_actions.confirm_discard = lambda: True
                 if hasattr(widget, 'shutdown'):
                     widget.shutdown()
                 widget.close()

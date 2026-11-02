@@ -8,7 +8,7 @@ name = "360-extractor"
 dynamic = ["version"]
 description = "Desktop and CLI tool to preprocess 360 and standard video/images into rectilinear datasets for photogrammetry and Gaussian Splatting, with AI operator removal."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "AGPL-3.0" }
 authors = [{ name = "Nicolas Diolez" }]
 keywords = ["360", "photogrammetry", "gaussian-splatting", "equirectangular", "yolo"]
@@ -21,7 +21,7 @@ dependencies = [
     "tqdm>=4.66.0",
     "piexif>=1.1.3",
     "defusedxml>=0.7.1",
-    "Pillow>=10.0.0",
+    "Pillow>=13.0.0",
 ]
 
 [project.optional-dependencies]
@@ -58,7 +58,7 @@ testpaths = ["tests"]
 pythonpath = ["src", "scripts"]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 120
 src = ["src", "tests"]
 
@@ -69,9 +69,9 @@ src = ["src", "tests"]
 select = ["E9", "F"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 ignore_missing_imports = true
-# Pragmatic: the codebase is only partially typed. Keep mypy informational.
+# The project check is blocking; critical modules also check untyped bodies.
 check_untyped_defs = false
 warn_unused_ignores = true
 exclude = ["build/", "dist/"]

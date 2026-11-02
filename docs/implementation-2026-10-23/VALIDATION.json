@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-23",
+  "branch": "codex/audit-fixes-2026-10-23",
+  "base_commit": "1b9e1f8ae4614d09446444732ab9072336695b0f",
+  "app_version": "4.0.1",
+  "release_status": "unreleased changes; no tag, push or publication",
+  "platform": "macOS-26.7.1-arm64-arm-64bit-Mach-O",
+  "python": "3.13.17",
+  "python_executable": "/private/tmp/application360-fixes-2026-10-23/venv/bin/python",
+  "source_hashes_sha256": "121d20d3edcbcd6558dcb4c9656a1e97ca5762bf36fc784efe1ff410aee41a4d",
+  "pytest": {
+    "passed": 304,
+    "subtests_passed": 20,
+    "skipped": 0,
+    "seconds": 10.17
+  },
+  "ruff": "passed",
+  "mypy": {
+    "files": 43,
+    "errors": 0,
+    "untyped_function_bodies": "not checked globally; checked in four critical modules"
+  },
+  "critical_mypy": "passed",
+  "release_consistency": "passed",
+  "pip_check": "passed",
+  "wheel": {
+    "file": "/private/tmp/application360-fixes-2026-10-23/wheel-validated/360_extractor-4.0.1-py3-none-any.whl",
+    "sha256": "dbe5cc4178e73b46595d767c3af8a17cfb2faa67b3ef64002b949c1b654931f8",
+    "bytes": 118467,
+    "installed_import": "site-packages, -I, outside source checkout",
+    "smoke": "passed"
+  },
+  "ai": {
+    "status": "passed",
+    "device": "cpu",
+    "input": "synthetic uniform 96x64 PNG",
+    "image_count": 1,
+    "mask_count": 1,
+    "mask_values": [
+      255
+    ],
+    "model": "yolo26n-seg.pt",
+    "model_sha256": "361fbfabab285c3237700b6bb91d7ecfa602cd945fffda8dbe1242829b71e73f",
+    "qualification": "model loading/inference/writing through installed CLI; not segmentation accuracy or GPU"
+  },
+  "osv": {
+    "packages": 68,
+    "advisories": 0
+  },
+  "not_qualified": [
+    "Windows/Linux execution of this branch and its new CI jobs",
+    "frozen binaries (including Windows console executable)",
+    "CUDA/MPS inference and segmentation accuracy on real media",
+    "real camera/codec/GPS corpus and full COLMAP reconstruction",
+    "hostile native decoder/resource-boundary behavior, signing and distribution license inventory"
+  ],
+  "temporary_files": {
+    "root": "/private/tmp/application360-fixes-2026-10-23",
+    "physical_data_bytes_measured": 2793357312,
+    "measurement": "F_LOG2PHYS_EXT union, APFS clones/hardlinks de-duplicated; excludes filesystem metadata; measured before final small logs/wheel",
+    "action": "await user approval before moving to Trash"
+  }
+}

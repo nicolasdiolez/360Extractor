@@ -84,26 +84,33 @@ a = Analysis(  # noqa: F821
 
 pyz = PYZ(a.pure)  # noqa: F821
 
-exe = EXE(  # noqa: F821
-    pyz,
-    a.scripts,
-    [],
+exe_options = dict(
     exclude_binaries=True,
-    name=APP_NAME,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=False,  # GUI app: no terminal window on launch
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    contents_directory="_internal",
 )
 
+exe = EXE(  # noqa: F821
+    pyz, a.scripts, [], name=APP_NAME, console=False, **exe_options,
+)
+executables = [exe]
+if sys.platform == "win32":
+    # Both launchers use the same Analysis/PYZ and one shared _internal tree.
+    # Windows' windowed bootloader has no stdout/stderr, even when redirected.
+    executables.append(EXE(  # noqa: F821
+        pyz, a.scripts, [], name=APP_NAME + " CLI", console=True, **exe_options,
+    ))
+
 coll = COLLECT(  # noqa: F821
-    exe,
+    *executables,
     a.binaries,
     a.datas,
     strip=False,

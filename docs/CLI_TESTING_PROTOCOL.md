@@ -28,7 +28,9 @@ The telemetry check requires ffmpeg and ffprobe. A missing optional tool blocks 
 | :--- | :--- | :--- |
 | Import/layout | Open Studio, add the 360 clip, select Cube, inspect every face, then add flat media and disable 360 input for that card. | Responsive previews; Cube face labels correct; flat retains its proportions. Additional imports remain available. |
 | Per-job settings | Give two cards different resolutions/quality, select both and change only interval. Inspect each separately. | Only edited values are shared; other settings remain per-job. Record any misleading mixed-value display. |
-| Persistence | With no selected job, set defaults; close and reopen Studio, then add media. | Defaults persist. A saved queue is not expected: project-file persistence is not implemented. |
+| Persistence | Save a `.360proj`, close Studio, reopen it and extract. Separately verify global defaults in an untitled window. | Queue, source references, per-job settings and capture exclusions persist. Extraction creates a fresh run, preserving existing outputs. |
+| Source preflight | Select a stitched 360 video, choose Project → Alignment Diagnostic → From source, then run/cancel without a previous export. | Small explicit sample, settings unchanged, accurate timestamps and physical-capture counts; cancellation stops the helper and its children. Missing AI models are reported, not downloaded. |
+| Diagnostic range and models | Select an inclusive source-frame range and 1024 px, view each boundary, run, save and reopen. Compare a single-model result with a report containing only two-capture fragments. | Per-source choices survive reopening and later extraction; boundaries seek exact frames. The headline describes the largest individual model, never the union of alternatives. Spans and missing tested captures remain explicit; changing choices marks old results historical. Time/disk limits stay unchanged, and export mode never upscales. |
 | Extraction | Run a short Cube job with filters/AI disabled; open its output from the card. | Successful card state, completed manifest, six images per selected source frame, correct folder. |
 | Rerun | Run the same job again. | New numbered folder; prior files unchanged. |
 | Masks | Enable AI on Down plus the nadir disc; inspect image and mask at full size. | Matching dimensions and alignment; black ignore/white keep with default convention; no unwanted masking on other faces. Precision must be assessed visually. |
@@ -65,7 +67,7 @@ Compare masks against the real subjects, including limbs and tripod boundaries. 
 ### Failure paths
 
 - Try a nonexistent input: expect nonzero exit and an explicit error.
-- Try `--resolution 0` with an existing input: expect exit 2 and no exported images (the parent destination may exist).
+- Try `--resolution 0` with an existing input: expect exit 2 and no output folder created.
 - Try a custom multi-view video name without `{camera}` or `{frame}`: expect a naming failure before image writes.
 - Interrupt a long run: expect handled CLI interruption to return 130 and partial output to remain identifiable. In Bash read `echo $?` immediately; in PowerShell read `$LASTEXITCODE` immediately.
 - Check that missing GPS is reported separately: overall extraction can succeed without geotags. Never infer GPS success from exit 0 alone.

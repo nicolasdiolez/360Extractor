@@ -49,6 +49,10 @@ def output_names(settings, stem, frame, camera):
     image = f'{stem}_frame{frame:06d}_{camera}{extension}'
     if settings['naming_mode'] == 'realityscan':
         mask = image + '.mask.png'
+    elif settings['naming_mode'] == 'postshot':
+        mask = str(Path(image).with_suffix('.mask.png'))
+    elif settings['naming_mode'] == 'colmap':
+        mask = image + '.png'
     elif settings['naming_mode'] == 'simple':
         mask = f'{stem}_frame{frame:06d}_{camera}_mask.png'
     else:

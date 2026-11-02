@@ -1,0 +1,321 @@
+{
+  "date": "2026-11-01",
+  "scene_id": "escalier-debut",
+  "application_commit": "3bba6bec552cbf1059ad32c22dfec45d21e79141",
+  "source_sha256": "16e63af4debba72ef11586512fa9c703bb8a823cccdc27ccf98c29c031c6b152",
+  "repetitions_per_case_per_consumer": 1,
+  "paired_observations_including_historical_pilot": 2,
+  "versions": {
+    "realityscan": "2.2.0.119430.RS",
+    "postshot": "1.1.69 (2026-08-18)"
+  },
+  "machine": {
+    "os": "Windows build 26200",
+    "gpu": "NVIDIA RTX A4500",
+    "gpu_memory_mib": 19190,
+    "driver": "595.97"
+  },
+  "extraction_environment": {
+    "platform": "macOS-26.7.1-arm64-arm-64bit-Mach-O",
+    "python": "3.13.17",
+    "opencv": "4.12.0",
+    "numpy": "2.2.6"
+  },
+  "controls": {
+    "layout": "Cube",
+    "fov_degrees": 90,
+    "views_per_capture": 6,
+    "resolution": 1024,
+    "jpeg_quality": 95,
+    "pitch_offset": 0,
+    "exif_intrinsics": true,
+    "nadir_mask": "40% Down disc, binary, destination-specific polarity",
+    "ai": false,
+    "filters": false,
+    "sharpening": false,
+    "telemetry": false,
+    "colmap_export": false,
+    "diagnostic_capture_limit_changed": false
+  },
+  "sampling": {
+    "control16": {
+      "frames": [
+        0,
+        5,
+        11,
+        16,
+        22,
+        27,
+        33,
+        38,
+        44,
+        49,
+        55,
+        60,
+        66,
+        71,
+        77,
+        82
+      ],
+      "captures": 16,
+      "images": 96,
+      "masks": 16
+    },
+    "trial31": {
+      "frames": [
+        0,
+        2,
+        5,
+        8,
+        11,
+        13,
+        16,
+        19,
+        22,
+        24,
+        27,
+        30,
+        33,
+        35,
+        38,
+        41,
+        44,
+        46,
+        49,
+        52,
+        55,
+        57,
+        60,
+        63,
+        66,
+        68,
+        71,
+        74,
+        77,
+        79,
+        82
+      ],
+      "added_frames": [
+        2,
+        8,
+        13,
+        19,
+        24,
+        30,
+        35,
+        41,
+        46,
+        52,
+        57,
+        63,
+        68,
+        74,
+        79
+      ],
+      "captures": 31,
+      "images": 186,
+      "masks": 31
+    },
+    "window_seconds": [
+      0,
+      3.28
+    ]
+  },
+  "input_verification": {
+    "independent_worker_extractions": 4,
+    "normal_capture_plan_path": true,
+    "reused_pilot_pixels": false,
+    "common_jpeg_sha256_matches_per_profile": 96,
+    "common_mask_sha256_matches_per_profile": 16,
+    "decoded_timestamps_match": true,
+    "comparison_signatures_match_per_profile": true,
+    "all_fresh_images_and_masks_match_historical_bytes": true,
+    "profile_images_identical": true,
+    "profile_masks_complementary": true,
+    "source_unchanged": true,
+    "failed_writes": 0,
+    "windows_archive_and_payload_hashes_verified": true
+  },
+  "realityscan": {
+    "configuration_audit": {
+      "import_source_nodes_identical_to_history": true,
+      "input_order_identical_to_history": true,
+      "binary_global_config_exports_differ_from_history": true,
+      "component_alignment_settings_identical_all_four_projects": true,
+      "component_settings": {
+        "engine": "RealityScan",
+        "mode": "High",
+        "max_features_per_mpx": 10000,
+        "max_features_per_image": 80000,
+        "sensitivity": "Ultra",
+        "preselector_features": 40000,
+        "downscale": 1,
+        "max_reprojection_error_px": 2,
+        "use_camera_positions": true,
+        "distortion_model": "Brown3",
+        "final_optimization": true
+      },
+      "limitation": "Binary settings exports differ; component alignment parameters and imported source nodes/order are identical. No random seed or cold-cache repeatability qualification."
+    },
+    "control16": {
+      "components": 12,
+      "largest_component_images": 8,
+      "capture_count": 8,
+      "directions": {
+        "Left": 8
+      },
+      "median_error_px": 0.6502017378807068,
+      "mean_error_px": 0.7327238321304321,
+      "alignment_seconds": 99,
+      "preview_triangles": 4060,
+      "frames": [
+        0,
+        5,
+        11,
+        16,
+        22,
+        27,
+        33,
+        38
+      ],
+      "common_frame0_left_camera_index": 7
+    },
+    "trial31": {
+      "components": 12,
+      "largest_component_images": 58,
+      "capture_count": 31,
+      "directions": {
+        "Left": 31,
+        "Up": 7,
+        "Back": 11,
+        "Down": 5,
+        "Front": 4
+      },
+      "median_error_px": 0.7480881214141846,
+      "mean_error_px": 0.8043012022972107,
+      "alignment_seconds": 85,
+      "preview_triangles": 17522,
+      "frames": [
+        0,
+        2,
+        5,
+        8,
+        11,
+        13,
+        16,
+        19,
+        22,
+        24,
+        27,
+        30,
+        33,
+        35,
+        38,
+        41,
+        44,
+        46,
+        49,
+        52,
+        55,
+        57,
+        60,
+        63,
+        66,
+        68,
+        71,
+        74,
+        77,
+        79,
+        82
+      ],
+      "common_frame0_left_camera_index": 57
+    }
+  },
+  "postshot": {
+    "settings": {
+      "image_selection": "Use All Images",
+      "poses": "Compute From Images",
+      "pose_quality": "3 (High)",
+      "mask_mode": "Remove Occluders",
+      "profile": "Splat3",
+      "image_size_cap": 3840,
+      "max_splats": 3000000,
+      "anti_aliasing": true,
+      "photometric_compensation": false,
+      "stop_after_steps": 5000
+    },
+    "session_started_utc": "2026-11-01 21:23:32",
+    "control16": {
+      "input_images": 96,
+      "input_masks": 16,
+      "partial_registered_images": 2,
+      "accepted_image_set": false,
+      "initial_sparse_points": 52,
+      "tracking_seconds": 12.413,
+      "training_started": false,
+      "saved_project": "control16/postshot/control16-failed.psht",
+      "saved_project_bytes": 75447,
+      "reopened_this_session": false
+    },
+    "trial31": {
+      "input_images": 186,
+      "input_masks": 31,
+      "registered_images": 118,
+      "initial_sparse_points": 4830,
+      "tracking_seconds": 134.419,
+      "training_started": true,
+      "training_step_limit": 5000,
+      "training_finished": true,
+      "training_steps": 5000,
+      "training_seconds": 64.621,
+      "saved_project": "trial31/postshot/trial31-5000steps.psht",
+      "saved_project_bytes": 397869403,
+      "reopened": true,
+      "reopened_image_counts": {
+        "imported": 118,
+        "selected": 118,
+        "tracked": 118
+      },
+      "unmatched_mask_warnings": [
+        {
+          "frame": 5,
+          "direction": "Down"
+        },
+        {
+          "frame": 8,
+          "direction": "Down"
+        },
+        {
+          "frame": 11,
+          "direction": "Down"
+        },
+        {
+          "frame": 13,
+          "direction": "Down"
+        },
+        {
+          "frame": 16,
+          "direction": "Down"
+        }
+      ],
+      "physical_capture_count": null,
+      "direction_counts": null
+    },
+    "visual_inspection": {
+      "image_set_view_indices": [
+        0,
+        44,
+        84
+      ],
+      "observation": "Recognizable stairs, doors and railings; soft surfaces, dark artifacts and smearing. Camera wireframe overlays are not model defects.",
+      "held_out": false
+    }
+  },
+  "limits": [
+    "One fresh run per arm; no controlled seed or cold/warm-cache protocol.",
+    "Input bytes, input order and reported alignment settings agree with history; the cause of changed consumer counts is not isolated.",
+    "Postshot mask association and per-pixel effect remain unqualified despite explicit masks and Remove Occluders mode.",
+    "No matched-view RealityScan render comparison, reference geometry or held-out Postshot quality metric.",
+    "Consumer Windows GPU trials do not qualify Windows extraction, CUDA inference or a downloadable binary."
+  ]
+}

@@ -97,6 +97,8 @@ class AIService:
                 if not destination.exists() and local.is_file():
                     shutil.copy2(local, destination)
                 model_path = str(destination)
+            if os.environ.get('EXTRACTOR360_OFFLINE_MODELS') == '1' and not Path(model_path).is_file():
+                raise FileNotFoundError('Diagnostic AI model is not available locally; provision it before running the diagnostic')
             self.model = YOLO(model_path)
             logger.info(f"Successfully loaded {model_name}")
             logger.info(f"✅ ACTIVE AI MODEL: {model_name}")
@@ -178,6 +180,8 @@ class AIService:
             
         if self.model is None:
             raise RuntimeError("AI model is unavailable")
+        if mode == 'generate_mask' and getattr(self.model, 'task', None) not in (None, 'segment'):
+            raise RuntimeError("Generate Mask requires a segmentation model; use Skip Frame for a detection model")
         if len(images) > 2:
             return [result for start in range(0, len(images), 2) for result in self.process_batch(images[start:start+2], mode, conf, classes, invert_mask, feather_mask)]
         # Run inference on the whole batch
@@ -199,7 +203,9 @@ class AIService:
                 else:
                     batch_results.append((img, False))
             elif mode == 'generate_mask':
-                if has_detection and res.masks:
+                if has_detection:
+                    if getattr(res, 'masks', None) is None or len(res.masks.data) == 0:
+                        raise RuntimeError("AI detected objects but returned no segmentation masks")
                     # res.masks.data is shape (N, H, W)
                     final_mask = self._build_mask(res.masks.data, img, invert_mask, feather_mask)
                     batch_results.append((img, final_mask))

@@ -1,0 +1,274 @@
+[
+  {
+    "name": "altgraph",
+    "version": "0.17.5"
+  },
+  {
+    "name": "anyio",
+    "version": "4.15.1"
+  },
+  {
+    "name": "ast_serialize",
+    "version": "0.13.1"
+  },
+  {
+    "name": "build",
+    "version": "1.6.1"
+  },
+  {
+    "name": "certifi",
+    "version": "2026.10.23"
+  },
+  {
+    "name": "charset-normalizer",
+    "version": "3.5.2"
+  },
+  {
+    "name": "contourpy",
+    "version": "1.4.0"
+  },
+  {
+    "name": "cycler",
+    "version": "0.12.1"
+  },
+  {
+    "name": "defusedxml",
+    "version": "0.7.1"
+  },
+  {
+    "name": "filelock",
+    "version": "4.2.4"
+  },
+  {
+    "name": "fonttools",
+    "version": "4.67.0"
+  },
+  {
+    "name": "fsspec",
+    "version": "2026.9.0"
+  },
+  {
+    "name": "h11",
+    "version": "0.16.0"
+  },
+  {
+    "name": "httpcore",
+    "version": "1.0.9"
+  },
+  {
+    "name": "httpx",
+    "version": "0.28.1"
+  },
+  {
+    "name": "idna",
+    "version": "3.20"
+  },
+  {
+    "name": "iniconfig",
+    "version": "2.3.1"
+  },
+  {
+    "name": "Jinja2",
+    "version": "3.1.6"
+  },
+  {
+    "name": "kiwisolver",
+    "version": "1.5.1"
+  },
+  {
+    "name": "librt",
+    "version": "0.16.0"
+  },
+  {
+    "name": "macholib",
+    "version": "1.16.4"
+  },
+  {
+    "name": "MarkupSafe",
+    "version": "3.0.4"
+  },
+  {
+    "name": "matplotlib",
+    "version": "3.11.2"
+  },
+  {
+    "name": "mpmath",
+    "version": "1.3.0"
+  },
+  {
+    "name": "mypy",
+    "version": "2.4.0"
+  },
+  {
+    "name": "mypy_extensions",
+    "version": "1.1.0"
+  },
+  {
+    "name": "networkx",
+    "version": "3.7"
+  },
+  {
+    "name": "numpy",
+    "version": "2.5.4"
+  },
+  {
+    "name": "nvidia-ml-py",
+    "version": "13.615.71"
+  },
+  {
+    "name": "opencv-python",
+    "version": "5.0.0.93"
+  },
+  {
+    "name": "packaging",
+    "version": "26.3"
+  },
+  {
+    "name": "pathspec",
+    "version": "1.1.1"
+  },
+  {
+    "name": "piexif",
+    "version": "1.1.3"
+  },
+  {
+    "name": "pillow",
+    "version": "13.0.0"
+  },
+  {
+    "name": "pip",
+    "version": "26.2.2"
+  },
+  {
+    "name": "pluggy",
+    "version": "1.7.0"
+  },
+  {
+    "name": "polars",
+    "version": "2.0.0"
+  },
+  {
+    "name": "polars-runtime-32",
+    "version": "2.0.0"
+  },
+  {
+    "name": "psutil",
+    "version": "7.2.2"
+  },
+  {
+    "name": "Pygments",
+    "version": "2.21.0"
+  },
+  {
+    "name": "pyinstaller",
+    "version": "6.22.3"
+  },
+  {
+    "name": "pyinstaller-hooks-contrib",
+    "version": "2026.9"
+  },
+  {
+    "name": "pyparsing",
+    "version": "3.3.3"
+  },
+  {
+    "name": "pyproject_hooks",
+    "version": "1.3.3"
+  },
+  {
+    "name": "PySide6",
+    "version": "6.12.0"
+  },
+  {
+    "name": "PySide6_Addons",
+    "version": "6.12.0"
+  },
+  {
+    "name": "PySide6_Essentials",
+    "version": "6.12.0"
+  },
+  {
+    "name": "PySide6_Pdf",
+    "version": "6.12.0.140"
+  },
+  {
+    "name": "PySide6_WebEngine",
+    "version": "6.12.0.140"
+  },
+  {
+    "name": "pytest",
+    "version": "9.1.1"
+  },
+  {
+    "name": "python-dateutil",
+    "version": "3.0.0"
+  },
+  {
+    "name": "PyYAML",
+    "version": "6.0.3"
+  },
+  {
+    "name": "requests",
+    "version": "2.34.2"
+  },
+  {
+    "name": "ruff",
+    "version": "0.17.2"
+  },
+  {
+    "name": "setuptools",
+    "version": "84.2.1"
+  },
+  {
+    "name": "shiboken6",
+    "version": "6.12.0"
+  },
+  {
+    "name": "six",
+    "version": "1.17.0"
+  },
+  {
+    "name": "sympy",
+    "version": "1.14.0"
+  },
+  {
+    "name": "torch",
+    "version": "2.14.1"
+  },
+  {
+    "name": "torchvision",
+    "version": "0.29.1"
+  },
+  {
+    "name": "tqdm",
+    "version": "4.70.1"
+  },
+  {
+    "name": "typing_extensions",
+    "version": "4.16.0"
+  },
+  {
+    "name": "tzdata",
+    "version": "2026.5"
+  },
+  {
+    "name": "ultralytics",
+    "version": "8.4.184"
+  },
+  {
+    "name": "ultralytics-platform",
+    "version": "0.1.92"
+  },
+  {
+    "name": "ultralytics-thop",
+    "version": "2.2.3"
+  },
+  {
+    "name": "urllib3",
+    "version": "2.8.0"
+  },
+  {
+    "name": "wheel",
+    "version": "0.48.0"
+  }
+]

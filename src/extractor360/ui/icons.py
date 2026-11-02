@@ -4,7 +4,7 @@ Provides vector Lucide icons and high-resolution App icon generation.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QByteArray, QRectF, Qt
+from PySide6.QtCore import QByteArray, QLineF, QRectF, Qt
 from PySide6.QtGui import (
     QBrush, QColor, QFont, QIcon, QLinearGradient, QPainter,
     QPainterPath, QPen, QPixmap
@@ -58,11 +58,11 @@ def get_app_icon() -> QIcon:
     icon = QIcon()
     for size in [16, 32, 64, 128, 256, 512]:
         pix = QPixmap(size, size)
-        pix.fill(Qt.transparent)
+        pix.fill(Qt.GlobalColor.transparent)
 
         painter = QPainter(pix)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 
         # macOS Squircle Background
         radius = size * 0.22
@@ -89,14 +89,14 @@ def get_app_icon() -> QIcon:
         # Glowing Outer Ring
         glow_pen = QPen(QColor("#F59E0B"), max(1.5, size * 0.04))
         painter.setPen(glow_pen)
-        painter.setBrush(Qt.NoBrush)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawEllipse(QRectF(center_x - globe_r, center_y - globe_r, globe_r * 2, globe_r * 2))
 
         # Meridian & Parallel lines
         meridian_pen = QPen(QColor("#FBBF24"), max(1.0, size * 0.025))
         painter.setPen(meridian_pen)
         painter.drawEllipse(QRectF(center_x - globe_r * 0.45, center_y - globe_r, globe_r * 0.9, globe_r * 2))
-        painter.drawLine(center_x - globe_r, center_y, center_x + globe_r, center_y)
+        painter.drawLine(QLineF(center_x - globe_r, center_y, center_x + globe_r, center_y))
 
         # Central Lens Core
         painter.setBrush(QBrush(QColor("#D97706")))
@@ -106,9 +106,9 @@ def get_app_icon() -> QIcon:
         # "360" text for large icons
         if size >= 128:
             painter.setPen(QColor("#FAF9F6"))
-            font = QFont("-apple-system", int(size * 0.12), QFont.Bold)
+            font = QFont("-apple-system", int(size * 0.12), QFont.Weight.Bold)
             painter.setFont(font)
-            painter.drawText(QRectF(0, size * 0.72, size, size * 0.22), Qt.AlignCenter, "360")
+            painter.drawText(QRectF(0, size * 0.72, size, size * 0.22), Qt.AlignmentFlag.AlignCenter, "360")
 
         painter.end()
         icon.addPixmap(pix)

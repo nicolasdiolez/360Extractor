@@ -16,7 +16,7 @@ class ToggleSwitch(QWidget):
     def __init__(self, text="", parent=None):
         super().__init__(parent)
         self._checked = False
-        self._circle_position = 3  # Starting position (off)
+        self._circle_position = 3.0  # Starting position (off)
         self._bg_color = QColor("#3C3C3C")
         
         # Animation for the circle movement
@@ -37,14 +37,14 @@ class ToggleSwitch(QWidget):
         self.setFixedHeight(28)
         self.setCursor(Qt.PointingHandCursor)
         
-    @Property(float)
-    def circle_position(self):
+    def _get_circle_position(self) -> float:
         return self._circle_position
     
-    @circle_position.setter
-    def circle_position(self, pos):
+    def _set_circle_position(self, pos: float) -> None:
         self._circle_position = pos
         self.update()
+
+    circle_position = Property(float, _get_circle_position, _set_circle_position)
         
     def isChecked(self):
         return self._checked

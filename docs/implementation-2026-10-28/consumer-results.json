@@ -1,0 +1,309 @@
+{
+  "schema_version": 1,
+  "trial_date": "2026-10-28",
+  "consolidated_on": "2026-11-01",
+  "application_commit": "5fec65ccfb52385ebebd5b5e0c7ea454e81e1ae2",
+  "ci_run": 40678698548,
+  "provenance": {
+    "kind": "summary of retained observations; no rerun during consolidation",
+    "local_evidence_set": "plans/application360-consumers-2026-10-28 (ignored)",
+    "evidence_sha256": {
+      "LISEZMOI.txt": "732101b8939d69aa89e6f74997163bf6887ad68282c3ce8226ea1959afbd909c",
+      "preparation.json": "798907213eae66d81ddf659e7aaebb4da81493d7f9ad2d3516d4a1c319ab31a4",
+      "status.json": "121626f56d532805abf496ef57e65e3daea97a8f3564ec5574344addbcc7ff9f",
+      "fov-comparison.json": "0cc42674155776e31ddaa08e562a662ecf975c2ff80ea9035199af6dbf474971"
+    },
+    "scope": "Consumer artifacts remain privately retained. No private media, filesystem paths or cloud identifiers included."
+  },
+  "consumer_environment": {
+    "platform": "Windows",
+    "gpu": "NVIDIA RTX A4500",
+    "vram_mib": 20470,
+    "driver": "595.97",
+    "realityscan": "2.2",
+    "postshot": "1.0.1 (2025-09-26)"
+  },
+  "baseline_settings": {
+    "layout": "cube",
+    "faces_per_capture": 6,
+    "fov_degrees": 90,
+    "resolution": 1024,
+    "jpeg_quality": 95,
+    "nadir_radius_percent": 40,
+    "blur_filter": false,
+    "motion_filter": false,
+    "telemetry_export": false,
+    "postshot_image_selection": "Use All Images",
+    "postshot_profile": "Splat3",
+    "postshot_mask_mode": "Remove Occluders",
+    "postshot_limit_steps": 5000
+  },
+  "baseline_trials": {
+    "cour": {
+      "source_sha256": "b60adae97679fd3d41477e3a3d18cf3092cdfcb0a8c69babf028c952a3040091",
+      "source_frames": [
+        0,
+        7,
+        15,
+        22,
+        29,
+        36,
+        44,
+        51,
+        58,
+        65,
+        73,
+        80,
+        87,
+        94,
+        102,
+        109
+      ],
+      "physical_captures": 16,
+      "images": 96,
+      "masks": 16,
+      "ai": "YOLO26n-seg persons on Down",
+      "checks": {
+        "image_pairs_identical": true,
+        "mask_pairs_exact_complements": true,
+        "source_unchanged": true
+      },
+      "realityscan": {
+        "components": 1,
+        "largest_component_images": 91,
+        "largest_component_physical_captures": 16,
+        "largest_component_median_reprojection_px": 0.508263349533081,
+        "outcome": "positive integration reference; incomplete untextured preview"
+      },
+      "postshot": {
+        "tracked_images": 95,
+        "training_completed": true,
+        "training_steps": 5000,
+        "splats_approx": 1790000,
+        "saved_project_exists_verified": true,
+        "saved_project_reopened_verified": true,
+        "outcome": "positive integration reference; limited visual review"
+      }
+    },
+    "louvre": {
+      "source_sha256": "1d1f04b6f8e3843d1c386cb7c603a0bd0149446a55a688bb80b27bc97f63c26d",
+      "source_frames": [
+        0,
+        7,
+        14,
+        20,
+        27,
+        34,
+        41,
+        48,
+        54,
+        61,
+        68,
+        75,
+        82,
+        88,
+        95,
+        102
+      ],
+      "physical_captures": 16,
+      "images": 96,
+      "masks": 16,
+      "ai": "disabled",
+      "checks": {
+        "image_pairs_identical": true,
+        "mask_pairs_exact_complements": true,
+        "source_unchanged": true
+      },
+      "realityscan": {
+        "components": 6,
+        "largest_component_images": 26,
+        "largest_component_physical_captures": 12,
+        "largest_component_median_reprojection_px": 0.4072056710720062,
+        "outcome": "fragmented; no accepted complete-scene reconstruction"
+      },
+      "postshot": {
+        "tracked_images": 38,
+        "training_completed": false,
+        "training_steps": null,
+        "splats_approx": null,
+        "saved_project_exists_verified": true,
+        "saved_project_reopened_verified": null,
+        "outcome": "camera tracking aborted before radiance-field training"
+      }
+    },
+    "escalier-debut": {
+      "source_sha256": "16e63af4debba72ef11586512fa9c703bb8a823cccdc27ccf98c29c031c6b152",
+      "source_frames": [
+        0,
+        5,
+        11,
+        16,
+        22,
+        27,
+        33,
+        38,
+        44,
+        49,
+        55,
+        60,
+        66,
+        71,
+        77,
+        82
+      ],
+      "physical_captures": 16,
+      "images": 96,
+      "masks": 16,
+      "ai": "disabled",
+      "checks": {
+        "image_pairs_identical": true,
+        "mask_pairs_exact_complements": true,
+        "source_unchanged": true
+      },
+      "realityscan": {
+        "components": 15,
+        "largest_component_images": 10,
+        "largest_component_physical_captures": 9,
+        "largest_component_median_reprojection_px": 0.6084766527610779,
+        "outcome": "fragmented; no accepted complete-scene reconstruction"
+      },
+      "postshot": {
+        "tracked_images": 3,
+        "training_completed": false,
+        "training_steps": null,
+        "splats_approx": null,
+        "saved_project_exists_verified": true,
+        "saved_project_reopened_verified": null,
+        "outcome": "CameraTracker failed: registered only 3 of 96 images"
+      }
+    },
+    "escalier-fin": {
+      "source_sha256": "16e63af4debba72ef11586512fa9c703bb8a823cccdc27ccf98c29c031c6b152",
+      "source_frames": [
+        261,
+        266,
+        272,
+        277,
+        283,
+        288,
+        294,
+        299,
+        305,
+        310,
+        316,
+        321,
+        327,
+        332,
+        338,
+        343
+      ],
+      "physical_captures": 16,
+      "images": 96,
+      "masks": 16,
+      "ai": "disabled",
+      "checks": {
+        "image_pairs_identical": true,
+        "mask_pairs_exact_complements": true,
+        "source_unchanged": true
+      },
+      "realityscan": {
+        "components": 2,
+        "largest_component_images": 2,
+        "largest_component_physical_captures": 2,
+        "largest_component_median_reprojection_px": 0.5895080044708672,
+        "outcome": "fragmented; no accepted complete-scene reconstruction"
+      },
+      "postshot": {
+        "tracked_images": null,
+        "training_completed": false,
+        "training_steps": null,
+        "splats_approx": null,
+        "saved_project_exists_verified": true,
+        "saved_project_reopened_verified": null,
+        "outcome": "CameraTracker: ERROR: failed to create sparse model"
+      }
+    }
+  },
+  "fov110_trial": {
+    "case": "escalier-debut",
+    "source_frames": [
+      0,
+      5,
+      11,
+      16,
+      22,
+      27,
+      33,
+      38,
+      44,
+      49,
+      55,
+      60,
+      66,
+      71,
+      77,
+      82
+    ],
+    "fov_degrees": 110,
+    "controls_verified": {
+      "source_unchanged": true,
+      "frame_camera_timestamp_index_identical": true,
+      "masks_pixel_identical_to_control": true,
+      "consumer_profile_images_identical": true,
+      "consumer_profile_masks_complementary": true,
+      "only_extraction_setting_changed": "FOV (plus destination)"
+    },
+    "realityscan": {
+      "components": 10,
+      "largest_component_images": 20,
+      "largest_component_physical_captures": 7,
+      "largest_component_frames": [
+        5,
+        11,
+        16,
+        22,
+        27,
+        33,
+        38
+      ],
+      "largest_component_median_reprojection_px_rounded": 0.407314,
+      "outcome": "fragmented; not an accepted full-scene reconstruction",
+      "coverage_method": "Explicit maximal-component selection followed by a separate camera report; count distinct source frames.",
+      "reporting_correction": "The combined component report repeated the active camera list; smaller-component coverage remains unknown unless independently verified."
+    },
+    "postshot": {
+      "registered_images": 2,
+      "sparse_points": 39,
+      "training_completed": false,
+      "outcome": "camera tracking failed before radiance-field training"
+    },
+    "interpretation": "No evidence to change the default FOV to 110. RealityScan has more registered faces but fewer distinct source captures in its largest component; Postshot fails at both FOVs. A single paired pilot, not a general ranking of FOV values.",
+    "causal_limits": [
+      "Changing FOV also changes angular sampling at fixed pixel resolution and peripheral content.",
+      "Pixel-identical nadir masks cover a different angular cone at the new FOV.",
+      "No repeated runs, no final geometry accuracy or visual-quality qualification."
+    ]
+  },
+  "remaining_limits": [
+    "No repeated runs or geometric ground truth.",
+    "Consumer mask association/mode checked; no masked/unmasked ablation.",
+    "A successful COLMAP diagnostic does not guarantee consumer success.",
+    "Windows consumer runs do not qualify the 360 Extractor Windows binary or CUDA inference."
+  ],
+  "next_experiment": {
+    "executed": false,
+    "case": "escalier-debut",
+    "fov_degrees": 90,
+    "control_captures": 16,
+    "trial_captures": 31,
+    "method": "Interleave one new capture in each of the 15 gaps; preserve endpoints and other settings.",
+    "measurements": [
+      "largest-component capture fraction",
+      "temporal span and gaps",
+      "fragmentation",
+      "visual result",
+      "runtime",
+      "disk and memory cost"
+    ]
+  }
+}

@@ -24,4 +24,4 @@ class ImageUtils:
         else:
             gray = image
             
-        return cv2.Laplacian(gray, cv2.CV_64F).var()
+        return float(cv2.Laplacian(gray, cv2.CV_64F).var())

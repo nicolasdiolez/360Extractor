@@ -77,11 +77,28 @@ def test_partial_count_is_exact(tmp_path):
 @pytest.mark.parametrize('options', [dict(naming_mode='custom', image_pattern='same'), dict(naming_mode='custom', image_pattern='{camera}.png', mask_pattern='{camera}.png', ai_mode='Generate Mask')])
 def test_collision_refused_before_image_or_model(tmp_path, options):
     path=source(tmp_path)
+    destination=tmp_path/'new'/'output'
     with patch.object(ProcessingWorker, '_ensure_ai_service') as ai:
-        job, worker=run(path, **options)
+        job, worker=run(path, custom_output_dir=str(destination), **options)
     assert worker.error_count == 1
-    assert not list(Path(job.result['output_dir']).glob('*.jpg'))
+    assert 'output_dir' not in job.result
+    assert not destination.parent.exists()
     ai.assert_not_called()
+
+
+@pytest.mark.parametrize('pattern', ['same', '../{camera}.jpg', '{unknown}_{camera}.jpg'])
+def test_cli_invalid_names_leave_destination_absent(tmp_path, monkeypatch, pattern):
+    from extractor360 import main as cli
+
+    path = source(tmp_path)
+    destination = tmp_path/'new'/'output'
+    monkeypatch.setattr(cli, 'TQDM_AVAILABLE', False)
+    monkeypatch.setattr('sys.argv', ['360extractor', '--input', str(path), '--output', str(destination),
+                                   '--resolution', '32', '--layout', 'cube', '--image-pattern', pattern])
+    with pytest.raises(SystemExit) as rejected:
+        cli.run_cli(cli.parse_arguments())
+    assert rejected.value.code == 1
+    assert not destination.parent.exists()
 
 
 def test_repeated_runs_and_recursive_discovery(tmp_path):

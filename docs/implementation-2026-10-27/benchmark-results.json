@@ -1,0 +1,284 @@
+{
+  "cour": {
+    "sha256": "b60adae97679fd3d41477e3a3d18cf3092cdfcb0a8c69babf028c952a3040091",
+    "source_bytes": 275824090,
+    "source_width": 7680,
+    "source_height": 3840,
+    "frame_count": 110,
+    "fps": 25.0,
+    "platform": "macOS-26.7.1-arm64-arm-64bit-Mach-O",
+    "python": "3.13.17",
+    "opencv": "4.12.0",
+    "colmap": [
+      "COLMAP 4.2.0 (Commit Unknown on Unknown without GPU support)",
+      "Usage:"
+    ],
+    "git_head": "d4f942a78953b1b3e2501628461343698395e21a",
+    "face_resolution": 512,
+    "native_width": 2048,
+    "cases": {
+      "regular": {
+        "preparation_seconds": 6.051925290999861,
+        "input_captures": 8,
+        "input_images": 48,
+        "frame_indices": [
+          0,
+          14,
+          28,
+          42,
+          56,
+          70,
+          84,
+          98
+        ],
+        "reconstruction_seconds": 10.774360958000216,
+        "models": [
+          {
+            "model": "0",
+            "registered_images": 48,
+            "registered_captures": 8,
+            "frame_indices": [
+              0,
+              14,
+              28,
+              42,
+              56,
+              70,
+              84,
+              98
+            ],
+            "points3D": 2298,
+            "mean_reprojection_error_pixels": 0.5593644060094092
+          }
+        ]
+      },
+      "adaptive": {
+        "preparation_seconds": 7.360406792000049,
+        "input_captures": 8,
+        "input_images": 48,
+        "frame_indices": [
+          0,
+          14,
+          28,
+          42,
+          56,
+          70,
+          84,
+          98
+        ],
+        "reconstruction_seconds": 16.96456395799987,
+        "models": [
+          {
+            "model": "0",
+            "registered_images": 48,
+            "registered_captures": 8,
+            "frame_indices": [
+              0,
+              14,
+              28,
+              42,
+              56,
+              70,
+              84,
+              98
+            ],
+            "points3D": 2271,
+            "mean_reprojection_error_pixels": 0.5633307387196536
+          }
+        ]
+      },
+      "native": {
+        "preparation_seconds": 8.12923041699969,
+        "input_captures": 8,
+        "input_images": 8,
+        "frame_indices": [
+          0,
+          14,
+          28,
+          42,
+          56,
+          70,
+          84,
+          98
+        ],
+        "reconstruction_seconds": 9.599507708999681,
+        "models": [
+          {
+            "model": "0",
+            "registered_images": 8,
+            "registered_captures": 8,
+            "frame_indices": [
+              0,
+              14,
+              28,
+              42,
+              56,
+              70,
+              84,
+              98
+            ],
+            "points3D": 1838,
+            "mean_reprojection_error_pixels": 0.5031138409045979
+          }
+        ]
+      }
+    },
+    "source_size_mtime_unchanged": true,
+    "allocated_bytes_unique_inodes": 87601152,
+    "source_name": "360_cour.mp4",
+    "candidate": "Local changed sources on codex/mask-profiles-storage-preflight; not the public release binary",
+    "regular_adaptive_jpegs_byte_identical": true
+  },
+  "louvre": {
+    "sha256": "1d1f04b6f8e3843d1c386cb7c603a0bd0149446a55a688bb80b27bc97f63c26d",
+    "source_bytes": 663231647,
+    "source_width": 7680,
+    "source_height": 3840,
+    "frame_count": 269,
+    "fps": 25.0,
+    "platform": "macOS-26.7.1-arm64-arm-64bit-Mach-O",
+    "python": "3.13.17",
+    "opencv": "4.12.0",
+    "colmap": [
+      "COLMAP 4.2.0 (Commit Unknown on Unknown without GPU support)",
+      "Usage:"
+    ],
+    "git_head": "d4f942a78953b1b3e2501628461343698395e21a",
+    "face_resolution": 512,
+    "native_width": 2048,
+    "cases": {
+      "regular": {
+        "preparation_seconds": 20.511243292000017,
+        "input_captures": 8,
+        "input_images": 48,
+        "frame_indices": [
+          0,
+          34,
+          68,
+          102,
+          136,
+          170,
+          204,
+          238
+        ],
+        "reconstruction_seconds": 7.679242458999852,
+        "models": [
+          {
+            "model": "0",
+            "registered_images": 12,
+            "registered_captures": 2,
+            "frame_indices": [
+              170,
+              238
+            ],
+            "points3D": 35,
+            "mean_reprojection_error_pixels": 0.10231432504638317
+          },
+          {
+            "model": "1",
+            "registered_images": 48,
+            "registered_captures": 8,
+            "frame_indices": [
+              0,
+              34,
+              68,
+              102,
+              136,
+              170,
+              204,
+              238
+            ],
+            "points3D": 347,
+            "mean_reprojection_error_pixels": 0.33589483611668547
+          }
+        ]
+      },
+      "adaptive": {
+        "preparation_seconds": 13.031201040999804,
+        "input_captures": 8,
+        "input_images": 48,
+        "frame_indices": [
+          0,
+          34,
+          68,
+          102,
+          136,
+          170,
+          204,
+          238
+        ],
+        "reconstruction_seconds": 7.2860222919998705,
+        "models": [
+          {
+            "model": "0",
+            "registered_images": 12,
+            "registered_captures": 2,
+            "frame_indices": [
+              170,
+              238
+            ],
+            "points3D": 35,
+            "mean_reprojection_error_pixels": 0.10231432504638317
+          },
+          {
+            "model": "1",
+            "registered_images": 48,
+            "registered_captures": 8,
+            "frame_indices": [
+              0,
+              34,
+              68,
+              102,
+              136,
+              170,
+              204,
+              238
+            ],
+            "points3D": 344,
+            "mean_reprojection_error_pixels": 0.3333481735526365
+          }
+        ]
+      },
+      "native": {
+        "preparation_seconds": 12.152317208999648,
+        "input_captures": 8,
+        "input_images": 8,
+        "frame_indices": [
+          0,
+          34,
+          68,
+          102,
+          136,
+          170,
+          204,
+          238
+        ],
+        "reconstruction_seconds": 7.421770249999554,
+        "models": [
+          {
+            "model": "0",
+            "registered_images": 8,
+            "registered_captures": 8,
+            "frame_indices": [
+              0,
+              34,
+              68,
+              102,
+              136,
+              170,
+              204,
+              238
+            ],
+            "points3D": 553,
+            "mean_reprojection_error_pixels": 0.2398909154189704
+          }
+        ]
+      }
+    },
+    "source_size_mtime_unchanged": true,
+    "allocated_bytes_unique_inodes": 54374400,
+    "source_name": "360_ArcLouvre.mp4",
+    "candidate": "Local changed sources on codex/mask-profiles-storage-preflight; not the public release binary",
+    "regular_adaptive_jpegs_byte_identical": true
+  }
+}

@@ -39,6 +39,15 @@ def test_load_failure_is_not_a_passthrough(tmp_path,monkeypatch):
             AIService()
 
 
+def test_offline_diagnostic_never_calls_yolo_for_missing_model(tmp_path, monkeypatch):
+    monkeypatch.setenv('EXTRACTOR360_OFFLINE_MODELS', '1')
+    monkeypatch.setenv('EXTRACTOR360_MODEL_DIR', str(tmp_path / 'models'))
+    with patch('extractor360.core.ai_model.YOLO') as load, patch.object(AIService, 'get_device_info', return_value={'device': 'cpu', 'is_accelerated': False}):
+        with pytest.raises(RuntimeError, match='not available locally'):
+            AIService('yolo26x-seg.pt')
+        load.assert_not_called()
+
+
 def test_incomplete_inference_batch_is_error():
     service=AIService.__new__(AIService)
     service.model=lambda *args,**kwargs: []
@@ -46,3 +55,42 @@ def test_incomplete_inference_batch_is_error():
     service.device='cpu'
     with pytest.raises(RuntimeError,match='incomplete'):
         service.process_batch([np.zeros((10,10,3),np.uint8)],mode='generate_mask')
+
+
+def _service_with_result(result, task=None):
+    from types import SimpleNamespace
+    class Model:
+        def __call__(self, images, **kwargs):
+            return [result for _ in images]
+    model = Model()
+    model.task = task
+    service = AIService.__new__(AIService)
+    service.model = model
+    service.target_classes = [0]
+    service.device = 'cpu'
+    return service, SimpleNamespace
+
+
+def test_detection_only_custom_model_cannot_generate_a_keep_everything_mask():
+    from types import SimpleNamespace
+    service, _ = _service_with_result(SimpleNamespace(boxes=[object()], masks=None), task='detect')
+    image = np.zeros((10, 10, 3), np.uint8)
+    with pytest.raises(RuntimeError, match='segmentation model'):
+        service.process_batch([image], mode='generate_mask')
+    assert service.process_batch([image], mode='skip_frame') == [(None, True)]
+
+
+def test_missing_masks_with_detections_is_an_error_even_without_model_task():
+    from types import SimpleNamespace
+    service, _ = _service_with_result(SimpleNamespace(boxes=[object()], masks=None))
+    with pytest.raises(RuntimeError, match='no segmentation masks'):
+        service.process_batch([np.zeros((10, 10, 3), np.uint8)], mode='generate_mask')
+
+
+def test_no_detections_still_returns_a_valid_empty_segmentation_mask():
+    from types import SimpleNamespace
+    service, _ = _service_with_result(SimpleNamespace(boxes=[], masks=None), task='segment')
+    image = np.zeros((10, 10, 3), np.uint8)
+    output, mask = service.process_batch([image], mode='generate_mask')[0]
+    assert output is image
+    assert np.all(mask == 255)

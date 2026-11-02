@@ -1,10 +1,12 @@
 import re
 import logging
-from typing import List, Dict
+from typing import List
+
+from extractor360.utils.gps_types import GPSSample
 
 logger = logging.getLogger(__name__)
 
-def parse_srt_data(raw_data: bytes, altitude_mode: str = 'absolute') -> List[Dict[str, float]]:
+def parse_srt_data(raw_data: bytes, altitude_mode: str = 'absolute') -> List[GPSSample]:
     """
     Parses SRT subtitle data to extract GPS telemetry.
     
@@ -30,7 +32,7 @@ def parse_srt_data(raw_data: bytes, altitude_mode: str = 'absolute') -> List[Dic
         - timestamp: float (seconds)
         - lat: float
         - lon: float
-        - alt: float (per altitude_mode, falling back to whatever is available)
+        - alt: float or None (per altitude_mode, falling back to whatever is available)
     """
     prefer_relative = str(altitude_mode).lower() == 'relative'
     try:
@@ -39,7 +41,7 @@ def parse_srt_data(raw_data: bytes, altitude_mode: str = 'absolute') -> List[Dic
         logger.error(f"Error decoding SRT data: {e}")
         return []
 
-    samples = []
+    samples: List[GPSSample] = []
     
     # Split by double newlines to get blocks
     # Normalize line endings first
@@ -100,7 +102,9 @@ def parse_srt_data(raw_data: bytes, altitude_mode: str = 'absolute') -> List[Dic
         # Extract Coordinates
         lat = None
         lon = None
-        alt = 0.0
+        alt = None
+        altitude_source = "missing"
+        altitude_reference = "unknown"
         
         lat_match = lat_pattern.search(content)
         lon_match = lon_pattern.search(content)
@@ -120,10 +124,12 @@ def parse_srt_data(raw_data: bytes, altitude_mode: str = 'absolute') -> List[Dic
                 legacy_val = float(alt_match.group(1)) if alt_match else None
 
                 if prefer_relative:
-                    candidates = (rel_val, legacy_val, abs_val)
+                    candidates = ((rel_val, "rel_alt", "relative"), (legacy_val, "altitude", "unknown"), (abs_val, "abs_alt", "absolute"))
                 else:
-                    candidates = (abs_val, legacy_val, rel_val)
-                alt = next((v for v in candidates if v is not None), 0.0)
+                    candidates = ((abs_val, "abs_alt", "absolute"), (legacy_val, "altitude", "unknown"), (rel_val, "rel_alt", "relative"))
+                alt, altitude_source, altitude_reference = next(
+                    (v for v in candidates if v[0] is not None), (None, "missing", "unknown")
+                )
             except ValueError:
                 continue
         else:
@@ -134,6 +140,7 @@ def parse_srt_data(raw_data: bytes, altitude_mode: str = 'absolute') -> List[Dic
                     lat = float(gps_match.group(1))
                     lon = float(gps_match.group(2))
                     alt = float(gps_match.group(3))
+                    altitude_source = "GPS"
                 except ValueError:
                     continue
 
@@ -142,7 +149,9 @@ def parse_srt_data(raw_data: bytes, altitude_mode: str = 'absolute') -> List[Dic
                 'timestamp': timestamp,
                 'lat': lat,
                 'lon': lon,
-                'alt': alt
+                'alt': alt,
+                'altitude_source': altitude_source,
+                'altitude_reference': altitude_reference,
             })
 
     return samples

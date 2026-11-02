@@ -1,6 +1,7 @@
 import json
 import os
 import copy
+from typing import Any
 from pathlib import Path
 
 from extractor360.utils.logger import logger
@@ -8,7 +9,10 @@ from extractor360.utils.logger import logger
 class SettingsManager:
     _instance = None
     
-    DEFAULT_SETTINGS = {
+    DEFAULT_SETTINGS: dict[str, Any] = {
+        "excluded_frames": [],
+        "included_frame_ranges": [],
+        "capture_plan": None,
         "is_360": True,
         "resolution": 2048,
         "fov": 90,
@@ -46,6 +50,7 @@ class SettingsManager:
         "export_colmap": False,
         "interpolation_mode": "linear",
         "feather_mask": False,
+        "mask_profile": "custom",
         "naming_mode": "realityscan",
         "image_pattern": "{filename}_frame{frame}_{camera}",
         "mask_pattern": "{filename}_frame{frame}_{camera}_mask"
@@ -76,7 +81,7 @@ class SettingsManager:
             return
 
         try:
-            with open(self.config_file, 'r') as f:
+            with open(self.config_file, 'r', encoding='utf-8-sig') as f:
                 loaded_settings = json.load(f)
                 if not isinstance(loaded_settings, dict):
                     raise ValueError("Settings must be a JSON object")
@@ -165,10 +170,30 @@ def build_settings(args, config, active_cameras=None, output_path=""):
         'naming_mode': args.naming_mode,
         'image_pattern': args.image_pattern,
         'mask_pattern': args.mask_pattern,
+        'mask_profile': getattr(args, 'mask_profile', None),
+        'included_frame_ranges': getattr(args, 'frame_range', None),
     }
     for key, value in cli_overrides.items():
         if value is not None:
             settings[key] = value
+
+    from extractor360.core.capture_plan import baseline_from_window
+    baseline = getattr(args, 'capture_baseline', None)
+    window = getattr(args, 'capture_window', None)
+    mode = getattr(args, 'capture_mode', None)
+    if window is not None:
+        baseline = baseline_from_window(*window)
+    if mode == 'interval':
+        if baseline is not None:
+            raise ValueError('A capture reference cannot be combined with interval mode')
+        settings['capture_plan'] = None
+    elif baseline is not None:
+        settings['capture_plan'] = {'mode': mode or 'baseline', 'baseline_frames': baseline}
+    elif mode is not None:
+        plan = settings.get('capture_plan')
+        if not isinstance(plan, dict):
+            raise ValueError('Provide --capture-window, --capture-baseline or a saved capture_plan first')
+        settings['capture_plan'] = {**plan, 'mode': mode}
 
     if getattr(args, 'trust_custom_model', False):
         settings['trust_custom_model'] = True

@@ -3,6 +3,7 @@ import numpy as np
 import os
 import time
 import json
+import sys
 import uuid
 import concurrent.futures
 from collections import defaultdict, deque
@@ -10,7 +11,12 @@ from datetime import datetime, timedelta, timezone
 
 from extractor360.core import colmap_export, exif_writer
 from extractor360.core.events import Event
+from extractor360.core.frame_timing import FrameClock, frame_step
+from extractor360.core.capture_plan import sampling_record, validate_plan_selection
 from extractor360.core.validation import validate_settings
+from extractor360.core.mask_profiles import mask_contract
+from extractor360.core.project import source_problem
+from extractor360.core.storage import estimate_output, existing_destination, require_free_space
 from extractor360.core.output_plan import create_output_directory, output_names, preflight_names
 from extractor360.core.geometry import GeometryProcessor
 from extractor360.core.motion_detector import MotionDetector
@@ -35,7 +41,14 @@ class ProcessingWorker:
     ``threading.Thread``; the CLI calls ``run()`` synchronously).
     """
 
-    def __init__(self, jobs):
+    def __init__(self, jobs, *, diagnostic_frames=None):
+        if diagnostic_frames is not None:
+            if (len(jobs) != 1 or not isinstance(diagnostic_frames, list)
+                    or not 1 <= len(diagnostic_frames) <= 16
+                    or any(type(i) is not int or i < 0 for i in diagnostic_frames)
+                    or sorted(set(diagnostic_frames)) != diagnostic_frames):
+                raise ValueError('A diagnostic requires one job and 1..16 unique ordered frame indices')
+        self.diagnostic_frames = diagnostic_frames
         self.progress_updated = Event()  # (value 0-100, message)
         self.job_started = Event()       # (job index)
         self.job_finished = Event()      # (job index)
@@ -116,6 +129,11 @@ class ProcessingWorker:
                         job.status = "Done"
                         self.progress_updated.emit(100, f"Finished {job.filename}")
                         self.job_finished.emit(i)
+                except KeyboardInterrupt:
+                    self.stop()
+                    job.status = "Cancelled"
+                    self.job_cancelled.emit(i)
+                    raise
                 except Exception as exc:
                     if not self.is_running:
                         job.status = "Cancelled"
@@ -129,6 +147,8 @@ class ProcessingWorker:
                     self.error_occurred.emit(f"Error processing {job.filename}: {exc}")
         finally:
             self.io_pool.shutdown(wait=True)
+            self.ai_service = None
+            self._ai_model_name = None
             self.finished.emit()
 
     def process_video(self, job, job_index, total_jobs):
@@ -136,6 +156,10 @@ class ProcessingWorker:
         started = time.monotonic()
         try:
             job.settings = validate_settings(job.settings)
+            if job.source_check_required or job.source_identity is not None:
+                problem = source_problem(job)
+                if problem:
+                    raise ValueError(problem)
             stat = os.stat(job.file_path)
             job.result["source_identity"] = {"size_bytes": stat.st_size, "mtime_ns": stat.st_mtime_ns, "hash_verified": False}
             self._process_video(job, job_index, total_jobs)
@@ -166,10 +190,6 @@ class ProcessingWorker:
         filename = os.path.basename(file_path)
         name_no_ext = os.path.splitext(filename)[0]
 
-        output_dir = create_output_directory(file_path, job.output_dir)
-        job.result['output_dir'] = output_dir
-        self._write_manifest(output_dir, job, job.result)
-
         # Determine Output Format & Params
         fmt = job.output_format.lower()
         if fmt not in ['jpg', 'png', 'tiff']:
@@ -189,10 +209,16 @@ class ProcessingWorker:
             save_params = [cv2.IMWRITE_TIFF_COMPRESSION, 1] # 1 = NONE
 
         is_image = file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.tiff', '.tif'))
+        if self.diagnostic_frames is not None and is_image:
+            raise ValueError('A source diagnostic requires a video')
 
+        from extractor360.core.selection import FrameSelection
+        selection = FrameSelection(job.settings.get('included_frame_ranges', []))
         cap = None
         current_image_frame = None
         skipped_blur_count = 0
+        futures = []
+        written_view_names = set()
 
         # Wrap the whole processing in try/finally so the video capture handle
         # is always released, even if an exception is raised mid-processing.
@@ -211,6 +237,8 @@ class ProcessingWorker:
 
                 fps = cap.get(cv2.CAP_PROP_FPS)
                 total_frames_video = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                if self.diagnostic_frames is not None and (total_frames_video < 1 or self.diagnostic_frames[-1] >= total_frames_video):
+                    raise ValueError('Diagnostic frame indices exceed the reported source length')
                 if total_frames_video <= 0: total_frames_video = 1 # Prevent division by zero
 
                 # Calculate extraction interval
@@ -218,11 +246,21 @@ class ProcessingWorker:
                 interval_unit = job.settings.get('interval_unit', 'Seconds')
 
                 if interval_unit == 'Frames':
-                    interval = int(max(1, interval_value))
+                    interval = frame_step(interval_value)
                 else: # Seconds
                     # Round instead of truncating: at 29.97 fps a 1s interval
                     # means 30 frames, not 29 (which would drift over time).
                     interval = max(1, round(fps * interval_value))
+
+            selection.validate_source(1 if is_image else int(cap.get(cv2.CAP_PROP_FRAME_COUNT)), is_image)
+            planned = validate_plan_selection(job.settings, 1 if is_image else int(cap.get(cv2.CAP_PROP_FRAME_COUNT)), is_image)
+            if planned is not None and self.diagnostic_frames is not None:
+                raise ValueError('An explicit diagnostic sample cannot also use an extraction capture plan')
+            planned_set = set(planned) if planned is not None else None
+            selection_end = selection.ranges[-1][1] if selection.ranges else None
+            if planned is not None:
+                selection_end = planned[-1]
+                job.result['capture_sampling'] = sampling_record(job.settings, job.result['source_identity'])
 
             # Geometry Settings
             out_res = job.resolution
@@ -237,6 +275,32 @@ class ProcessingWorker:
             # reprojection. All other steps (blur filter, AI masking, sharpening,
             # telemetry) still apply.
             is_360 = job.settings.get('is_360', True)
+
+            # Reject invalid names before metadata subprocesses, projection
+            # allocation or loading any model/cache.
+            views = (GeometryProcessor.generate_views(camera_count, pitch_offset=pitch_offset, layout_mode=layout_mode)
+                     if is_360 else [("flat", 0.0, 0.0, 0.0)])
+            active_cams = job.active_cameras
+            selected_views = [v for i, v in enumerate(views) if active_cams is None or i in active_cams]
+            preflight_names(job.settings, name_no_ext, selected_views, is_image)
+
+            if is_360:
+                output_width = output_height = out_res
+            elif is_image:
+                output_height, output_width = current_image_frame.shape[:2]
+            else:
+                output_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                output_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            storage = estimate_output(job.settings, output_width, output_height,
+                                      1 if is_image else int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
+                                      fps, is_image, [v[0] for v in selected_views])
+            destination = existing_destination(file_path, job.output_dir)
+            storage['free_bytes_at_start'] = require_free_space(destination, storage['capture_budget_bytes'])
+            storage['checked_destination'] = str(destination)
+            job.result['storage_preflight'] = storage
+            if storage['bytes_high'] is not None and storage['bytes_high'] + storage['reserve_bytes'] > storage['free_bytes_at_start']:
+                logger.warning('Estimated output may exceed free disk space; filters/compression can change the total. '
+                               'Free space will be checked before each capture. %s', storage['assumptions'])
 
             # AI Mode per job
             ai_mode_ui = job.settings.get('ai_mode', 'None')
@@ -314,24 +378,16 @@ class ProcessingWorker:
             adaptive_threshold = job.adaptive_threshold
             last_extracted_frame = None
 
-            # Telemetry Setup
-            telemetry_handler = None
-            current_gps = None
-            current_heading = None
-            if job.export_telemetry:
-                telemetry_handler = TelemetryHandler(altitude_mode=job.altitude_mode, cancelled=lambda: not self.is_running)
-                logger.info(f"Extracting telemetry for {filename}...")
-                telemetry_handler.extract_metadata(file_path)
-                job.result["telemetry"] = telemetry_handler.metadata
-                if not telemetry_handler.has_gps:
-                    logger.warning("No valid GPS samples were extracted; output will not be geotagged")
-
-            # EXIF enrichment (I1): the virtual cameras have exactly known
-            # intrinsics, so write them (focal from FOV + a stable Make/Model
-            # per rig) plus per-frame capture time on every image —
-            # photogrammetry tools group and bootstrap calibration from these.
+            # Capture-time metadata is independent of GPS export and sidecars.
             exif_enabled = job.settings.get('exif_intrinsics', True)
             camera_model_label = f"Virtual Pinhole {fov}deg" if is_360 else None
+            telemetry_handler = TelemetryHandler(altitude_mode=job.altitude_mode, cancelled=lambda: not self.is_running)
+            telemetry_handler.extract_metadata(file_path, include_gps=job.export_telemetry)
+            job.result["telemetry"] = telemetry_handler.metadata
+            if job.export_telemetry and not telemetry_handler.has_gps:
+                logger.warning("No valid GPS samples were extracted; output will not be geotagged")
+            current_gps = None
+            current_heading = None
 
             # Filesystem modification time is not a capture timestamp.
             capture_start = None
@@ -347,8 +403,6 @@ class ProcessingWorker:
             # Generate views and reprojection maps (only for 360 input).
             maps = {}
             if is_360:
-                views = GeometryProcessor.generate_views(camera_count, pitch_offset=pitch_offset, layout_mode=layout_mode)
-
                 if is_image:
                     src_h, src_w = current_image_frame.shape[:2]
                 else:
@@ -357,10 +411,6 @@ class ProcessingWorker:
 
                 self.progress_updated.emit(0, f"Generating maps for {filename}...")
 
-                active_cams = job.active_cameras
-
-                selected_views = [v for i, v in enumerate(views) if active_cams is None or i in active_cams]
-                preflight_names(job.settings, name_no_ext, selected_views, is_image)
                 for i, (name, y, p, r) in enumerate(views):
                     if not self.is_running:
                         return
@@ -373,12 +423,15 @@ class ProcessingWorker:
                     # Convert to fixed-point (CV_16SC2): cv2.remap is markedly
                     # faster on these than on two float32 maps, with no visible
                     # quality change (verified bit-identical for linear/lanczos).
-                    maps[name] = cv2.convertMaps(map_x, map_y, cv2.CV_16SC2)
+                    maps[name] = GeometryProcessor.prepare_equirectangular_maps(map_x, map_y)
             else:
                 # Flat / non-360 media: a single passthrough "view".
-                views = [("flat", 0.0, 0.0, 0.0)]
-                preflight_names(job.settings, name_no_ext, views, is_image)
                 self.progress_updated.emit(0, f"Processing {filename} (flat / non-360)...")
+
+            # Names and collisions must be validated before any output write.
+            output_dir = create_output_directory(file_path, job.output_dir)
+            job.result['output_dir'] = output_dir
+            self._write_manifest(output_dir, job, job.result)
 
             active_view_names = set(maps.keys()) if is_360 else {"flat"}
             # Yaw of each view, used to turn the GPS heading (direction of
@@ -400,47 +453,78 @@ class ProcessingWorker:
             # Manifest counters (see the manifest.json written at the end).
             frames_processed = 0       # frames hit at the extraction interval
             frames_skipped_motion = 0  # skipped by the adaptive/motion filter
-            images_written = 0         # image files actually saved
-            written_view_names = set()
+            job.result['extraction'] = {'images_written': 0, 'writes_failed': 0}
             next_extract_time = 0.0
+            excluded_frames = set(job.settings.get('excluded_frames', []))
+            frames_excluded = 0
+            frames_outside_ranges = 0
             views_skipped_ai = 0       # views dropped by AI "Skip Frame"
 
             frame_idx = 0
             job_start_time = time.time()
+            frame_clock = FrameClock(fps)
+            diagnostic_iterator = iter(self.diagnostic_frames or [])
+            if self.diagnostic_frames is not None:
+                job.result['diagnostic_sampling'] = {'requested_frames': self.diagnostic_frames, 'decoded_frames': []}
 
             while self.is_running:
+                if self.diagnostic_frames is None and selection_end is not None and frame_idx > selection_end:
+                    break
                 if is_image:
                     if frame_idx > 0:
                         break
+                    if frame_idx in excluded_frames:
+                        frames_excluded += 1
+                        break
                     frame = current_image_frame
                 else:
+                    if self.diagnostic_frames is not None:
+                        selected_frame = next(diagnostic_iterator, None)
+                        if selected_frame is None:
+                            break
+                        frame_idx = selected_frame
+                        if not cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx):
+                            raise IOError(f'Decoder cannot seek to diagnostic frame {frame_idx}')
                     if not cap.grab():
+                        if self.diagnostic_frames is not None:
+                            raise IOError(f'Could not decode diagnostic frame {frame_idx}')
                         break
-                    sample_time = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
-                    if frame_idx and sample_time <= 0:
-                        sample_time = frame_idx / fps if fps > 0 else 0.0
-                    due = frame_idx % interval == 0 if interval_unit == 'Frames' else sample_time + 1e-8 >= next_extract_time
+                    if self.diagnostic_frames is not None:
+                        position = cap.get(cv2.CAP_PROP_POS_FRAMES)
+                        if not np.isfinite(position) or abs(position - (frame_idx + 1)) > .01:
+                            raise IOError(f'Decoder cannot confirm diagnostic frame {frame_idx}')
+                        job.result['diagnostic_sampling']['decoded_frames'].append(frame_idx)
+                    sample_time, time_source = frame_clock.resolve(frame_idx, cap.get(cv2.CAP_PROP_POS_MSEC) / 1000)
+                    job.result["frame_time_source"] = frame_clock.source
+                    if time_source == 'fps_estimate' and 'timestamp_fallback' not in job.result:
+                        job.result['timestamp_fallback'] = 'Decoder timestamps unavailable or nonmonotonic; FPS estimation used'
+                        logger.warning(job.result['timestamp_fallback'])
+                    due = (self.diagnostic_frames is not None or
+                           (frame_idx in planned_set if planned_set is not None else
+                            frame_idx % interval == 0 if interval_unit == 'Frames' else sample_time + 1e-8 >= next_extract_time))
                     if not due:
+                        frame_idx += 1
+                        continue
+                    if interval_unit == 'Seconds':
+                        next_extract_time = (int(sample_time / interval_value) + 1) * interval_value
+                    if not selection.contains(frame_idx):
+                        frames_outside_ranges += 1
+                        frame_idx += 1
+                        continue
+                    if frame_idx in excluded_frames:
+                        frames_excluded += 1
                         frame_idx += 1
                         continue
                     ret, frame = cap.retrieve()
                     if not ret or frame is None:
                         raise IOError(f'Could not decode selected frame {frame_idx}')
-                    if interval_unit == 'Seconds':
-                        next_extract_time = (int(sample_time / interval_value) + 1) * interval_value
-
                 # Reached only on extraction points (or the single image frame).
-                if is_image or interval_unit == 'Seconds' or frame_idx % interval == 0:
-                    frame_time = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000 if cap is not None else 0.0
-                    if frame_idx and frame_time <= 0:
-                        frame_time = frame_idx / fps if fps > 0 else 0.0
-                        job.result["frame_time_source"] = "fps_estimate"
-                    else:
-                        job.result["frame_time_source"] = "decoder_timestamp"
+                if planned is not None or self.diagnostic_frames is not None or is_image or interval_unit == 'Seconds' or frame_idx % interval == 0:
+                    frame_time = 0.0 if is_image else sample_time
 
                     # Update GPS fix and travel heading for the current time
                     if telemetry_handler:
-                        current_gps = telemetry_handler.get_gps_at_time(frame_time)
+                        current_gps = telemetry_handler.get_gps_at_time(frame_time, orthometric=True)
                         if current_gps and (job.altitude_mode == "relative" or job.settings.get("gps_altitude_reference") != "orthometric"):
                             current_gps = (current_gps[0], current_gps[1], None)
                         # Direction of travel does not establish optical orientation.
@@ -488,6 +572,7 @@ class ProcessingWorker:
                     batch_contexts = []
                     batch_names = []
 
+                    prepared_frame = GeometryProcessor.prepare_equirectangular_source(frame) if is_360 else frame
                     for name, _, _, _ in views:
                         if is_360:
                             if name not in maps:
@@ -495,7 +580,7 @@ class ProcessingWorker:
 
                             map_x, map_y = maps[name]
                             # 1. Reproject
-                            rect_img = cv2.remap(frame, map_x, map_y, interp_flag, borderMode=cv2.BORDER_WRAP)
+                            rect_img = GeometryProcessor.remap_equirectangular(prepared_frame, map_x, map_y, interp_flag, source_is_prepared=True)
                         else:
                             # Flat passthrough at native resolution. Copy so the
                             # async I/O save is not affected by the next cap.read().
@@ -584,6 +669,10 @@ class ProcessingWorker:
                                 combined = disc
                             ai_results[idx] = (img_i, combined)
 
+                    # Guard the whole submitted capture before its first write.
+                    # Previous capture writes have been drained; do not count
+                    # partially published output as safely resumable.
+                    require_free_space(output_dir, storage['capture_budget_bytes'])
                     # 5. Save (Multi-threaded I/O)
                     futures = []
                     for i, (final_img, mask_or_skip) in enumerate(ai_results):
@@ -621,39 +710,64 @@ class ProcessingWorker:
                             FileManager.write_pair, full_save_path, final_img, save_params,
                             exif_bytes, full_mask_path,
                             mask_or_skip if isinstance(mask_or_skip, np.ndarray) else None
-                        ), {"image": save_name, "mask": mask_name if isinstance(mask_or_skip, np.ndarray) else None, "camera": name, "frame": frame_idx}))
+                        ), {"image": save_name, "mask": mask_name if isinstance(mask_or_skip, np.ndarray) else None,
+                            "camera": name, "frame": frame_idx, "timestamp_seconds": frame_time,
+                            "timestamp_source": 'still_image' if is_image else time_source,
+                            **({'sampling_role': 'baseline' if frame_idx in job.settings['capture_plan']['baseline_frames'] else 'inserted'}
+                               if planned is not None else {})}))
 
-                    failures = []
-                    accepted = 0
-                    for future, record in futures:
-                        try:
-                            if not future.result():
-                                raise OSError("Writer did not confirm the output")
-                            images_written += 1
-                            accepted += 1
-                            written_view_names.add(record["camera"])
-                            with open(os.path.join(output_dir, "images.jsonl"), "a", encoding="utf-8") as index_file:
-                                index_file.write(json.dumps(record) + "\n")
-                        except Exception as exc:
-                            failures.append(str(exc))
-                    job.result['extraction'] = dict(
+                    job.result['extraction'].update(
                         interval_frames=interval, frames_processed=frames_processed,
-                        frames_skipped_motion=frames_skipped_motion, images_written=images_written,
+                        frames_skipped_motion=frames_skipped_motion,
+                        frames_excluded=frames_excluded,
+                        frames_outside_ranges=frames_outside_ranges,
                         views_skipped_blur=skipped_blur_count, views_skipped_ai=views_skipped_ai,
-                        writes_failed=len(failures),
                     )
-                    if failures:
-                        raise OSError("; ".join(failures))
+                    accepted = self._drain_writes(job, output_dir, futures, written_view_names)
+                    if planned is not None and accepted == len(active_view_names):
+                        job.result['capture_sampling']['confirmed_frames'].append(frame_idx)
                     if accepted and adaptive_mode:
                         last_extracted_frame = frame.copy()
 
                 frame_idx += 1
-            if not is_image and self.is_running and frame_idx < total_frames_video - 1:
-                raise IOError(f"Decoder stopped at frame {frame_idx}, expected {total_frames_video}; output is partial")
+            if not is_image and self.is_running and self.diagnostic_frames is None:
+                expected = telemetry_handler.metadata.get('frame_count', total_frames_video)
+                if selection_end is not None:
+                    expected = min(expected, selection_end + 1)
+                count_source = telemetry_handler.metadata.get('frame_count_source', 'decoder_reported')
+                job.result['frame_count_check'] = dict(expected=expected, decoded=frame_idx, source=count_source)
+                job.result['frame_count_check']['scope'] = 'selected end' if selection_end is not None else 'whole source'
+                if frame_idx < expected:
+                    message = f"Decoder stopped at frame {frame_idx}, expected {expected}; output may be partial"
+                    if count_source == 'container_estimate':
+                        job.result['frame_count_warning'] = message + '; container count is estimated'
+                        logger.warning(job.result['frame_count_warning'])
+                    else:
+                        raise IOError(message)
         finally:
-            if cap:
-                cap.release()
+            pending_exception = sys.exc_info()[1]
+            if isinstance(pending_exception, KeyboardInterrupt):
+                self.stop()
+            try:
+                # Also drain submissions if setup of a later view or Ctrl-C
+                # interrupts the submission loop. No terminal manifest precedes
+                # a still-running writer.
+                if futures:
+                    self._drain_writes(job, output_dir, futures, written_view_names)
+            except Exception:
+                if isinstance(pending_exception, KeyboardInterrupt):
+                    # Write errors are retained in the result by _drain_writes;
+                    # preserve the initiating interrupt for the CLI's exit 130.
+                    raise pending_exception
+                raise
+            finally:
+                if cap:
+                    cap.release()
 
+        if planned is not None and self.is_running and job.result['capture_sampling']['confirmed_frames'] != planned:
+            raise IOError('Controlled capture plan incomplete: not every planned capture has all confirmed views')
+        job.result['extraction'].update(frames_excluded=frames_excluded, frames_outside_ranges=frames_outside_ranges)
+        images_written = job.result['extraction']['images_written']
         if skipped_blur_count > 0:
             logger.info(f"Total blurry views skipped for {filename}: {skipped_blur_count}")
 
@@ -682,12 +796,64 @@ class ProcessingWorker:
                 "interval_frames": interval,
                 "frames_processed": frames_processed,
                 "frames_skipped_motion": frames_skipped_motion,
+                "frames_excluded": frames_excluded,
+                "frames_outside_ranges": frames_outside_ranges,
                 "images_written": images_written,
                 "views_skipped_blur": skipped_blur_count,
                 "views_skipped_ai": views_skipped_ai,
+                "writes_failed": job.result['extraction'].get('writes_failed', 0),
             },
             "elapsed_seconds": round(time.time() - job_start_time, 2),
         })
+
+    def _drain_writes(self, job, output_dir, futures, written_view_names):
+        """Settle and index every submitted write before propagating interruption.
+
+        KeyboardInterrupt interrupts a wait, not the underlying writer. Retain
+        that future and wait again, then report all confirmed outputs/errors.
+        """
+        interruption = None
+        failures = []
+        accepted = 0
+        while futures:
+            future, record = futures[0]
+            try:
+                confirmed = future.result()
+            except KeyboardInterrupt as exc:
+                self.stop()
+                interruption = exc
+                # A worker-raised BaseException is a settled failure, unlike
+                # a signal interrupting this thread's wait.
+                if future.done() and isinstance(future.exception(), KeyboardInterrupt):
+                    failures.append("Writer interrupted before confirming output")
+                    futures.pop(0)
+                continue
+            except Exception as exc:
+                failures.append(str(exc))
+                futures.pop(0)
+                continue
+            futures.pop(0)
+            if not confirmed:
+                failures.append("Writer did not confirm the output")
+                continue
+            job.result['extraction']['images_written'] += 1
+            accepted += 1
+            written_view_names.add(record['camera'])
+            try:
+                with open(os.path.join(output_dir, 'images.jsonl'), 'a', encoding='utf-8') as index_file:
+                    index_file.write(json.dumps(record) + "\n")
+            except Exception as exc:
+                failures.append(f"Could not index confirmed output {record['image']}: {exc}")
+        job.result['extraction']['writes_failed'] += len(failures)
+        if failures:
+            job.result.setdefault('write_errors', []).extend(failures)
+            for failure in failures:
+                logger.error('Output write/index failure: %s', failure)
+        if interruption is not None:
+            raise interruption
+        if failures:
+            raise OSError('; '.join(failures))
+        return accepted
 
     def _write_manifest(self, output_dir, job, stats):
         """Write a manifest.json in the job's output folder.
@@ -702,6 +868,7 @@ class ProcessingWorker:
             "source_file": job.file_path,
             "output_dir": output_dir,
             "settings": job.settings,
+            "mask_contract": mask_contract(job.settings),
             **stats,
         }
         manifest["schema_version"] = 2

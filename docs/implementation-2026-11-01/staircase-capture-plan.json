@@ -1,0 +1,29 @@
+{
+  "capture_plan": {
+    "mode": "baseline",
+    "baseline_frames": [0, 5, 11, 16, 22, 27, 33, 38, 44, 49, 55, 60, 66, 71, 77, 82]
+  },
+  "included_frame_ranges": [[0, 82]],
+  "excluded_frames": [],
+  "is_360": true,
+  "layout_mode": "cube",
+  "camera_count": 6,
+  "active_cameras": [0, 1, 2, 3, 4, 5],
+  "pitch_offset": 0,
+  "fov": 90,
+  "resolution": 1024,
+  "output_format": "jpg",
+  "quality": 95,
+  "nadir_mask_enabled": true,
+  "nadir_mask_radius": 40,
+  "feather_mask": false,
+  "mask_profile": "postshot",
+  "ai_mode": "None",
+  "blur_filter_enabled": false,
+  "smart_blur_enabled": false,
+  "adaptive_mode": false,
+  "sharpening_enabled": false,
+  "export_telemetry": false,
+  "exif_intrinsics": true,
+  "export_colmap": false
+}

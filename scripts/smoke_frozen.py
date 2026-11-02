@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -11,18 +12,43 @@ import cv2
 import numpy as np
 
 
+def frozen_executable(dist, platform):
+    if platform == "darwin":
+        return dist / "360 Extractor.app/Contents/MacOS/360 Extractor"
+    if platform == "win32":
+        return dist / "360 Extractor/360 Extractor CLI.exe"
+    return dist / "360 Extractor/360 Extractor"
+
+
+def run_launcher(executable, arguments, root, env):
+    result = subprocess.run(
+        [str(executable), *arguments], cwd=root, env=env,
+        capture_output=True, timeout=90,
+    )
+    # Windows' parent locale may be cp1252 while Python/Qt emit UTF-8. Keep
+    # diagnostics printable even if a native dependency emits other bytes.
+    stdout = result.stdout.decode('utf-8', errors='replace')
+    stderr = result.stderr.decode('utf-8', errors='replace')
+    if result.returncode:
+        raise RuntimeError(f"Frozen launcher exited {result.returncode}:\n{stdout}\n{stderr}")
+    return stdout
+
+
+def check_cli_output(run):
+    version = run("--version")
+    if not re.search(r"(?m)^360 Extractor \d+\.\d+\.\d+\s*$", version):
+        raise RuntimeError(f"Frozen launcher did not print its version: {version!r}")
+    help_text = run("--help")
+    if not all(option in help_text for option in ("--input", "--output", "--config")):
+        raise RuntimeError(f"Frozen launcher did not print CLI help: {help_text!r}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dist", type=Path, required=True)
     parser.add_argument("--model-dir", type=Path, help="Provisioned standard weights for an additional AI extraction")
     args = parser.parse_args()
-    if sys.platform == "darwin":
-        executable = args.dist / "360 Extractor.app/Contents/MacOS/360 Extractor"
-    elif sys.platform == "win32":
-        executable = args.dist / "360 Extractor/360 Extractor.exe"
-    else:
-        executable = args.dist / "360 Extractor/360 Extractor"
-    executable = executable.resolve(strict=True)
+    executable = frozen_executable(args.dist, sys.platform).resolve(strict=True)
 
     with tempfile.TemporaryDirectory(prefix="360-frozen-smoke-") as directory:
         root = Path(directory)
@@ -35,14 +61,9 @@ def main():
         env["PATH"] = os.environ.get("SystemRoot", "C:\\Windows") + "\\System32" if sys.platform == "win32" else "/usr/bin:/bin"
 
         def run(*arguments):
-            result = subprocess.run(
-                [str(executable), *arguments], cwd=root, env=env,
-                capture_output=True, text=True, timeout=90,
-            )
-            if result.returncode:
-                raise RuntimeError(f"Frozen launcher exited {result.returncode}:\n{result.stdout}\n{result.stderr}")
+            return run_launcher(executable, arguments, root, env)
 
-        run("--version")
+        check_cli_output(run)
         run("--input", str(source), "--output", str(root / "output"), "--flat", "--format", "png")
         manifests = list((root / "output").rglob("manifest.json"))
         assert len(manifests) == 1, "Frozen executable did not produce one manifest"
@@ -53,7 +74,7 @@ def main():
         image = cv2.imread(str(images[0]))
         assert image is not None and image.shape[:2] == (64, 96)
         assert np.all(image == 127), "Flat extraction altered the input pixels"
-        print("FROZEN_SMOKE_OK: launcher, completed manifest, one native-size PNG, exact pixels")
+        print("FROZEN_SMOKE_OK: version/help text, completed manifest, one native-size PNG, exact pixels")
         if args.model_dir:
             # Hosted macOS VMs can report MPS available while GPU allocations
             # fail. Qualify portable CPU inference; GPU acceptance is separate.
@@ -65,7 +86,7 @@ def main():
             assert len(manifests) == 1
             manifest = json.loads(manifests[0].read_text(encoding="utf-8"))
             assert manifest["status"] == "completed", manifest
-            records = [json.loads(line) for line in (manifests[0].parent / "images.jsonl").read_text().splitlines()]
+            records = [json.loads(line) for line in (manifests[0].parent / "images.jsonl").read_text(encoding="utf-8").splitlines()]
             assert len(records) == 1 and records[0]["mask"], records
             mask = cv2.imread(str(manifests[0].parent / records[0]["mask"]), cv2.IMREAD_GRAYSCALE)
             assert mask is not None and mask.shape == (64, 96)

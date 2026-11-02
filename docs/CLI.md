@@ -1,6 +1,8 @@
 # Command-line guide
 
-This guide describes the Studio 4.0.1 preview. Install the project using the [README](../README.md#install-from-source). Commands below run from the repository root with that environment activated. `python -m extractor360`, `360extractor` and the development launcher `python src/main.py` use the same entry point.
+This guide describes current development sources, including the unreleased October corrections. Install the project using the [README](../README.md#install-from-source). Commands below run from the repository root with that environment activated. `python -m extractor360`, `360extractor` and the development launcher `python src/main.py` use the same entry point.
+
+New Windows builds provide `360 Extractor CLI.exe` for console use alongside `360 Extractor.exe` for Studio; both share the same application files. In PowerShell, invoke `& '.\360 Extractor CLI.exe' --help`. This launcher is not included in the previously published v4.0.1 assets.
 
 ## Starting a job
 
@@ -50,7 +52,8 @@ Defaults below apply when neither a JSON config nor an explicit argument overrid
 | `--altitude-mode` | DJI source selection: `absolute` or `relative`. Relative altitude is omitted from EXIF; absolute also requires a verified orthometric reference. | `absolute` |
 | `--no-exif-intrinsics` | Disable synthetic calibration EXIF. Capture dates require an available container timestamp; travel direction is never optical heading. GPS export is controlled separately. | Calibration enabled |
 | `--export-colmap` | Write virtual calibration, rig configuration and a reconstruction runner for 360 output. Full reconstruction qualification is pending. | Disabled |
-| `--naming-mode` | `realityscan`, `simple` or `custom`. | `realityscan` |
+| `--mask-profile` | `realityscan`, `colmap`, `postshot` (Remove Occluders) or `custom`. Named profiles override mask polarity and naming, including saved/manual settings. | `custom` |
+| `--naming-mode` | `realityscan`, `colmap`, `postshot`, `simple` or `custom`; used directly only with the custom mask profile. | `realityscan` |
 | `--image-pattern` | Custom image pattern, e.g. `{filename}_{frame}_{camera}{ext}`. | See settings guide |
 | `--mask-pattern` | Custom mask pattern, e.g. `{image_name}.mask.png`. Providing a pattern implies custom mode unless a mode is explicit. | See settings guide |
 
@@ -75,6 +78,14 @@ Standard video without panorama projection:
 ```sh
 360extractor --input clips/interview.mp4 --output out/interview --flat
 ```
+
+Postshot's **Remove Occluders** mode needs white ignored regions and matching mask basenames. Import color images as images and masks in Postshot's Image Masks section. Do not select Remove Background for these occlusion masks:
+
+```sh
+360extractor --input videos/trip.mp4 --output out/postshot --layout cube --ai-mask --mask-profile postshot
+```
+
+Set JSON `export_colmap` to `false` for this run if a saved configuration enables it. For COLMAP, make a separate run with `--mask-profile colmap --export-colmap`. For manual polarity or patterns, explicitly select `--mask-profile custom`. A profile does not enable AI or nadir masking by itself. See the [mask contracts](SETTINGS.md#mask-profiles-and-storage) and [Postshot documentation](https://www.jawset.com/docs/d/Postshot%2BUser%2BGuide/Interface/Training%2BConfiguration).
 
 Use the JSON example in [SETTINGS.md](SETTINGS.md#configuration-files), which includes its input and output paths:
 
@@ -119,3 +130,7 @@ Seconds sampling uses decoder timestamps, with an identified FPS fallback when u
 Configuration validation precedes model loading and image writes, but the CLI can create the parent output folder earlier. Image/mask pairs are staged before publication; a power cut can still leave partial state. Do not treat a `running` manifest from an interrupted process as complete. Automatic resume is not implemented.
 
 For a repeatable manual check, use the [acceptance protocol](CLI_TESTING_PROTOCOL.md). Current qualification limits are tracked in the [implementation status](implementation-2026-09-07/PROGRESSION.md).
+
+## Import external reconstruction evidence
+
+Use `--import-consumer-report realityscan|postshot` with `--dataset`, `--camera-report` and/or `--consumer-log`, plus a new `--report-output` JSON filename. `--write-realityscan-template PATH` writes a new input-state template. These modes do not extract media or edit projects. See the [consumer report guide](CONSUMER_REPORTS.md) for exact formats and unknown-coverage rules.

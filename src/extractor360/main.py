@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import sys
+import signal
+import threading
 import os
 import argparse
 import json
@@ -11,6 +13,7 @@ from extractor360.core.settings_manager import SettingsManager, build_settings
 from extractor360.core.job import Job
 from extractor360.core.output_plan import discover_media
 from extractor360.core.validation import validate_settings
+from extractor360.core.mask_profiles import MASK_PROFILES
 from extractor360.core.processor import ProcessingWorker
 from extractor360.core.version import APP_NAME, VERSION
 from extractor360.utils.logger import logger
@@ -28,7 +31,23 @@ def parse_arguments():
     parser.add_argument("--config", type=str, help="Path to JSON configuration file")
     parser.add_argument("--input", "-i", type=str, help="Path to input video file or directory (CLI mode)")
     parser.add_argument("--output", "-o", type=str, help="Path to output directory (CLI mode)")
+    parser.add_argument('--import-consumer-report', choices=['realityscan', 'postshot'],
+                        help='Import reconstruction evidence without extracting media')
+    parser.add_argument('--dataset', help='Completed extraction folder with manifest.json and images.jsonl')
+    parser.add_argument('--camera-report', help='RealityScan registration CSV/input-state report, or Postshot COLMAP images.txt/images.bin')
+    parser.add_argument('--consumer-log', help='Optional log; inspect the last UTC session, or the whole file without a header')
+    parser.add_argument('--report-output', help='New normalized JSON report filename (never overwrite)')
+    parser.add_argument('--write-realityscan-template', metavar='PATH', help='Write a new RealityScan input-state report template')
     parser.add_argument("--interval", type=float, help="Extraction interval in seconds (default: 1.0)")
+    parser.add_argument('--frame-range', type=int, nargs=2, action='append', metavar=('START', 'END'),
+                        help='Include an inclusive source-frame range (zero-based); repeat for several ranges. Sampling stays anchored at source start.')
+    capture_reference = parser.add_mutually_exclusive_group()
+    capture_reference.add_argument('--capture-window', type=int, nargs=2, metavar=('START', 'END'),
+                                   help='Freeze 16 evenly spaced reference frames in this inclusive window (one video only).')
+    capture_reference.add_argument('--capture-baseline', type=int, nargs=16, metavar='FRAME',
+                                   help='Use these exact 16 increasing source frames as the comparison reference.')
+    parser.add_argument('--capture-mode', choices=['baseline', 'densified', 'interval'],
+                        help='Export the frozen 16, or 31 including all 16 plus floor midpoints; interval clears the plan.')
     parser.add_argument("--format", type=str, choices=['jpg', 'png', 'tiff'], help="Output image format (default: jpg)")
     parser.add_argument("--ai", action="store_true", help="Enable AI masking (Legacy alias for --ai-mask)")
     parser.add_argument("--ai-mask", action="store_true", help="Enable AI masking (Generate Mask)")
@@ -56,7 +75,8 @@ def parse_arguments():
     parser.add_argument("--ai-mask-cameras", type=str, help="Restrict AI masking to these faces only, comma-separated (e.g. 'Down' or 'Back,Down'; cube faces: Front,Right,Back,Left,Up,Down; ring/fibonacci: View_0,View_1,...). Empty = all faces.")
     
     # Naming Control
-    parser.add_argument("--naming-mode", type=str, choices=['realityscan', 'simple', 'custom'], help="Naming convention for output files")
+    parser.add_argument("--mask-profile", choices=list(MASK_PROFILES), help="Set mask polarity and names for realityscan, colmap or postshot (Remove Occluders). Default custom preserves manual settings.")
+    parser.add_argument("--naming-mode", type=str, choices=['realityscan', 'postshot', 'colmap', 'simple', 'custom'], help="Naming convention for output files (named mask profiles take precedence)")
     parser.add_argument("--image-pattern", type=str, help="Custom pattern for image filenames")
     parser.add_argument("--mask-pattern", type=str, help="Custom pattern for mask filenames")
     
@@ -69,7 +89,7 @@ def load_config(config_path):
         sys.exit(1)
     
     try:
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             if not isinstance(data, dict):
                 raise ValueError("Configuration must be a JSON object")
@@ -108,15 +128,6 @@ def run_cli(args):
         output_path = os.path.join(os.getcwd(), "output")
         logger.warning(f"No output path specified. Using default: {output_path}")
 
-    # Ensure output directory exists
-    if not os.path.exists(output_path):
-        try:
-            os.makedirs(output_path)
-            logger.info(f"Created output directory: {output_path}")
-        except OSError as e:
-            logger.error(f"Error creating output directory {output_path}: {e}")
-            sys.exit(1)
-            
     # Prepare jobs
     files_to_process = discover_media([input_path], exclude=[output_path] if os.path.realpath(input_path) != os.path.realpath(output_path) else [])
 
@@ -127,23 +138,23 @@ def run_cli(args):
     logger.info(f"Found {len(files_to_process)} file(s) to process.")
 
     # Parse Active Cameras
-    active_cameras_str = args.active_cameras or config.get('active_cameras')
-    active_cameras = None
-    if active_cameras_str is not None:
+    # Preserve JSON types for the shared validator. Only the explicit CLI
+    # option uses comma-separated text; coercing JSON would turn true or 1.9
+    # into a valid camera index before validation could reject them.
+    active_cameras = config.get('active_cameras')
+    if args.active_cameras is not None:
         try:
-            # Handle list from JSON or string from CLI
-            if isinstance(active_cameras_str, list):
-                active_cameras = [int(x) for x in active_cameras_str]
-            else:
-                active_cameras = [int(x.strip()) for x in active_cameras_str.split(',')]
+            active_cameras = [int(x.strip()) for x in args.active_cameras.split(',')]
         except ValueError:
-            logger.error(f"Error: Invalid format for active-cameras: {active_cameras_str}")
-            sys.exit(1)
+            logger.error(f"Error: Invalid format for active-cameras: {args.active_cameras}")
+            sys.exit(2)
 
     # Build the settings dict the processor consumes.
     # Precedence: DEFAULT_SETTINGS < config file < explicit CLI arguments.
     try:
         settings = validate_settings(build_settings(args, config, active_cameras, output_path))
+        if settings['capture_plan'] is not None and len(files_to_process) != 1:
+            raise ValueError('A source-specific capture plan requires exactly one input video')
     except ValueError as exc:
         logger.error(f"Invalid settings: {exc}")
         sys.exit(2)
@@ -152,6 +163,8 @@ def run_cli(args):
 
     # The core is Qt-free: its events are plain callbacks, so no
     # QCoreApplication is needed in CLI mode anymore.
+    # The worker allocates output only after settings, views and names pass
+    # validation, so a rejected launch leaves the destination untouched.
     worker = ProcessingWorker(jobs)
     
     # Progress Bar Handling
@@ -190,7 +203,20 @@ def run_cli(args):
         worker.error_occurred.connect(lambda err: logger.error(f"ERROR: {err}"))
         worker.finished.connect(lambda: logger.info("All jobs finished."))
     
-    # Run processing synchronously
+    # Cooperative SIGINT keeps a signal from splitting publication of an
+    # already-confirmed image, its index entry, and the terminal manifest.
+    # Repeated Ctrl-C remains cooperative while native writers finish.
+    interrupted = False
+    previous_sigint_handler = None
+    handles_sigint = threading.current_thread() is threading.main_thread()
+
+    def request_interrupt(signum, frame):
+        nonlocal interrupted
+        interrupted = True
+        worker.stop()
+
+    if handles_sigint:
+        previous_sigint_handler = signal.signal(signal.SIGINT, request_interrupt)
     try:
         worker.run()
     except KeyboardInterrupt:
@@ -202,6 +228,13 @@ def run_cli(args):
         if TQDM_AVAILABLE: pbar.close()
         logger.error(f"An unexpected error occurred: {e}")
         sys.exit(1)
+    finally:
+        if handles_sigint:
+            signal.signal(signal.SIGINT, previous_sigint_handler)
+
+    if interrupted:
+        logger.info("\nProcess interrupted by user; submitted writes have finished.")
+        sys.exit(130)
 
     # Propagate job failures to the shell so batch automation can detect them.
     if worker.error_count > 0:
@@ -209,7 +242,35 @@ def run_cli(args):
         sys.exit(1)
 
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == '--diagnostic-sample':
+        from extractor360.core.preflight import sample_main
+        sample_main(sys.argv[2])
+        return
     args = parse_arguments()
+
+    if args.import_consumer_report or args.write_realityscan_template:
+        from extractor360.core.consumer_reports import import_report, write_report, write_template
+        try:
+            if args.input or args.config or args.output:
+                raise ValueError('Report import/template export cannot be combined with media extraction')
+            if args.write_realityscan_template:
+                if args.import_consumer_report or any((args.dataset, args.camera_report, args.consumer_log, args.report_output)):
+                    raise ValueError('Template export cannot be combined with report import')
+                write_template(args.write_realityscan_template)
+            else:
+                if not args.dataset or not args.report_output:
+                    raise ValueError('Report import requires --dataset and --report-output')
+                report = import_report(args.dataset, args.import_consumer_report, args.camera_report, args.consumer_log)
+                write_report(args.report_output, report)
+                print(f"Imported {len(report['models'])} component(s)/Image Set(s), {len(report['views'])} confirmed views, "
+                      f"{len(report['warnings'])} warning(s). Saved {args.report_output}")
+        except (OSError, ValueError) as exc:
+            logger.error(str(exc))
+            sys.exit(1)
+        return
+    if any((args.dataset, args.camera_report, args.consumer_log, args.report_output)):
+        logger.error('Report options require --import-consumer-report')
+        sys.exit(1)
     
     # Check if CLI required arguments are present (input is strictly required via CLI or Config)
     # But here we only check if we should go to CLI mode vs GUI mode.

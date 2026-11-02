@@ -1,0 +1,268 @@
+{
+  "date": "2026-11-01",
+  "scene_id": "escalier-debut",
+  "application_commit": "9b26c77cd8a49dd2b71c3eb288d5b54a70abd81e",
+  "source_sha256": "16e63af4debba72ef11586512fa9c703bb8a823cccdc27ccf98c29c031c6b152",
+  "repetitions_per_case_per_consumer": 1,
+  "versions": {
+    "realityscan": "2.2.0.119430.RS",
+    "postshot": "1.1.69 (2026-08-18)"
+  },
+  "machine": {
+    "os": "Windows build 26200",
+    "gpu": "NVIDIA RTX A4500",
+    "gpu_memory_mib": 19190,
+    "driver": "595.97"
+  },
+  "controls": {
+    "layout": "Cube",
+    "fov_degrees": 90,
+    "views_per_capture": 6,
+    "resolution": 1024,
+    "jpeg_quality": 95,
+    "ai": false,
+    "filters": false,
+    "nadir_mask": "40% Down disc, binary, destination-specific polarity",
+    "common_images_byte_identical": true,
+    "consumer_profile_images_byte_identical": true,
+    "consumer_masks_complementary": true,
+    "source_unchanged": true,
+    "diagnostic_capture_limit_changed": false
+  },
+  "postshot_settings": {
+    "selection": "Use All Images",
+    "mask_mode": "Remove Occluders",
+    "photometric_compensation": false,
+    "poses": "Compute From Images",
+    "pose_quality": "3 (High)",
+    "profile": "Splat3",
+    "image_size_limit": 3840,
+    "max_splats": 3000000,
+    "anti_aliasing": true,
+    "training_step_limit": 5000
+  },
+  "sampling": {
+    "control16": {
+      "frames": [
+        0,
+        5,
+        11,
+        16,
+        22,
+        27,
+        33,
+        38,
+        44,
+        49,
+        55,
+        60,
+        66,
+        71,
+        77,
+        82
+      ],
+      "capture_count": 16,
+      "face_count": 96,
+      "span_seconds": 3.28,
+      "gap_frames": [
+        5,
+        6
+      ],
+      "mean_gap_seconds": 0.21866666666666668,
+      "max_gap_seconds": 0.24
+    },
+    "trial31": {
+      "frames": [
+        0,
+        2,
+        5,
+        8,
+        11,
+        13,
+        16,
+        19,
+        22,
+        24,
+        27,
+        30,
+        33,
+        35,
+        38,
+        41,
+        44,
+        46,
+        49,
+        52,
+        55,
+        57,
+        60,
+        63,
+        66,
+        68,
+        71,
+        74,
+        77,
+        79,
+        82
+      ],
+      "capture_count": 31,
+      "face_count": 186,
+      "span_seconds": 3.28,
+      "gap_frames": [
+        2,
+        3
+      ],
+      "mean_gap_seconds": 0.10933333333333334,
+      "max_gap_seconds": 0.12
+    }
+  },
+  "realityscan": {
+    "trial31": {
+      "components": 15,
+      "largest": {
+        "id": "{4A46F2EF-C704-4E9C-A846-6444BB1D6FD2}",
+        "images": 31,
+        "median_error_px": 0.7554656267166138,
+        "mean_error_px": 0.8122956156730652,
+        "alignment_time": "00h:01m:25s"
+      },
+      "frames": [
+        0,
+        2,
+        5,
+        8,
+        11,
+        13,
+        16,
+        19,
+        22,
+        24,
+        27,
+        30,
+        33,
+        35,
+        38,
+        41,
+        44,
+        46,
+        49,
+        52,
+        55,
+        57,
+        60,
+        63,
+        66,
+        68,
+        71,
+        74,
+        77,
+        79,
+        82
+      ],
+      "capture_count": 31,
+      "views": {
+        "Left": 31
+      },
+      "first_last_seconds": [
+        0.0,
+        3.28
+      ],
+      "preview_mesh": [
+        14200,
+        7102
+      ]
+    },
+    "control16": {
+      "components": 14,
+      "largest": {
+        "id": "{44753C6F-4C23-40C9-ADAE-9E799F72128B}",
+        "images": 17,
+        "median_error_px": 0.6289519667625427,
+        "mean_error_px": 0.7186915278434753,
+        "alignment_time": "00h:00m:35s"
+      },
+      "frames": [
+        0,
+        5,
+        11,
+        16,
+        22,
+        27,
+        33,
+        38,
+        44,
+        49,
+        55,
+        60,
+        66,
+        71,
+        77,
+        82
+      ],
+      "capture_count": 16,
+      "views": {
+        "Left": 16,
+        "Up": 1
+      },
+      "first_last_seconds": [
+        0.0,
+        3.28
+      ],
+      "preview_mesh": [
+        6900,
+        3452
+      ]
+    }
+  },
+  "postshot": {
+    "control16": {
+      "input_images": 96,
+      "partial_registered_images_before_failure": 2,
+      "accepted_images_after_failure": 0,
+      "sparse_points": 38,
+      "tracking_seconds": 13.838,
+      "training_steps": 0,
+      "outcome": "camera_tracking_failed",
+      "project_bytes": 76879
+    },
+    "trial31": {
+      "input_images": 186,
+      "registered_images": 121,
+      "registered_physical_captures": null,
+      "sparse_points": 5419,
+      "tracking_seconds": 190.81,
+      "training_seconds_to_limit": 71.141,
+      "training_steps": 5000,
+      "outcome": "trained_and_reopened",
+      "project_bytes": 398497517,
+      "unmatched_mask_warnings_on_reopen_frames": [
+        0,
+        2,
+        5,
+        8,
+        11
+      ],
+      "reopened_image_counts": {
+        "imported": 121,
+        "selected": 121,
+        "tracked": 121
+      }
+    }
+  },
+  "limitations": [
+    "One paired pilot, no repeated-run or cold/warm cache qualification",
+    "Postshot physical-capture and directional coverage not independently enumerated",
+    "No geometry ground truth or held-out views",
+    "Five unmatched Down-mask warnings on Postshot reopen remain to be explained",
+    "No peak RAM/VRAM measurement; global caches not included in retained-file inventory"
+  ],
+  "realityscan_visual_review": {
+    "same_source_view": "frame000000_Left",
+    "camera_indexes": {
+      "control16": 9,
+      "trial31": 30
+    },
+    "projects_reopened": true,
+    "quality": "Both Preview meshes remain coarse, faceted and incomplete; final texture/mesh quality not qualified"
+  }
+}

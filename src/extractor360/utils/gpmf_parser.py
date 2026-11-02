@@ -2,6 +2,8 @@ import struct
 import logging
 from typing import List, Dict, Any
 
+from extractor360.utils.gps_types import GPSSample
+
 logger = logging.getLogger(__name__)
 
 class GPMFParser:
@@ -11,14 +13,14 @@ class GPMFParser:
     
     def __init__(self):
         self.scales: Dict[str, List[float]] = {}
-        self.gps_data: List[Dict[str, float]] = []
+        self.gps_data: List[GPSSample] = []
         self.current_timestamp = 0.0
         self.gps_fix = None
         # Assuming ~18Hz for GPS as default, but this is rough estimation
         # Real implementation would look for TSMP (Total Samples) or TICK to map time accurately
         self.sample_duration = 1.0 / 18.0 
         
-    def parse(self, data: bytes) -> List[Dict[str, float]]:
+    def parse(self, data: bytes) -> List[GPSSample]:
         """
         Parses raw GPMF binary data.
         
