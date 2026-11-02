@@ -4,6 +4,8 @@ Versioned entries describe their historical candidates/releases. Version 4.0.1 p
 
 ## [Unreleased]
 
+- Qualify native RealityScan 2.2 input-state reports and Postshot 1.1.69 COLMAP text/binary exports on retained staircase projects. Accept zero-based unsigned camera/image IDs, scope appended logs before UTF-8 decoding, and apply the dark dialog theme to consumer reports. Preserve unknown coverage when a failed Postshot project cannot export camera poses; document the exact correspondence between five mask warnings and five absent Down views.
+
 - Import RealityScan registration/input-state reports and Postshot COLMAP camera exports with optional mask-warning logs in Studio and CLI. Persist per-source evidence across extractions, report coverage per component, capture and direction, and distinguish explicit rejection, absence and unknown membership.
 - Preserve the documented dotted filename extension in the RealityScan report template and cancel active report imports when the dialog is dismissed with Escape.
 

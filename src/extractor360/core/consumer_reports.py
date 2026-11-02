@@ -22,6 +22,9 @@ MAX_BYTES = 16 * 1024**2
 MAX_VIEWS = 20000
 MAX_MEMBERSHIPS = 100000
 MAX_REPORTS = 10
+# COLMAP image_t/camera_t are uint32; only UINT32_MAX is the invalid sentinel.
+# Native Postshot exports start both identifiers at zero.
+INVALID_COLMAP_ID = 2**32 - 1
 STATES = ('retained', 'rejected', 'not_retained', 'disabled', 'unknown')
 FORMAT = '360-extractor-consumer-report'
 RS_TEMPLATE = '''360EXTRACTOR_REALITYSCAN_V1
@@ -223,7 +226,9 @@ def _postshot_text(content, names, cancelled):
             if len(fields) != 10:
                 raise ValueError('Invalid COLMAP image row; choose images.txt, not cameras.txt')
             identifier, camera = int(fields[0]), int(fields[8])
-            if identifier <= 0 or identifier in ids or camera <= 0 or not all(math.isfinite(float(v)) for v in fields[1:8]):
+            if (not 0 <= identifier < INVALID_COLMAP_ID or identifier in ids
+                    or not 0 <= camera < INVALID_COLMAP_ID
+                    or not all(math.isfinite(float(v)) for v in fields[1:8])):
                 raise ValueError('Invalid COLMAP image ID or pose')
             ids.add(identifier)
             _member(names, fields[9], states)
@@ -258,8 +263,9 @@ def _postshot_binary(content, names, cancelled):
     ids = set()
     for _ in range(count):
         _check(cancelled)
-        row = unpack('i7di')
-        if row[0] <= 0 or row[0] in ids or row[-1] <= 0 or not all(math.isfinite(v) for v in row[1:8]):
+        row = unpack('I7dI')
+        if (row[0] == INVALID_COLMAP_ID or row[0] in ids or row[-1] == INVALID_COLMAP_ID
+                or not all(math.isfinite(v) for v in row[1:8])):
             raise ValueError('Invalid COLMAP image ID or pose')
         ids.add(row[0])
         name = bytearray()
@@ -282,11 +288,14 @@ def _postshot_binary(content, names, cancelled):
 
 
 def _log(content, views, cancelled):
-    text = _text(content)
-    headers = list(re.finditer(r'^\[0:00:00\.\d+\] (\d{4}-\d{2}-\d{2} [\d:]+ UTC)', text, re.M))
-    scope = headers[-1].group(1) if headers else 'entire supplied file (no UTC session header)'
+    # Postshot appends sessions to one file. Older sessions may use a different
+    # encoding; only the selected session must satisfy the UTF-8 contract.
+    content = content.removeprefix(b'\xef\xbb\xbf')
+    headers = list(re.finditer(rb'^\[0:00:00\.\d+\] (\d{4}-\d{2}-\d{2} [\d:]+ UTC)', content, re.M))
+    scope = headers[-1].group(1).decode('ascii') if headers else 'entire supplied file (no UTC session header)'
     if headers:
-        text = text[headers[-1].start():]
+        content = content[headers[-1].start():]
+    text = _text(content)
     masks = _Names(v['mask'] for v in views if v['mask'])
     mask_views = {v['mask']: v['image'] for v in views if v['mask']}
     warnings = []

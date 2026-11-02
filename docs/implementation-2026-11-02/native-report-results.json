@@ -1,0 +1,1258 @@
+{
+  "baseline_commit": "f7807929482b873126bd0a46c4eb2b743fc1c253",
+  "versions": {
+    "RealityScan": "2.2.0.119430.RS",
+    "Postshot": "1.1.69"
+  },
+  "transfer_sha256": "b812471bacf78927b7834da68ec1558bce445a36857154fee533dbb8f358d72f",
+  "datasets": {
+    "realityscan/control16": {
+      "run_id": "6dac30e43b4f43b088a481d689daf70e",
+      "images_written": 96,
+      "index_sha256": "4184b816b2e11bc265090b0fbb8aba769f1318a7e09475cdb952d3b6f6220dcd",
+      "manifest_sha256": "e0876fae1886ae5da131a3a8a0b2d07100c9b9fefe48c65ff2109ee890048d3f"
+    },
+    "realityscan/trial31": {
+      "run_id": "0374a96ab42644a4826a3123bebf5046",
+      "images_written": 186,
+      "index_sha256": "0939c764ab2ad775b35690168b8edb4fb4afad8b78ca5982197a3f4790e3ce2b",
+      "manifest_sha256": "503797c30893d69c010982d0b1eaf8edb37b91356bc8ba2868a756864c943588"
+    },
+    "postshot/control16": {
+      "run_id": "daab262713934ff3b38786dce3b027b0",
+      "images_written": 96,
+      "index_sha256": "5f0b407dc43ee4b65751cb9c775d6995d63e51a22ea8ad1501afa1c4275465da",
+      "manifest_sha256": "55559d86eeb392ad22095b69f48c77bf6b0d7eb6e7e3ecc77f5c9b798731f8fb"
+    },
+    "postshot/trial31": {
+      "run_id": "0d479b29caca40c5a1c1b4c3fec062e5",
+      "images_written": 186,
+      "index_sha256": "32592fea892b0e7767f018250e7fff70e8e876394cb7c83484a896737af9f2dc",
+      "manifest_sha256": "859dc4b48e211f665a8413778eef182e5fea03fdf97c25105e0fe34052980d23"
+    }
+  },
+  "imports": {
+    "realityscan-control16-txt": {
+      "inputs": [
+        {
+          "name": "control16-input-states.txt",
+          "sha256": "f4efa880fb40a1c8e1a521da4087163276cc4138ec4f9cd73e80bb52a57d7fff",
+          "role": "cameras"
+        }
+      ],
+      "log_scope": null,
+      "models": [
+        {
+          "label": "Component 0",
+          "totals": {
+            "rejected": 88,
+            "retained": 8
+          },
+          "capture_totals": {
+            "exported": 16,
+            "any_retained": 8,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 16
+            },
+            "Down": {
+              "rejected": 16
+            },
+            "Front": {
+              "rejected": 16
+            },
+            "Left": {
+              "retained": 8,
+              "rejected": 8
+            },
+            "Right": {
+              "rejected": 16
+            },
+            "Up": {
+              "rejected": 16
+            }
+          },
+          "retained_source_frames": [
+            0,
+            5,
+            11,
+            16,
+            22,
+            27,
+            33,
+            38
+          ]
+        },
+        {
+          "label": "Component 1",
+          "totals": {
+            "rejected": 94,
+            "retained": 2
+          },
+          "capture_totals": {
+            "exported": 16,
+            "any_retained": 2,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Down": {
+              "rejected": 16
+            },
+            "Front": {
+              "rejected": 16
+            },
+            "Left": {
+              "rejected": 16
+            },
+            "Right": {
+              "rejected": 16
+            },
+            "Up": {
+              "rejected": 15,
+              "retained": 1
+            }
+          },
+          "retained_source_frames": [
+            5,
+            11
+          ]
+        },
+        {
+          "label": "Component 2",
+          "totals": {
+            "rejected": 93,
+            "retained": 3
+          },
+          "capture_totals": {
+            "exported": 16,
+            "any_retained": 3,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Down": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Front": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Left": {
+              "rejected": 16
+            },
+            "Right": {
+              "rejected": 16
+            },
+            "Up": {
+              "rejected": 16
+            }
+          },
+          "retained_source_frames": [
+            16,
+            22,
+            27
+          ]
+        },
+        {
+          "label": "Component 3",
+          "totals": {
+            "rejected": 94,
+            "retained": 2
+          },
+          "capture_totals": {
+            "exported": 16,
+            "any_retained": 2,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 16
+            },
+            "Down": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Front": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Left": {
+              "rejected": 16
+            },
+            "Right": {
+              "rejected": 16
+            },
+            "Up": {
+              "rejected": 16
+            }
+          },
+          "retained_source_frames": [
+            16,
+            22
+          ]
+        },
+        {
+          "label": "Component 4",
+          "totals": {
+            "rejected": 93,
+            "retained": 3
+          },
+          "capture_totals": {
+            "exported": 16,
+            "any_retained": 3,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Down": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Front": {
+              "rejected": 16
+            },
+            "Left": {
+              "rejected": 16
+            },
+            "Right": {
+              "rejected": 16
+            },
+            "Up": {
+              "rejected": 15,
+              "retained": 1
+            }
+          },
+          "retained_source_frames": [
+            16,
+            22,
+            27
+          ]
+        },
+        {
+          "label": "Component 5",
+          "totals": {
+            "rejected": 94,
+            "retained": 2
+          },
+          "capture_totals": {
+            "exported": 16,
+            "any_retained": 2,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 16
+            },
+            "Down": {
+              "rejected": 16
+            },
+            "Front": {
+              "rejected": 16
+            },
+            "Left": {
+              "rejected": 16
+            },
+            "Right": {
+              "rejected": 14,
+              "retained": 2
+            },
+            "Up": {
+              "rejected": 16
+            }
+          },
+          "retained_source_frames": [
+            22,
+            27
+          ]
+        },
+        {
+          "label": "Component 6",
+          "totals": {
+            "rejected": 93,
+            "retained": 3
+          },
+          "capture_totals": {
+            "exported": 16,
+            "any_retained": 3,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Down": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Front": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Left": {
+              "rejected": 16
+            },
+            "Right": {
+              "rejected": 16
+            },
+            "Up": {
+              "rejected": 16
+            }
+          },
+          "retained_source_frames": [
+            44,
+            49,
+            55
+          ]
+        },
+        {
+          "label": "Component 7",
+          "totals": {
+            "rejected": 93,
+            "retained": 3
+          },
+          "capture_totals": {
+            "exported": 16,
+            "any_retained": 3,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Down": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Front": {
+              "rejected": 16
+            },
+            "Left": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Right": {
+              "rejected": 16
+            },
+            "Up": {
+              "rejected": 16
+            }
+          },
+          "retained_source_frames": [
+            44,
+            49,
+            55
+          ]
+        },
+        {
+          "label": "Component 8",
+          "totals": {
+            "rejected": 94,
+            "retained": 2
+          },
+          "capture_totals": {
+            "exported": 16,
+            "any_retained": 2,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 16
+            },
+            "Down": {
+              "rejected": 16
+            },
+            "Front": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Left": {
+              "rejected": 16
+            },
+            "Right": {
+              "rejected": 16
+            },
+            "Up": {
+              "rejected": 15,
+              "retained": 1
+            }
+          },
+          "retained_source_frames": [
+            49,
+            55
+          ]
+        },
+        {
+          "label": "Component 9",
+          "totals": {
+            "rejected": 93,
+            "retained": 3
+          },
+          "capture_totals": {
+            "exported": 16,
+            "any_retained": 3,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 16
+            },
+            "Down": {
+              "rejected": 16
+            },
+            "Front": {
+              "rejected": 16
+            },
+            "Left": {
+              "rejected": 13,
+              "retained": 3
+            },
+            "Right": {
+              "rejected": 16
+            },
+            "Up": {
+              "rejected": 16
+            }
+          },
+          "retained_source_frames": [
+            60,
+            66,
+            71
+          ]
+        },
+        {
+          "label": "Component 10",
+          "totals": {
+            "rejected": 93,
+            "retained": 3
+          },
+          "capture_totals": {
+            "exported": 16,
+            "any_retained": 3,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Down": {
+              "rejected": 15,
+              "retained": 1
+            },
+            "Front": {
+              "rejected": 16
+            },
+            "Left": {
+              "rejected": 16
+            },
+            "Right": {
+              "rejected": 16
+            },
+            "Up": {
+              "rejected": 15,
+              "retained": 1
+            }
+          },
+          "retained_source_frames": [
+            71,
+            77,
+            82
+          ]
+        },
+        {
+          "label": "Component 11",
+          "totals": {
+            "rejected": 94,
+            "retained": 2
+          },
+          "capture_totals": {
+            "exported": 16,
+            "any_retained": 2,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 16
+            },
+            "Down": {
+              "rejected": 16
+            },
+            "Front": {
+              "rejected": 16
+            },
+            "Left": {
+              "rejected": 14,
+              "retained": 2
+            },
+            "Right": {
+              "rejected": 16
+            },
+            "Up": {
+              "rejected": 16
+            }
+          },
+          "retained_source_frames": [
+            77,
+            82
+          ]
+        }
+      ],
+      "mask_warning_frames": [],
+      "unknown_views_without_model": {
+        "unknown": 96
+      }
+    },
+    "realityscan-trial31-txt": {
+      "inputs": [
+        {
+          "name": "trial31-input-states.txt",
+          "sha256": "e857c58a42a344fdff0929f22bdb302acf478b3aa2daa10919cea327577b4eee",
+          "role": "cameras"
+        }
+      ],
+      "log_scope": null,
+      "models": [
+        {
+          "label": "Component 0",
+          "totals": {
+            "rejected": 184,
+            "retained": 2
+          },
+          "capture_totals": {
+            "exported": 31,
+            "any_retained": 2,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 31
+            },
+            "Down": {
+              "rejected": 31
+            },
+            "Front": {
+              "rejected": 31
+            },
+            "Left": {
+              "rejected": 31
+            },
+            "Right": {
+              "rejected": 31
+            },
+            "Up": {
+              "retained": 2,
+              "rejected": 29
+            }
+          },
+          "retained_source_frames": [
+            0,
+            2
+          ]
+        },
+        {
+          "label": "Component 1",
+          "totals": {
+            "retained": 2,
+            "rejected": 184
+          },
+          "capture_totals": {
+            "exported": 31,
+            "any_retained": 2,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 31
+            },
+            "Down": {
+              "rejected": 31
+            },
+            "Front": {
+              "retained": 2,
+              "rejected": 29
+            },
+            "Left": {
+              "rejected": 31
+            },
+            "Right": {
+              "rejected": 31
+            },
+            "Up": {
+              "rejected": 31
+            }
+          },
+          "retained_source_frames": [
+            0,
+            2
+          ]
+        },
+        {
+          "label": "Component 2",
+          "totals": {
+            "rejected": 184,
+            "retained": 2
+          },
+          "capture_totals": {
+            "exported": 31,
+            "any_retained": 2,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 31
+            },
+            "Down": {
+              "rejected": 31
+            },
+            "Front": {
+              "rejected": 31
+            },
+            "Left": {
+              "rejected": 31
+            },
+            "Right": {
+              "retained": 2,
+              "rejected": 29
+            },
+            "Up": {
+              "rejected": 31
+            }
+          },
+          "retained_source_frames": [
+            0,
+            2
+          ]
+        },
+        {
+          "label": "Component 3",
+          "totals": {
+            "rejected": 184,
+            "retained": 2
+          },
+          "capture_totals": {
+            "exported": 31,
+            "any_retained": 2,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 31
+            },
+            "Down": {
+              "rejected": 31
+            },
+            "Front": {
+              "rejected": 31
+            },
+            "Left": {
+              "rejected": 31
+            },
+            "Right": {
+              "rejected": 29,
+              "retained": 2
+            },
+            "Up": {
+              "rejected": 31
+            }
+          },
+          "retained_source_frames": [
+            8,
+            11
+          ]
+        },
+        {
+          "label": "Component 4",
+          "totals": {
+            "rejected": 184,
+            "retained": 2
+          },
+          "capture_totals": {
+            "exported": 31,
+            "any_retained": 2,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 30,
+              "retained": 1
+            },
+            "Down": {
+              "rejected": 30,
+              "retained": 1
+            },
+            "Front": {
+              "rejected": 31
+            },
+            "Left": {
+              "rejected": 31
+            },
+            "Right": {
+              "rejected": 31
+            },
+            "Up": {
+              "rejected": 31
+            }
+          },
+          "retained_source_frames": [
+            22,
+            27
+          ]
+        },
+        {
+          "label": "Component 5",
+          "totals": {
+            "rejected": 184,
+            "retained": 2
+          },
+          "capture_totals": {
+            "exported": 31,
+            "any_retained": 2,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 31
+            },
+            "Down": {
+              "rejected": 30,
+              "retained": 1
+            },
+            "Front": {
+              "rejected": 30,
+              "retained": 1
+            },
+            "Left": {
+              "rejected": 31
+            },
+            "Right": {
+              "rejected": 31
+            },
+            "Up": {
+              "rejected": 31
+            }
+          },
+          "retained_source_frames": [
+            16,
+            22
+          ]
+        },
+        {
+          "label": "Component 6",
+          "totals": {
+            "rejected": 184,
+            "retained": 2
+          },
+          "capture_totals": {
+            "exported": 31,
+            "any_retained": 2,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 30,
+              "retained": 1
+            },
+            "Down": {
+              "rejected": 31
+            },
+            "Front": {
+              "rejected": 31
+            },
+            "Left": {
+              "rejected": 31
+            },
+            "Right": {
+              "rejected": 31
+            },
+            "Up": {
+              "rejected": 30,
+              "retained": 1
+            }
+          },
+          "retained_source_frames": [
+            22,
+            27
+          ]
+        },
+        {
+          "label": "Component 7",
+          "totals": {
+            "rejected": 184,
+            "retained": 2
+          },
+          "capture_totals": {
+            "exported": 31,
+            "any_retained": 2,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 31
+            },
+            "Down": {
+              "rejected": 31
+            },
+            "Front": {
+              "rejected": 30,
+              "retained": 1
+            },
+            "Left": {
+              "rejected": 31
+            },
+            "Right": {
+              "rejected": 31
+            },
+            "Up": {
+              "rejected": 30,
+              "retained": 1
+            }
+          },
+          "retained_source_frames": [
+            49,
+            55
+          ]
+        },
+        {
+          "label": "Component 8",
+          "totals": {
+            "rejected": 184,
+            "retained": 2
+          },
+          "capture_totals": {
+            "exported": 31,
+            "any_retained": 2,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 31
+            },
+            "Down": {
+              "rejected": 30,
+              "retained": 1
+            },
+            "Front": {
+              "rejected": 30,
+              "retained": 1
+            },
+            "Left": {
+              "rejected": 31
+            },
+            "Right": {
+              "rejected": 31
+            },
+            "Up": {
+              "rejected": 31
+            }
+          },
+          "retained_source_frames": [
+            46,
+            52
+          ]
+        },
+        {
+          "label": "Component 9",
+          "totals": {
+            "rejected": 165,
+            "retained": 21
+          },
+          "capture_totals": {
+            "exported": 31,
+            "any_retained": 21,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 31
+            },
+            "Down": {
+              "rejected": 31
+            },
+            "Front": {
+              "rejected": 31
+            },
+            "Left": {
+              "rejected": 31
+            },
+            "Right": {
+              "rejected": 10,
+              "retained": 21
+            },
+            "Up": {
+              "rejected": 31
+            }
+          },
+          "retained_source_frames": [
+            24,
+            27,
+            30,
+            33,
+            35,
+            38,
+            44,
+            46,
+            49,
+            52,
+            55,
+            57,
+            60,
+            63,
+            66,
+            68,
+            71,
+            74,
+            77,
+            79,
+            82
+          ]
+        },
+        {
+          "label": "Component 10",
+          "totals": {
+            "rejected": 128,
+            "retained": 58
+          },
+          "capture_totals": {
+            "exported": 31,
+            "any_retained": 31,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 20,
+              "retained": 11
+            },
+            "Down": {
+              "rejected": 26,
+              "retained": 5
+            },
+            "Front": {
+              "rejected": 27,
+              "retained": 4
+            },
+            "Left": {
+              "retained": 31
+            },
+            "Right": {
+              "rejected": 31
+            },
+            "Up": {
+              "rejected": 24,
+              "retained": 7
+            }
+          },
+          "retained_source_frames": [
+            0,
+            2,
+            5,
+            8,
+            11,
+            13,
+            16,
+            19,
+            22,
+            24,
+            27,
+            30,
+            33,
+            35,
+            38,
+            41,
+            44,
+            46,
+            49,
+            52,
+            55,
+            57,
+            60,
+            63,
+            66,
+            68,
+            71,
+            74,
+            77,
+            79,
+            82
+          ]
+        },
+        {
+          "label": "Component 11",
+          "totals": {
+            "rejected": 183,
+            "retained": 3
+          },
+          "capture_totals": {
+            "exported": 31,
+            "any_retained": 3,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "rejected": 31
+            },
+            "Down": {
+              "rejected": 29,
+              "retained": 2
+            },
+            "Front": {
+              "rejected": 30,
+              "retained": 1
+            },
+            "Left": {
+              "rejected": 31
+            },
+            "Right": {
+              "rejected": 31
+            },
+            "Up": {
+              "rejected": 31
+            }
+          },
+          "retained_source_frames": [
+            77,
+            79,
+            82
+          ]
+        }
+      ],
+      "mask_warning_frames": [],
+      "unknown_views_without_model": {
+        "unknown": 186
+      }
+    },
+    "postshot-trial31-txt": {
+      "inputs": [
+        {
+          "name": "images.txt",
+          "sha256": "febe2db9a7d00b92db54ac212a165c18ff11a0da876151b390978ac11b2a2260",
+          "role": "cameras"
+        },
+        {
+          "name": "postshot-trial31-session.log",
+          "sha256": "29eb04e7b02b20f74e4a66967c5328028caf370709169980c2179d427853c966",
+          "role": "log"
+        }
+      ],
+      "log_scope": "2026-11-02 09:26:09 UTC",
+      "models": [
+        {
+          "label": "Exported Image Set",
+          "totals": {
+            "not_retained": 68,
+            "retained": 118
+          },
+          "capture_totals": {
+            "exported": 31,
+            "any_retained": 31,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "not_retained": 18,
+              "retained": 13
+            },
+            "Down": {
+              "retained": 26,
+              "not_retained": 5
+            },
+            "Front": {
+              "not_retained": 22,
+              "retained": 9
+            },
+            "Left": {
+              "retained": 31
+            },
+            "Right": {
+              "not_retained": 5,
+              "retained": 26
+            },
+            "Up": {
+              "not_retained": 18,
+              "retained": 13
+            }
+          },
+          "retained_source_frames": [
+            0,
+            2,
+            5,
+            8,
+            11,
+            13,
+            16,
+            19,
+            22,
+            24,
+            27,
+            30,
+            33,
+            35,
+            38,
+            41,
+            44,
+            46,
+            49,
+            52,
+            55,
+            57,
+            60,
+            63,
+            66,
+            68,
+            71,
+            74,
+            77,
+            79,
+            82
+          ]
+        }
+      ],
+      "mask_warning_frames": [
+        5,
+        8,
+        11,
+        13,
+        16
+      ],
+      "unknown_views_without_model": {
+        "unknown": 186
+      }
+    },
+    "postshot-trial31-bin": {
+      "inputs": [
+        {
+          "name": "images.bin",
+          "sha256": "88b114e65ee99f8db1651f118acdc33d56c9aac06adf6238fb3f853c4a312ec6",
+          "role": "cameras"
+        },
+        {
+          "name": "postshot-trial31-session.log",
+          "sha256": "29eb04e7b02b20f74e4a66967c5328028caf370709169980c2179d427853c966",
+          "role": "log"
+        }
+      ],
+      "log_scope": "2026-11-02 09:26:09 UTC",
+      "models": [
+        {
+          "label": "Exported Image Set",
+          "totals": {
+            "not_retained": 68,
+            "retained": 118
+          },
+          "capture_totals": {
+            "exported": 31,
+            "any_retained": 31,
+            "all_retained": 0
+          },
+          "directions": {
+            "Back": {
+              "not_retained": 18,
+              "retained": 13
+            },
+            "Down": {
+              "retained": 26,
+              "not_retained": 5
+            },
+            "Front": {
+              "not_retained": 22,
+              "retained": 9
+            },
+            "Left": {
+              "retained": 31
+            },
+            "Right": {
+              "not_retained": 5,
+              "retained": 26
+            },
+            "Up": {
+              "not_retained": 18,
+              "retained": 13
+            }
+          },
+          "retained_source_frames": [
+            0,
+            2,
+            5,
+            8,
+            11,
+            13,
+            16,
+            19,
+            22,
+            24,
+            27,
+            30,
+            33,
+            35,
+            38,
+            41,
+            44,
+            46,
+            49,
+            52,
+            55,
+            57,
+            60,
+            63,
+            66,
+            68,
+            71,
+            74,
+            77,
+            79,
+            82
+          ]
+        }
+      ],
+      "mask_warning_frames": [
+        5,
+        8,
+        11,
+        13,
+        16
+      ],
+      "unknown_views_without_model": {
+        "unknown": 186
+      }
+    },
+    "postshot-control16-log": {
+      "inputs": [
+        {
+          "name": "postshot-control16-session.log",
+          "sha256": "ac484464185a647eea6ab9e99c3ec7d7893957302b956552f5236630cba7b259",
+          "role": "log"
+        }
+      ],
+      "log_scope": "2026-11-02 09:37:18 UTC",
+      "models": [],
+      "mask_warning_frames": [],
+      "unknown_views_without_model": {
+        "unknown": 96
+      }
+    }
+  },
+  "common_outputs": {
+    "realityscan": {
+      "images": 96,
+      "masks": 16
+    },
+    "postshot": {
+      "images": 96,
+      "masks": 16
+    }
+  }
+}

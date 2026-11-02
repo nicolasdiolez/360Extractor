@@ -122,6 +122,61 @@ def test_empty_registered_set_requires_declared_zero(dataset, tmp_path):
     assert coverage(report, 'image-set')['totals'] == {'not_retained': 6}
 
 
+def test_log_ignores_encoding_of_older_sessions_but_not_current_scope(dataset, tmp_path):
+    log = tmp_path / 'Postshot.log'
+    old = b'[0:00:00.001] 2026-11-01 21:23:32 UTC\nWARNING: ancien chemin accentu\xe9\n'
+    current = (b'[0:00:00.001] 2026-11-02 09:26:09 UTC\n'
+               b"WARNING: no matching image found for image mask 'capture 5_Down.mask.png'\n")
+    for valid in (old + current, current, b'\xef\xbb\xbf' + current):
+        log.write_bytes(valid)
+        report = import_report(dataset, 'postshot', log_path=log)
+        assert report['log_scope'] == '2026-11-02 09:26:09 UTC'
+        assert len(report['warnings']) == 1
+        assert report['warnings'][0]['image'] == 'capture 5_Down.jpg'
+        assert report['inputs'][0]['sha256'] == hashlib.sha256(valid).hexdigest()
+        assert coverage(report)['totals'] == {'unknown': 6}
+    for invalid in (old, current + b'WARNING: accentu\xe9\n', b'WARNING: accentu\xe9\n'):
+        log.write_bytes(invalid)
+        with pytest.raises(ValueError, match='UTF-8'):
+            import_report(dataset, 'postshot', log_path=log)
+
+
+def postshot_id_model(path, identifier, camera, binary):
+    # Postshot 1.1.69 emits zero-based IDs and absolute Windows image names.
+    name = r'C:\qualification\images\capture 0_Left.jpg'
+    if binary:
+        path.write_bytes(struct.pack('<QI7dI', 1, identifier, 1, 0, 0, 0, 0, 0, 0, camera)
+                         + name.encode() + b'\0' + struct.pack('<Q', 0))
+    else:
+        path.write_text(f'# Number of images: 1, mean observations per image: 0\n'
+                        f'{identifier} 1 0 0 0 0 0 0 {camera} {name}\n\n')
+    return path
+
+
+@pytest.mark.parametrize('binary', [False, True])
+@pytest.mark.parametrize('identifier,camera', [(0, 0), (0, 1), (1, 0), (2**31, 2**32 - 2)])
+def test_native_postshot_zero_and_unsigned_ids(dataset, tmp_path, binary, identifier, camera):
+    path = postshot_id_model(tmp_path / ('images.bin' if binary else 'images.txt'), identifier, camera, binary)
+    report = import_report(dataset, 'postshot', path)
+    assert report['models'][0]['states'] == {'capture 0_Left.jpg': 'retained'}
+    assert coverage(report, 'image-set')['totals'] == {'retained': 1, 'not_retained': 5}
+
+
+@pytest.mark.parametrize('binary', [False, True])
+@pytest.mark.parametrize('identifier,camera', [(2**32 - 1, 0), (0, 2**32 - 1)])
+def test_postshot_invalid_id_sentinels_still_fail(dataset, tmp_path, binary, identifier, camera):
+    path = postshot_id_model(tmp_path / ('images.bin' if binary else 'images.txt'), identifier, camera, binary)
+    with pytest.raises(ValueError, match='Invalid COLMAP image ID'):
+        import_report(dataset, 'postshot', path)
+
+
+@pytest.mark.parametrize('identifier,camera', [(-1, 0), (0, -1), (2**32, 0), (0, 2**32)])
+def test_postshot_text_out_of_range_ids_fail(dataset, tmp_path, identifier, camera):
+    path = postshot_id_model(tmp_path / 'images.txt', identifier, camera, False)
+    with pytest.raises(ValueError, match='Invalid COLMAP image ID'):
+        import_report(dataset, 'postshot', path)
+
+
 def test_duplicate_and_ambiguous_names_fail(dataset, tmp_path):
     path = text_model(tmp_path / 'images.txt', ['capture 0_Left.jpg'] * 2)
     with pytest.raises(ValueError, match='Duplicate'):
