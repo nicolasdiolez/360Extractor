@@ -58,14 +58,16 @@ Use a focused branch and a pull request against the intended integration branch.
 
 ## Preparing and publishing a release
 
-Version **4.0.1**, dated **2026-09-07** in the changelog, is published as a [prerelease for user feedback](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.1). Its release notes describe the tested artifacts and remaining qualification limits, including a reproduced intermittent Windows native crash. It does not replace the latest stable release. Follow the sequence below for subsequent versions.
+The currently published feedback preview is [v4.0.3](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.3), excluded from **Latest**; v3.3 remains the latest stable release. Development sources prepare **4.1.0**. Read the corresponding release notes for the exact artifacts and observed limits rather than treating historical candidate results as current qualification.
+
+The v4.0.3 macOS artifact was Developer ID signed and notarized after the CI build. That process must be repeated and verified for each new macOS artifact; CI currently produces an ad-hoc-signed bundle. Windows/CUDA and clean-machine acceptance are separate checks.
 
 1. Run the [acceptance protocol](docs/CLI_TESTING_PROTOCOL.md) on representative real media. Record the exact commit, environment, results and unresolved limits. Resolve blocking failures and require CI on the final candidate.
 2. Merge the accepted candidate through review into the release branch (`main` for a public release). Do not merge unrelated local changes or reuse an existing published version.
 3. Choose the new semantic version, set `VERSION`, and move the relevant `[Unreleased]` notes to `## [X.Y.Z] - YYYY-MM-DD` with the actual release date. Keep a new `[Unreleased]` section for future work. Update README download/status text only to match artifacts actually available.
 4. Run `python scripts/check_release.py`, and preview notes with `python scripts/release_notes.py vX.Y.Z -o release_notes.md`. Here X.Y.Z is a placeholder for the chosen version. Commit and push that preparation and require CI again.
 5. Tag that exact accepted commit with the new canonical `vX.Y.Z` tag and push the tag. Do not move an existing release tag. This triggers release validation, macOS/Windows PyInstaller builds and creation of a **draft** GitHub Release.
-6. Download and test those exact draft binaries on clean target machines, including real extraction, model provisioning/inference, settings persistence and close/cancel. Verify architecture, third-party license notices and offline/dependency prerequisites. Signed/notarized distribution and Windows/CUDA profiles remain qualification work.
+6. Download and test those exact draft binaries on clean target machines, including real extraction, model provisioning/inference, settings persistence and close/cancel. Verify architecture, third-party license notices and offline/dependency prerequisites. Repeat Developer ID signing/notarization for the new macOS artifact and record the final ZIP fingerprint. Qualify Windows/CUDA separately.
 7. If checks pass, publish the draft with accurate notes and limits. If they fail, retain the draft, correct the candidate and rebuild under the project's versioning policy. The workflow refuses to replace an already public release's assets.
 
 A source wheel smoke test does not replace steps 5–6. The workflow prepares a draft; it does not itself approve production readiness. Do not infer download availability from historical screenshots or a local `dist/` directory.

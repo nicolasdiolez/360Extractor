@@ -1,8 +1,14 @@
 # Changelog
 
-Versioned entries describe their historical candidates/releases. Version 4.0.1 prepares the Studio feedback preview after a frozen-launcher failure in the unpublished 4.0.0 draft. Availability and qualification are described on the corresponding GitHub release.
+Versioned entries describe their historical candidates/releases. Availability, artifact fingerprints and qualification are described on the corresponding GitHub release. The 4.1.0 entry prepares the next feedback preview; it does not itself establish public availability.
 
 ## [Unreleased]
+
+## [4.1.0] - 2026-11-02
+
+Feedback-preview candidate bringing the project, diagnostic, controlled-sampling and consumer-report workflows into the next distribution. Preserve published 4.0.x tags and assets. Final downloaded binaries require their own acceptance; Windows remains experimental and this candidate is not a stable-release declaration.
+
+### Consumer evidence and controlled sampling
 
 - Qualify native RealityScan 2.2 input-state reports and Postshot 1.1.69 COLMAP text/binary exports on retained staircase projects. Accept zero-based unsigned camera/image IDs, scope appended logs before UTF-8 decoding, and apply the dark dialog theme to consumer reports. Preserve unknown coverage when a failed Postshot project cannot export camera poses; document the exact correspondence between five mask warnings and five absent Down views.
 

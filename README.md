@@ -16,6 +16,8 @@ Desktop and command-line preprocessing for stitched 360° panoramas and standard
 
 Start with a short clip and a separate output folder. Clean-machine/browser first-launch acceptance and the full Studio interaction/persistence/cancellation matrix remain open. Read the [release notes and SHA-256 fingerprints](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.3) for the tested scope, prerequisites and remaining limits; [validation evidence](https://github.com/nicolasdiolez/360Extractor/releases/download/v4.0.3/validation.json) and [macOS notarization evidence](https://github.com/nicolasdiolez/360Extractor/releases/download/v4.0.3/notarization.json) are attached to the release.
 
+**Development candidate: 4.1.0.** The current sources add saved projects, destination mask profiles, alignment diagnostics, controlled 16-to-31 sampling and consumer-report imports. These additions are not in the v4.0.3 downloads above. See the [4.1.0 preparation and acceptance record](docs/implementation-2026-11-02/RELEASE_4_1_0.md) for candidate status.
+
 ![360 Extractor Studio: media queue, live Cube preview and processing settings](docs/images/screenshot-gui.png)
 
 *Actual Studio window with a synthetic demonstration panorama. Preview and controls are rendered by the application; the image is not evidence of segmentation or reconstruction accuracy.*
