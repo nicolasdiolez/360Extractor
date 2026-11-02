@@ -17,7 +17,8 @@
       186
     ],
     "common_images_per_profile": 96,
-    "common_masks_per_profile": 16
+    "common_masks_per_profile": 16,
+    "mps_inference": "passed on final archive"
   },
   "qt": {
     "qt": "6.12.0",

@@ -5,18 +5,18 @@
 
 Desktop and command-line preprocessing for stitched 360° panoramas and standard videos/images. Generate rectilinear views, filter blur and motion, and export segmentation masks and optional GPS metadata for reconstruction workflows.
 
-**360 Extractor Studio — [v4.0.3 Pre-release](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.3).** This public preview is for user feedback and is excluded from **Latest**; [v3.3 remains the latest stable release](https://github.com/nicolasdiolez/360Extractor/releases/tag/v3.3).
+**360 Extractor Studio — [v4.1.0 Pre-release](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.1.0).** This public preview is for user feedback and is excluded from **Latest**; [v3.3 remains the latest stable release](https://github.com/nicolasdiolez/360Extractor/releases/tag/v3.3).
 
-| Platform | Download v4.0.3 | Validation status |
+| Platform | Download v4.1.0 | Validation status |
 | :--- | :--- | :--- |
-| macOS — Apple Silicon (arm64) | [macOS ZIP](https://github.com/nicolasdiolez/360Extractor/releases/download/v4.0.3/360-Extractor-macos-arm64.zip) | Developer ID signed and Apple-notarized, with the ticket attached. Gatekeeper checks and real-media extraction, CPU/MPS masking and COLMAP tests passed on an existing Mac. |
-| Windows — x64 | [Windows ZIP](https://github.com/nicolasdiolez/360Extractor/releases/download/v4.0.3/360-Extractor-windows-x64.zip) | **Experimental.** Automated CI and frozen-executable smoke tests passed; physical Windows/CUDA qualification remains pending. |
+| macOS 14.4+ — Apple Silicon (arm64) | [macOS ZIP](https://github.com/nicolasdiolez/360Extractor/releases/download/v4.1.0/360-Extractor-macos-arm64.zip) | Developer ID signed, Apple-notarized and stapled. Real extraction, CPU/MPS masks, reports, project persistence, diagnostics and cancellation tested on an existing Mac. Includes the Qt Cocoa accessibility fix. |
+| Windows — x64 | [Windows ZIP](https://github.com/nicolasdiolez/360Extractor/releases/download/v4.1.0/360-Extractor-windows-x64.zip) | **Experimental, CPU AI only.** Draft binary tested on Shadow Windows 11: extraction, reports, model provisioning, project persistence and cancellation. This package does not include CUDA inference. |
 
 **Windows limitation:** earlier candidates reproduced an intermittent native crash (`0xC0000005`) during extraction/shutdown. Its exact cause remains unconfirmed, and passing hosted CI and lifecycle stress tests does not prove it is resolved. Report any recurrence through the [bug report form](https://github.com/nicolasdiolez/360Extractor/issues/new?template=bug_report.yml), with your settings and available logs.
 
-Start with a short clip and a separate output folder. Clean-machine/browser first-launch acceptance and the full Studio interaction/persistence/cancellation matrix remain open. Read the [release notes and SHA-256 fingerprints](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.3) for the tested scope, prerequisites and remaining limits; [validation evidence](https://github.com/nicolasdiolez/360Extractor/releases/download/v4.0.3/validation.json) and [macOS notarization evidence](https://github.com/nicolasdiolez/360Extractor/releases/download/v4.0.3/notarization.json) are attached to the release.
+Start with a short clip and a separate output folder. Clean-machine acceptance and the full Studio interaction matrix remain open; targeted persistence and cancellation checks passed. Read the [release notes and SHA-256 fingerprints](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.1.0) for the tested scope, prerequisites and remaining limits; [validation evidence](https://github.com/nicolasdiolez/360Extractor/releases/download/v4.1.0/validation.json) and [macOS notarization evidence](https://github.com/nicolasdiolez/360Extractor/releases/download/v4.1.0/notarization.json) are attached to the release.
 
-**Development candidate: 4.1.0.** The current sources add saved projects, destination mask profiles, alignment diagnostics, controlled 16-to-31 sampling and consumer-report imports. These additions are not in the v4.0.3 downloads above. See the [4.1.0 preparation and acceptance record](docs/implementation-2026-11-02/RELEASE_4_1_0.md) for candidate status.
+**New in 4.1.0:** saved projects, destination mask profiles, alignment diagnostics, controlled 16-to-31 sampling and consumer-report imports. See the [binary acceptance record](docs/implementation-2026-11-02/RELEASE_4_1_0.md) for exact results and limits.
 
 ![360 Extractor Studio: media queue, live Cube preview and processing settings](docs/images/screenshot-gui.png)
 
@@ -24,7 +24,7 @@ Start with a short clip and a separate output folder. Clean-machine/browser firs
 
 ## Capabilities
 
-Version **4.0.3** includes the [October audit corrections](docs/implementation-2026-10-23/VALIDATION.md) and fixes COLMAP reconstruction for unmasked and mixed-mask exports. Source installation requires Python 3.11 or later. Qualification results and remaining limits are documented in the release notes above.
+Version **4.1.0** includes the project, diagnostic, sampling and consumer-report workflows described above, together with the earlier [October corrections](docs/implementation-2026-10-23/VALIDATION.md). Source installation requires Python 3.11 or later. Qualification results and remaining limits are documented in the release notes above.
 
 - Cube, Ring and Fibonacci layouts, selectable views, FOV, pitch and output resolution.
 - Flat media passthrough at native resolution with the same filtering and masking options.
@@ -39,10 +39,10 @@ Input 360 media must already be stitched. Accepting `.insv` does not imply nativ
 
 ## Install from source
 
-Clone the repository and select the `v4.0.3` tag to test the published preview's source. `main` may contain different changes. Run the commands below from the selected checkout’s root.
+Clone the repository and select the `v4.1.0` tag to test the published preview's application source. `main` may contain different changes. The macOS download also includes a [Qt 6.12.0 Cocoa dependency backport](packaging/macos-qt-cocoa/README.md), applied after CI; installing the source or wheel alone does not apply that native fix. Run the commands below from the selected checkout’s root.
 
 ```sh
-git clone --branch v4.0.3 https://github.com/nicolasdiolez/360Extractor.git
+git clone --branch v4.1.0 https://github.com/nicolasdiolez/360Extractor.git
 cd 360Extractor
 ```
 
@@ -62,10 +62,10 @@ Standard model weights use `~/.cache/360-extractor/models` (override with `EXTRA
 
 ## Run
 
-AI selects an available accelerator automatically. If GPU inference is unavailable or unreliable on your machine, set `EXTRACTOR360_DEVICE=cpu` before launching (`export EXTRACTOR360_DEVICE=cpu` in a macOS/Linux terminal, or `$env:EXTRACTOR360_DEVICE="cpu"` in PowerShell). Use `auto` to restore automatic selection. The release smoke test qualifies CPU inference; it does not certify GPU profiles.
+AI selects an available accelerator automatically. If GPU inference is unavailable or unreliable on your machine, set `EXTRACTOR360_DEVICE=cpu` before launching (`export EXTRACTOR360_DEVICE=cpu` in a macOS/Linux terminal, or `$env:EXTRACTOR360_DEVICE="cpu"` in PowerShell). Use `auto` to restore automatic selection. The Windows 4.1.0 download is CPU-only. CPU and Apple MPS inference were exercised on the final Mac archive; other GPU profiles remain unqualified.
 
 ```sh
-# Studio (development sources: .360proj save/open in the Project menu)
+# Studio (.360proj save/open in the Project menu)
 python -m extractor360
 
 # Stitched panorama or video, six cube views
