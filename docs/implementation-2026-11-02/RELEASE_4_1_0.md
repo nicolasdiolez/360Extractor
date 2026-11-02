@@ -53,9 +53,14 @@ passed. The source diagnostic completed on eight captures at 512 px and correctl
 reported zero reconstructed models. This is successful diagnostic execution, not
 successful 3D reconstruction. Original user preferences remained byte-identical.
 
-The final recipe-built plugin is being separately notarized and checked before
-publication. Its final archive fingerprint and Apple acceptance belong in the
-release receipt; the first notarization does not cover the corrected binary.
+The final recipe-built plugin was separately signed and notarized. Apple accepted
+submission `b9c661ef-4a52-44cc-870c-827d74a55da0`; the new ticket was stapled and
+validated. Gatekeeper accepts the re-extracted ZIP as **Notarized Developer ID**.
+All 3,854 payload files matched the tested bundle after packaging. The final Mac
+ZIP is 329,044,097 bytes, SHA-256
+`73de4351a924454608bc681b1546c29ecf78e0d263980f2cd46cf1b854d5d7f9`.
+Its Qt runtime requires macOS 14.4 or later on Apple Silicon. Actual native testing
+was on the maintainer's Mac, not on a fresh macOS 14.4 installation.
 
 ### Windows downloaded binary
 
@@ -76,7 +81,10 @@ inference passed. Automatic device selection explicitly reported **PyTorch
 GPU qualification requires a separate CUDA-enabled distribution. The original
 360 video was tested on Mac, not copied to Shadow for this Windows fixture.
 
-This record is a preparation checkpoint, not a completed binary qualification. CI must pass on the accepted release commit. The tag workflow builds a draft; the downloaded artifacts must then be tested and their SHA-256 fingerprints recorded in the release evidence.
+This record distinguishes observed binary checks from the remaining qualification
+below. The tag workflow produced a draft; the corrected Mac dependency is a documented
+post-build operation, like Developer ID signing. CI on the recipe branch does not
+itself run the native accessibility regression or build the backport.
 
 | Check | Required evidence |
 | --- | --- |
@@ -87,6 +95,15 @@ This record is a preparation checkpoint, not a completed binary qualification. C
 | Distribution | Clean-machine/browser first-launch status, model/tool provisioning and bundled dependency notices. |
 
 Real media remain on their original volume. Temporary downloads, extracted bundles and acceptance outputs are grouped in one dated external-disk workspace, with a separate cleanup approval at the end.
+
+### Final archive regression
+
+The full private frozen-CLI harness was rerun against the re-extracted corrected
+Mac ZIP. It passed version/help, real 16/31 exports for both mask profiles, 96
+byte-identical common JPEGs and 16 common masks per profile, flat decoded-pixel
+identity, native report imports, invalid-input preflight, fresh rerun folders,
+CPU AI, interruption exit 130 and unchanged original source metadata. The actual
+final Studio also reopened reports and ranges and completed a 186-view extraction.
 
 ## Publication limits
 
