@@ -23,7 +23,68 @@ At the initial release inventory, the four branches of PRs #28–31 are wholly r
 
 ## Artifact acceptance
 
-This record is a preparation checkpoint, not a completed binary qualification. CI must pass on the accepted release commit. The tag workflow builds a draft; the downloaded artifacts must then be tested and their SHA-256 fingerprints recorded in the release evidence.
+The immutable application tag is `v4.1.0` at `e2400c3ae174f0b3408c2f7144de140e0edf63d9`,
+promoted in [PR #33](https://github.com/nicolasdiolez/360Extractor/pull/33).
+The [release workflow](https://github.com/nicolasdiolez/360Extractor/actions/runs/41431637790)
+passed all 14 jobs. Its Mac build passed 520 tests plus 20 subtests (one skip),
+and Windows passed 518 tests plus 20 subtests (three skips). Both frozen CPU-AI
+smokes passed. These counts retain the skips; they are not full AI qualification.
+
+### Native macOS blocker and dependency correction
+
+The original downloaded Mac ZIP has SHA-256
+`4a81a7ce4dec1e12d01ad619a3c899baac3532b61e2c834236668daa89fda4e2`.
+After Developer ID signing and successful notarization, the actual Cocoa Studio
+still crashed twice while accessibility inspected table dialogs. Native crash
+reports identify SIGSEGV/SIGBUS in `libqcocoa.dylib`; the maintainer confirmed that
+the app quit without intervention. That candidate was **not published**.
+
+The correction rebuilds only the Qt 6.12.0 Cocoa plugin with the official
+[QTBUG-149612 fix](https://github.com/qt/qtbase/commit/b74d6cb3c5e8418602494ae549b60839d88ef858).
+The [version-specific recipe](../../packaging/macos-qt-cocoa/README.md) pins the
+source, SDK and patch inputs, keeps accessibility enabled, and describes the
+separate signature/notarization steps. The app's tagged Python sources are
+unchanged. A source wheel does not contain this native dependency backport.
+
+On the corrected copy, native accessibility observation, consumer-report display,
+reopening extraction ranges, 16-to-31 editing, saving/reopening the project, real
+Cube extraction (186 views), normal quit, cancellation and subsequent operation
+passed. The source diagnostic completed on eight captures at 512 px and correctly
+reported zero reconstructed models. This is successful diagnostic execution, not
+successful 3D reconstruction. Original user preferences remained byte-identical.
+
+The final recipe-built plugin was separately signed and notarized. Apple accepted
+submission `b9c661ef-4a52-44cc-870c-827d74a55da0`; the new ticket was stapled and
+validated. Gatekeeper accepts the re-extracted ZIP as **Notarized Developer ID**.
+All 3,854 payload files matched the tested bundle after packaging. The final Mac
+ZIP is 329,044,097 bytes, SHA-256
+`73de4351a924454608bc681b1546c29ecf78e0d263980f2cd46cf1b854d5d7f9`.
+Its Qt runtime requires macOS 14.4 or later on Apple Silicon. Actual native testing
+was on the maintainer's Mac, not on a fresh macOS 14.4 installation.
+
+### Windows downloaded binary
+
+The unchanged Windows ZIP has SHA-256
+`8de3c168a1b8089759b131459250d8c304d36792fdf6058670ad7644f98b9f16`.
+It was downloaded directly from the draft and tested on Shadow Windows 11 build
+26200. A synthetic video produced 96/186 views for the 16/31 plans, with all 96
+common JPEGs and 16 common masks byte-identical. The actual staircase JPEG retained
+its decoded pixels in flat PNG export. Native RealityScan/Postshot reports imported,
+including 118 Postshot retained views and five mapped mask warnings; text and binary
+COLMAP memberships agreed. The failed-run log alone left membership unknown.
+
+Studio import/preview, per-project Cube/256-pixel settings, save/quit/reopen,
+24-view extraction, cancellation, and rerunning after cancellation passed.
+The standard small segmentation model was provisioned into a fresh cache and CPU
+inference passed. Automatic device selection explicitly reported **PyTorch
+2.15.0+cpu, CUDA unavailable**. This Windows asset does not provide CUDA inference;
+GPU qualification requires a separate CUDA-enabled distribution. The original
+360 video was tested on Mac, not copied to Shadow for this Windows fixture.
+
+This record distinguishes observed binary checks from the remaining qualification
+below. The tag workflow produced a draft; the corrected Mac dependency is a documented
+post-build operation, like Developer ID signing. CI on the recipe branch does not
+itself run the native accessibility regression or build the backport.
 
 | Check | Required evidence |
 | --- | --- |
@@ -34,6 +95,15 @@ This record is a preparation checkpoint, not a completed binary qualification. C
 | Distribution | Clean-machine/browser first-launch status, model/tool provisioning and bundled dependency notices. |
 
 Real media remain on their original volume. Temporary downloads, extracted bundles and acceptance outputs are grouped in one dated external-disk workspace, with a separate cleanup approval at the end.
+
+### Final archive regression
+
+The full private frozen-CLI harness was rerun against the re-extracted corrected
+Mac ZIP. It passed version/help, real 16/31 exports for both mask profiles, 96
+byte-identical common JPEGs and 16 common masks per profile, flat decoded-pixel
+identity, native report imports, invalid-input preflight, fresh rerun folders,
+CPU AI, interruption exit 130 and unchanged original source metadata. The actual
+final Studio also reopened reports and ranges and completed a 186-view extraction.
 
 ## Publication limits
 

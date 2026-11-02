@@ -58,9 +58,9 @@ Use a focused branch and a pull request against the intended integration branch.
 
 ## Preparing and publishing a release
 
-The currently published feedback preview is [v4.0.3](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.0.3), excluded from **Latest**; v3.3 remains the latest stable release. Development sources prepare **4.1.0**. Read the corresponding release notes for the exact artifacts and observed limits rather than treating historical candidate results as current qualification.
+The currently published feedback preview is [v4.1.0](https://github.com/nicolasdiolez/360Extractor/releases/tag/v4.1.0), excluded from **Latest**; v3.3 remains the latest stable release. Its application tag is `e2400c3`; the [binary acceptance record](docs/implementation-2026-11-02/RELEASE_4_1_0.md) distinguishes the post-build Cocoa dependency fix from application-source validation. Read the corresponding release notes for the exact artifacts and observed limits rather than treating historical candidate results as current qualification.
 
-The v4.0.3 macOS artifact was Developer ID signed and notarized after the CI build. That process must be repeated and verified for each new macOS artifact; CI currently produces an ad-hoc-signed bundle. Windows/CUDA and clean-machine acceptance are separate checks.
+The v4.1.0 macOS artifact was Developer ID signed and notarized after the CI build and the documented Qt Cocoa backport. That process must be repeated and verified for each new macOS artifact; CI currently produces an ad-hoc-signed bundle. Windows/CUDA and clean-machine acceptance are separate checks.
 
 1. Run the [acceptance protocol](docs/CLI_TESTING_PROTOCOL.md) on representative real media. Record the exact commit, environment, results and unresolved limits. Resolve blocking failures and require CI on the final candidate.
 2. Merge the accepted candidate through review into the release branch (`main` for a public release). Do not merge unrelated local changes or reuse an existing published version.

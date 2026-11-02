@@ -1,0 +1,69 @@
+{
+  "application_version": "4.1.0",
+  "application_commit": "e2400c3ae174f0b3408c2f7144de140e0edf63d9",
+  "release_workflow_run": 41431637790,
+  "mac": {
+    "bytes": 329044097,
+    "sha256": "73de4351a924454608bc681b1546c29ecf78e0d263980f2cd46cf1b854d5d7f9",
+    "payload_files": 3854,
+    "payload_identity": true,
+    "notarization_id": "b9c661ef-4a52-44cc-870c-827d74a55da0",
+    "notarization_status": "Accepted",
+    "stapled": true,
+    "gatekeeper": "Notarized Developer ID",
+    "final_cli_acceptance": "passed",
+    "real_cube_views": [
+      96,
+      186
+    ],
+    "common_images_per_profile": 96,
+    "common_masks_per_profile": 16,
+    "mps_inference": "passed on final archive"
+  },
+  "qt": {
+    "qt": "6.12.0",
+    "architecture": "arm64",
+    "minimum_macos": "14.4",
+    "upstream_commit": "b74d6cb3c5e8418602494ae549b60839d88ef858",
+    "sha256_unsigned": "ef68a469c1d5ff4e4b1fe6196b9fe7f46985cead10aef61f10c647b0b5714e1d",
+    "inputs": {
+      "qtbase-sdk.7z": {
+        "url": "https://download.qt.io/online/qtsdkrepository/mac_x64/desktop/qt6_6120/qt6_6120/qt.qt6.6120.clang_64/6.12.0-0-202609280346qtbase-MacOS-MacOS_26-Clang-MacOS-MacOS_26-X86_64-ARM64.7z",
+        "sha256": "1e0df66ed17ae97997971ff481983c5c0b7497a52ef52f699725701401fd80ee",
+        "bytes": 31935810
+      },
+      "qtbase-source.tar.xz": {
+        "url": "https://download.qt.io/official_releases/qt/6.12/6.12.0/submodules/qtbase-everywhere-src-6.12.0.tar.xz",
+        "sha256": "a951bd163c7b80fc6b8c88d7668fb56abf91c152373e13c10666763238131307",
+        "bytes": 51220268
+      },
+      "upstream.patch": {
+        "url": "https://github.com/qt/qtbase/commit/b74d6cb3c5e8418602494ae549b60839d88ef858.patch",
+        "sha256": "e0158ec9584d0577896ae9112670c3d8212a71c34bf5b3e40969df4a0b424f24",
+        "bytes": 8155
+      }
+    },
+    "sha256_signed": "e0a1cbb531fa010186c4d93e6c161e5f1d73946bf23078feecaab8e49ef075c8",
+    "application_commit": "e2400c3ae174f0b3408c2f7144de140e0edf63d9"
+  },
+  "windows": {
+    "bytes": 398075188,
+    "sha256": "8de3c168a1b8089759b131459250d8c304d36792fdf6058670ad7644f98b9f16",
+    "os": "Windows 11 build 26200",
+    "torch": "2.15.0+cpu",
+    "cuda": false
+  },
+  "source_support": {
+    "name": "qt-cocoa-backport-6.12.0-source.zip",
+    "bytes": 51241023,
+    "sha256": "73cca69962ae0ab6aa6a6f74f4f54eb8edcbf30cccee29c1b1f320db8d8d8f93"
+  },
+  "limits": [
+    "Feedback preview; not Latest or stable certification",
+    "Existing macOS and Shadow Windows machines, not clean OS installations",
+    "Windows bundled PyTorch is CPU-only; no CUDA inference",
+    "macOS arm64 runtime minimum 14.4; minimum OS itself not tested",
+    "Broad camera/GPS correctness, mask precision and complete-scene 3D quality remain unqualified",
+    "Complete bundled third-party license inventory remains pending"
+  ]
+}
